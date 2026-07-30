@@ -146,6 +146,7 @@ BEGIN
            p.ID_TIPO_PASIVO, tp.CODIGO AS TIPO_PASIVO_CODIGO, tp.DESCRIPCION AS TIPO_PASIVO_DESCRIPCION,
            p.ID_MONEDA, m.CODIGO AS MONEDA_CODIGO, m.DESCRIPCION AS MONEDA_DESCRIPCION,
            p.ID_ESTADO_PASIVO, ep.CODIGO AS ESTADO_PASIVO_CODIGO, ep.DESCRIPCION AS ESTADO_PASIVO_DESCRIPCION,
+           p.MOTIVO_ANULACION, p.FECHA_ANULACION, CONCAT(ua.NOMBRES, ' ', ua.APELLIDOS) AS ANULADO_POR,
            p.TIPO_REFERENCIA, p.ID_REFERENCIA,
            CASE p.TIPO_REFERENCIA
                WHEN 'COMPRA' THEN (
@@ -194,6 +195,7 @@ BEGIN
       LEFT JOIN PROVEEDOR pr ON pr.ID_PROVEEDOR = p.ID_PROVEEDOR
       LEFT JOIN DIRECTORIO_CONTACTO_EXTERNO dc ON dc.ID_CONTACTO = p.ID_CONTACTO
       LEFT JOIN USUARIO u ON u.ID_USUARIO = p.ID_USUARIO
+      LEFT JOIN USUARIO ua ON ua.ID_USUARIO = p.USUARIO_ANULACION
      WHERE (p_id_tipo_pasivo IS NULL OR p.ID_TIPO_PASIVO = p_id_tipo_pasivo)
        AND (p_solo_activos = 0 OR ep.CODIGO = 'ACTIVO')
      ORDER BY ep.CODIGO = 'ACTIVO' DESC, p.FECHA_ORIGEN DESC;
@@ -214,6 +216,7 @@ BEGIN
            p.ID_TIPO_PASIVO, tp.CODIGO AS TIPO_PASIVO_CODIGO, tp.DESCRIPCION AS TIPO_PASIVO_DESCRIPCION,
            p.ID_MONEDA, m.CODIGO AS MONEDA_CODIGO, m.DESCRIPCION AS MONEDA_DESCRIPCION,
            p.ID_ESTADO_PASIVO, ep.CODIGO AS ESTADO_PASIVO_CODIGO, ep.DESCRIPCION AS ESTADO_PASIVO_DESCRIPCION,
+           p.MOTIVO_ANULACION, p.FECHA_ANULACION, CONCAT(ua.NOMBRES, ' ', ua.APELLIDOS) AS ANULADO_POR,
            p.TIPO_REFERENCIA, p.ID_REFERENCIA,
            CASE p.TIPO_REFERENCIA
                WHEN 'COMPRA' THEN (
@@ -262,6 +265,7 @@ BEGIN
       LEFT JOIN PROVEEDOR pr ON pr.ID_PROVEEDOR = p.ID_PROVEEDOR
       LEFT JOIN DIRECTORIO_CONTACTO_EXTERNO dc ON dc.ID_CONTACTO = p.ID_CONTACTO
       LEFT JOIN USUARIO u ON u.ID_USUARIO = p.ID_USUARIO
+      LEFT JOIN USUARIO ua ON ua.ID_USUARIO = p.USUARIO_ANULACION
      WHERE p.ID_PROYECTO = p_id_proyecto
      ORDER BY ep.CODIGO = 'ACTIVO' DESC, p.FECHA_ORIGEN DESC;
 END$$
@@ -278,6 +282,7 @@ BEGIN
            p.ID_MONEDA, m.CODIGO AS MONEDA_CODIGO, m.DESCRIPCION AS MONEDA_DESCRIPCION, p.TIPO_CAMBIO,
            p.ID_CUENTA_PAGO, cu.NOMBRE AS CUENTA_PAGO_NOMBRE,
            p.ID_ESTADO_PASIVO, ep.CODIGO AS ESTADO_PASIVO_CODIGO, ep.DESCRIPCION AS ESTADO_PASIVO_DESCRIPCION,
+           p.MOTIVO_ANULACION, p.FECHA_ANULACION, CONCAT(ua.NOMBRES, ' ', ua.APELLIDOS) AS ANULADO_POR,
            p.TIPO_REFERENCIA, p.ID_REFERENCIA,
            CASE p.TIPO_REFERENCIA
                WHEN 'COMPRA' THEN (
@@ -322,6 +327,7 @@ BEGIN
       LEFT JOIN PROVEEDOR pr ON pr.ID_PROVEEDOR = p.ID_PROVEEDOR
       LEFT JOIN DIRECTORIO_CONTACTO_EXTERNO dc ON dc.ID_CONTACTO = p.ID_CONTACTO
       LEFT JOIN USUARIO u ON u.ID_USUARIO = p.ID_USUARIO
+      LEFT JOIN USUARIO ua ON ua.ID_USUARIO = p.USUARIO_ANULACION
       LEFT JOIN PROYECTO py ON py.ID_PROYECTO = p.ID_PROYECTO
       JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = p.ID_ESTADO_PASIVO
      WHERE p.ID_PASIVO = p_id_pasivo;
@@ -364,13 +370,34 @@ END$$
 
 -- Solo se puede anular un pasivo si ninguna cuota fue pagada todavia
 -- (no-op silencioso si no cumple, mismo patron que SP_CUENTA_MOVIMIENTO_ELIMINAR).
+-- p_motivo es obligatorio a nivel de aplicacion (ver anularPasivoAction) --
+-- queda en MOTIVO_ANULACION/FECHA_ANULACION para auditoria (037_pasivo_anulacion.sql).
+--
+-- Anular el pasivo no debe dejar una carga fantasma detras: sus cuotas
+-- PENDIENTE/PROTESTADA ya no representan una obligacion real, asi que se
+-- anulan en cascada (mismo estado que usa SP_PASIVO_CUOTA_ANULAR para
+-- condonaciones) para que dejen de aparecer en Plan de pagos/Cuentas por
+-- pagar/alertas de vencimiento (SP_PASIVO_CUOTA_LISTAR_PENDIENTES no
+-- filtra por el estado del pasivo padre, solo por el de la cuota). Si el
+-- pasivo financiaba una COMPRA, se recalcula su ID_ESTADO_COMPRA igual
+-- que SP_PASIVO_CREAR (el aporte de este pasivo ya no cuenta, gracias al
+-- mismo filtro ep.CODIGO != 'ANULADO'), para no dejarla marcada como
+-- pagada/parcial cuando en realidad su financiamiento se cayo.
 CREATE PROCEDURE SP_PASIVO_ANULAR(
     IN p_id_pasivo INT UNSIGNED,
+    IN p_motivo VARCHAR(300),
     IN p_id_usuario_modificacion INT UNSIGNED
 )
 BEGIN
     DECLARE v_hay_pagadas INT;
     DECLARE v_id_anulado INT UNSIGNED;
+    DECLARE v_id_anulada_cuota INT UNSIGNED;
+    DECLARE v_tipo_referencia VARCHAR(50);
+    DECLARE v_id_referencia INT UNSIGNED;
+    DECLARE v_monto_total_compra DECIMAL(14,2);
+    DECLARE v_monto_pagado DECIMAL(14,2);
+    DECLARE v_monto_financiado DECIMAL(14,2);
+    DECLARE v_id_estado_compra_nuevo INT UNSIGNED;
 
     SELECT COUNT(*) INTO v_hay_pagadas
       FROM PASIVO_CUOTA pc
@@ -379,10 +406,44 @@ BEGIN
 
     IF v_hay_pagadas = 0 THEN
         SET v_id_anulado = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PASIVO' AND CODIGO = 'ANULADO' LIMIT 1);
+        SET v_id_anulada_cuota = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_CUOTA' AND CODIGO = 'ANULADA' LIMIT 1);
+
+        SELECT TIPO_REFERENCIA, ID_REFERENCIA INTO v_tipo_referencia, v_id_referencia
+          FROM PASIVO WHERE ID_PASIVO = p_id_pasivo;
 
         UPDATE PASIVO
-           SET ID_ESTADO_PASIVO = v_id_anulado, USUARIO_MODIFICACION = p_id_usuario_modificacion
+           SET ID_ESTADO_PASIVO = v_id_anulado,
+               MOTIVO_ANULACION = p_motivo,
+               FECHA_ANULACION = NOW(),
+               USUARIO_ANULACION = p_id_usuario_modificacion,
+               USUARIO_MODIFICACION = p_id_usuario_modificacion
          WHERE ID_PASIVO = p_id_pasivo;
+
+        UPDATE PASIVO_CUOTA pc
+          JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = pc.ID_ESTADO_CUOTA
+           SET pc.ID_ESTADO_CUOTA = v_id_anulada_cuota
+         WHERE pc.ID_PASIVO = p_id_pasivo AND ec.CODIGO IN ('PENDIENTE', 'PROTESTADA');
+
+        IF v_tipo_referencia = 'COMPRA' THEN
+            SELECT MONTO_TOTAL INTO v_monto_total_compra FROM COMPRA WHERE ID_COMPRA = v_id_referencia;
+            SELECT COALESCE(SUM(MONTO), 0) INTO v_monto_pagado FROM COMPRA_PAGO WHERE ID_COMPRA = v_id_referencia;
+            SELECT COALESCE(SUM(ps.MONTO_TOTAL), 0) INTO v_monto_financiado
+              FROM PASIVO ps
+              JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = ps.ID_ESTADO_PASIVO
+             WHERE ps.TIPO_REFERENCIA = 'COMPRA' AND ps.ID_REFERENCIA = v_id_referencia AND ep.CODIGO != 'ANULADO';
+
+            SET v_id_estado_compra_nuevo = (
+                SELECT ID_MAESTRO FROM MAESTRO_MAESTRO
+                 WHERE TIPO_MAESTRO = 'ESTADO_COMPRA'
+                   AND CODIGO = IF(
+                       v_monto_pagado + v_monto_financiado >= v_monto_total_compra, 'PAGADA',
+                       IF(v_monto_pagado + v_monto_financiado > 0, 'PARCIAL', 'PENDIENTE_PAGO')
+                   )
+                 LIMIT 1
+            );
+
+            UPDATE COMPRA SET ID_ESTADO_COMPRA = v_id_estado_compra_nuevo WHERE ID_COMPRA = v_id_referencia;
+        END IF;
     END IF;
 END$$
 

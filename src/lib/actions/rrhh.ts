@@ -76,6 +76,9 @@ export async function actualizarEmpleadoAction(formData: FormData): Promise<void
   let idPais: number | null;
   let idCiudad: number | null;
   let correoClockify: string | null;
+  let idSistemaPension: number | null;
+  let idAfpFondo: number | null;
+  let suspensionRetencion4taHasta: string | null;
 
   if (tieneEscrituraRrhh) {
     extension = String(formData.get("extension") ?? "").trim() || null;
@@ -84,6 +87,9 @@ export async function actualizarEmpleadoAction(formData: FormData): Promise<void
     idPais = Number(formData.get("idPais") || 0) || null;
     idCiudad = Number(formData.get("idCiudad") || 0) || null;
     correoClockify = String(formData.get("correoClockify") ?? "").trim() || null;
+    idSistemaPension = Number(formData.get("idSistemaPension") || 0) || null;
+    idAfpFondo = Number(formData.get("idAfpFondo") || 0) || null;
+    suspensionRetencion4taHasta = String(formData.get("suspensionRetencion4taHasta") ?? "").trim() || null;
   } else {
     const actual = await obtenerEmpleado(idUsuario);
     extension = actual?.EXTENSION ?? null;
@@ -92,6 +98,9 @@ export async function actualizarEmpleadoAction(formData: FormData): Promise<void
     idPais = actual?.ID_PAIS ?? null;
     idCiudad = actual?.ID_CIUDAD ?? null;
     correoClockify = actual?.CORREO_CLOCKIFY ?? null;
+    idSistemaPension = actual?.ID_SISTEMA_PENSION ?? null;
+    idAfpFondo = actual?.ID_AFP_FONDO ?? null;
+    suspensionRetencion4taHasta = actual?.SUSPENSION_RETENCION_4TA_HASTA ?? null;
   }
 
   await upsertEmpleado({
@@ -105,6 +114,9 @@ export async function actualizarEmpleadoAction(formData: FormData): Promise<void
     idPais,
     idCiudad,
     correoClockify,
+    idSistemaPension,
+    idAfpFondo,
+    suspensionRetencion4taHasta,
     idUsuarioModificacion: sesion.idUsuario,
   });
 
@@ -173,6 +185,9 @@ export async function crearContratoAction(formData: FormData): Promise<void> {
       idPais,
       idCiudad,
       correoClockify: empleado?.CORREO_CLOCKIFY ?? null,
+      idSistemaPension: empleado?.ID_SISTEMA_PENSION ?? null,
+      idAfpFondo: empleado?.ID_AFP_FONDO ?? null,
+      suspensionRetencion4taHasta: empleado?.SUSPENSION_RETENCION_4TA_HASTA ?? null,
       idUsuarioModificacion: sesion.idUsuario,
     });
   }

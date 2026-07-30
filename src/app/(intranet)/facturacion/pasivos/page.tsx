@@ -13,6 +13,10 @@ function formatearFecha(fecha: string): string {
   return new Date(`${fecha}T00:00:00`).toLocaleDateString("es-PE", { dateStyle: "medium" });
 }
 
+function formatearFechaHora(fecha: string): string {
+  return new Date(fecha).toLocaleString("es-PE", { dateStyle: "medium", timeStyle: "short" });
+}
+
 export default async function PasivosPage({
   searchParams,
 }: {
@@ -91,7 +95,14 @@ export default async function PasivosPage({
                   {formatearMonto(p.MONTO_PENDIENTE, p.MONEDA_CODIGO)}
                 </td>
                 <td className="px-4 py-2">
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  <span
+                    className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                    title={
+                      p.ESTADO_PASIVO_CODIGO === "ANULADO" && p.MOTIVO_ANULACION
+                        ? `Anulado por ${p.ANULADO_POR ?? "usuario desconocido"} el ${formatearFechaHora(p.FECHA_ANULACION ?? "")} — ${p.MOTIVO_ANULACION}`
+                        : undefined
+                    }
+                  >
                     {p.ESTADO_PASIVO_DESCRIPCION}
                   </span>
                 </td>

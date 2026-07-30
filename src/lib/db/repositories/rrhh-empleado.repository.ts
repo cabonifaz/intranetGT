@@ -21,6 +21,9 @@ interface UpsertEmpleadoParams {
   idPais: number | null;
   idCiudad: number | null;
   correoClockify: string | null;
+  idSistemaPension: number | null;
+  idAfpFondo: number | null;
+  suspensionRetencion4taHasta: string | null;
   idUsuarioModificacion: number;
 }
 
@@ -36,6 +39,9 @@ export async function upsertEmpleado(params: UpsertEmpleadoParams): Promise<void
     params.idPais,
     params.idCiudad,
     params.correoClockify,
+    params.idSistemaPension,
+    params.idAfpFondo,
+    params.suspensionRetencion4taHasta,
     params.idUsuarioModificacion,
   ]);
 }

@@ -6,8 +6,8 @@ import { listarCuentas } from "@/lib/db/repositories/cuenta.repository";
 import { listarProveedores } from "@/lib/db/repositories/compra.repository";
 import { listarTodosLosContactosExternos } from "@/lib/db/repositories/directorio-contacto.repository";
 import { listarDirectorio } from "@/lib/db/repositories/rrhh-empleado.repository";
-import { actualizarPasivoAction, anularPasivoAction, agregarCuotaAction } from "@/lib/actions/pasivos";
-import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
+import { actualizarPasivoAction, agregarCuotaAction } from "@/lib/actions/pasivos";
+import AnularPasivoBoton from "@/components/facturacion/AnularPasivoBoton";
 import CuotaFilaAcciones from "@/components/facturacion/CuotaFilaAcciones";
 import SelectorAcreedorPasivo from "@/components/facturacion/SelectorAcreedorPasivo";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
@@ -21,6 +21,11 @@ function formatearMonto(monto: string | number, monedaCodigo: string | null): st
 function formatearFecha(fecha: string | null): string {
   if (!fecha) return "-";
   return new Date(`${fecha}T00:00:00`).toLocaleDateString("es-PE", { dateStyle: "medium" });
+}
+
+function formatearFechaHora(fecha: string | null): string {
+  if (!fecha) return "-";
+  return new Date(fecha).toLocaleString("es-PE", { dateStyle: "medium", timeStyle: "short" });
 }
 
 export default async function DetallePasivoPage({
@@ -55,17 +60,7 @@ export default async function DetallePasivoPage({
             {pasivo.TIPO_PASIVO_DESCRIPCION} — {pasivo.ESTADO_PASIVO_DESCRIPCION}
           </p>
         </div>
-        {activo ? (
-          <form action={anularPasivoAction}>
-            <input type="hidden" name="idPasivo" value={pasivo.ID_PASIVO} />
-            <ConfirmSubmitButton
-              mensaje="¿Anular este pasivo? Solo se puede si ninguna cuota fue pagada todavia."
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Anular
-            </ConfirmSubmitButton>
-          </form>
-        ) : null}
+        {activo ? <AnularPasivoBoton idPasivo={pasivo.ID_PASIVO} idProyecto={pasivo.ID_PROYECTO} /> : null}
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
@@ -78,6 +73,13 @@ export default async function DetallePasivoPage({
           {pasivo.TASA_INTERES ? <Dato etiqueta="Tasa de interes" valor={`${pasivo.TASA_INTERES}%`} /> : null}
           {pasivo.TIPO_REFERENCIA ? (
             <Dato etiqueta="Financia" valor={pasivo.FINANCIA_DESCRIPCION ?? `${pasivo.TIPO_REFERENCIA} #${pasivo.ID_REFERENCIA}`} />
+          ) : null}
+          {pasivo.ESTADO_PASIVO_CODIGO === "ANULADO" && pasivo.MOTIVO_ANULACION ? (
+            <>
+              <Dato etiqueta="Anulado por" valor={pasivo.ANULADO_POR ?? "-"} />
+              <Dato etiqueta="Fecha de anulacion" valor={formatearFechaHora(pasivo.FECHA_ANULACION)} />
+              <Dato etiqueta="Motivo de anulacion" valor={pasivo.MOTIVO_ANULACION} />
+            </>
           ) : null}
           {pasivo.PROYECTO_NOMBRE ? (
             <div>

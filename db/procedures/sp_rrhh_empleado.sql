@@ -44,6 +44,9 @@ END$$
 -- PUESTO = ROL_NOMBRE (rol principal, mismo criterio que LISTAR).
 -- FECHA_INGRESO = fecha de inicio del contrato mas antiguo de la
 -- persona (planilla o locador, el que sea) -- ya no se tipea a mano.
+-- ID_SISTEMA_PENSION/ID_AFP_FONDO/SUSPENSION_RETENCION_4TA_HASTA
+-- (038_rrhh_planilla_pension_empleado.sql) alimentan el calculo de
+-- Planilla Mensual -- ver src/lib/rrhh/planilla/calculo.ts.
 CREATE PROCEDURE SP_RRHH_EMPLEADO_OBTENER(
     IN p_id_usuario INT UNSIGNED
 )
@@ -57,7 +60,10 @@ BEGIN
            e.NRO_DOCUMENTO, e.DIRECCION,
            e.ID_PAIS, pa.DESCRIPCION AS PAIS_DESCRIPCION,
            e.ID_CIUDAD, ci.DESCRIPCION AS CIUDAD_DESCRIPCION,
-           e.CORREO_CLOCKIFY
+           e.CORREO_CLOCKIFY,
+           e.ID_SISTEMA_PENSION, spn.CODIGO AS SISTEMA_PENSION_CODIGO, spn.DESCRIPCION AS SISTEMA_PENSION_DESCRIPCION,
+           e.ID_AFP_FONDO, afp.CODIGO AS AFP_FONDO_CODIGO, afp.DESCRIPCION AS AFP_FONDO_DESCRIPCION,
+           e.SUSPENSION_RETENCION_4TA_HASTA
       FROM USUARIO u
       LEFT JOIN USUARIO_ROL ur ON ur.ID_USUARIO = u.ID_USUARIO AND ur.ES_PRINCIPAL = 1
       LEFT JOIN ROL r ON r.ID_ROL = ur.ID_ROL
@@ -66,6 +72,8 @@ BEGIN
       LEFT JOIN MAESTRO_MAESTRO td ON td.ID_MAESTRO = e.ID_TIPO_DOCUMENTO
       LEFT JOIN MAESTRO_MAESTRO pa ON pa.ID_MAESTRO = e.ID_PAIS
       LEFT JOIN MAESTRO_MAESTRO ci ON ci.ID_MAESTRO = e.ID_CIUDAD
+      LEFT JOIN MAESTRO_MAESTRO spn ON spn.ID_MAESTRO = e.ID_SISTEMA_PENSION
+      LEFT JOIN MAESTRO_MAESTRO afp ON afp.ID_MAESTRO = e.ID_AFP_FONDO
      WHERE u.ID_USUARIO = p_id_usuario;
 END$$
 
@@ -80,6 +88,9 @@ CREATE PROCEDURE SP_RRHH_EMPLEADO_UPSERT(
     IN p_id_pais INT UNSIGNED,
     IN p_id_ciudad INT UNSIGNED,
     IN p_correo_clockify VARCHAR(150),
+    IN p_id_sistema_pension INT UNSIGNED,
+    IN p_id_afp_fondo INT UNSIGNED,
+    IN p_suspension_retencion_4ta_hasta DATE,
     IN p_id_usuario_modificacion INT UNSIGNED
 )
 BEGIN
@@ -89,11 +100,13 @@ BEGIN
     INSERT INTO RRHH_EMPLEADO (
         ID_USUARIO, TELEFONO, EXTENSION, FOTO_URL,
         ID_TIPO_DOCUMENTO, NRO_DOCUMENTO, DIRECCION, ID_PAIS, ID_CIUDAD, CORREO_CLOCKIFY,
+        ID_SISTEMA_PENSION, ID_AFP_FONDO, SUSPENSION_RETENCION_4TA_HASTA,
         ID_ESTADO, USUARIO_MODIFICACION
     )
     VALUES (
         p_id_usuario, p_telefono, p_extension, p_foto_url,
         p_id_tipo_documento, p_nro_documento, p_direccion, p_id_pais, p_id_ciudad, p_correo_clockify,
+        p_id_sistema_pension, p_id_afp_fondo, p_suspension_retencion_4ta_hasta,
         v_id_activo, p_id_usuario_modificacion
     )
     ON DUPLICATE KEY UPDATE
@@ -106,6 +119,9 @@ BEGIN
         ID_PAIS = p_id_pais,
         ID_CIUDAD = p_id_ciudad,
         CORREO_CLOCKIFY = p_correo_clockify,
+        ID_SISTEMA_PENSION = p_id_sistema_pension,
+        ID_AFP_FONDO = p_id_afp_fondo,
+        SUSPENSION_RETENCION_4TA_HASTA = p_suspension_retencion_4ta_hasta,
         USUARIO_MODIFICACION = p_id_usuario_modificacion;
 END$$
 

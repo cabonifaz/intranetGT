@@ -34,9 +34,11 @@ export default async function FichaEmpleadoPage({
 
   if (!empleado) notFound();
 
-  const [tiposDocumento, paises] = await Promise.all([
+  const [tiposDocumento, paises, sistemasPension, afpFondos] = await Promise.all([
     listarMaestros("TIPO_DOCUMENTO_IDENTIDAD"),
     listarMaestros("PAIS"),
+    listarMaestros("SISTEMA_PENSION"),
+    listarMaestros("AFP_FONDO"),
   ]);
 
   const { puedeVerCompleto, puedeEditarCompleto, puedeEditarBasico } = calcularVisibilidadFicha({
@@ -78,6 +80,18 @@ export default async function FichaEmpleadoPage({
               <Dato etiqueta="Telefono" valor={empleado.TELEFONO ?? "No registrado"} />
               <Dato etiqueta="Extension" valor={empleado.EXTENSION ?? "No registrada"} />
               <Dato etiqueta="Fecha de ingreso" valor={empleado.FECHA_INGRESO ?? "No registrada"} />
+              <Dato
+                etiqueta="Sistema de pension"
+                valor={
+                  empleado.SISTEMA_PENSION_DESCRIPCION
+                    ? `${empleado.SISTEMA_PENSION_DESCRIPCION}${empleado.AFP_FONDO_DESCRIPCION ? ` (${empleado.AFP_FONDO_DESCRIPCION})` : ""}`
+                    : "No configurado"
+                }
+              />
+              <Dato
+                etiqueta="Suspension retencion 4ta"
+                valor={empleado.SUSPENSION_RETENCION_4TA_HASTA ? `Vigente hasta ${formatearFecha(empleado.SUSPENSION_RETENCION_4TA_HASTA)}` : "No tiene"}
+              />
             </>
           ) : null}
         </dl>
@@ -165,6 +179,30 @@ export default async function FichaEmpleadoPage({
             <Campo name="telefono" label="Telefono" defaultValue={empleado.TELEFONO ?? ""} />
             <Campo name="extension" label="Extension" defaultValue={empleado.EXTENSION ?? ""} />
             <Campo name="correoClockify" label="Correo de Clockify (opcional)" defaultValue={empleado.CORREO_CLOCKIFY ?? ""} />
+            <div>
+              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Sistema de pension (Planilla)</label>
+              <ComboBusqueda
+                name="idSistemaPension"
+                placeholder="-- sin configurar --"
+                defaultValue={empleado.ID_SISTEMA_PENSION ? String(empleado.ID_SISTEMA_PENSION) : ""}
+                opciones={sistemasPension.map((s) => ({ value: String(s.ID_MAESTRO), label: s.DESCRIPCION }))}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Fondo AFP (solo si el sistema es AFP)</label>
+              <ComboBusqueda
+                name="idAfpFondo"
+                placeholder="-- no aplica --"
+                defaultValue={empleado.ID_AFP_FONDO ? String(empleado.ID_AFP_FONDO) : ""}
+                opciones={afpFondos.map((f) => ({ value: String(f.ID_MAESTRO), label: f.DESCRIPCION }))}
+              />
+            </div>
+            <Campo
+              name="suspensionRetencion4taHasta"
+              label="Suspension retencion Renta 4ta hasta (Locador, opcional)"
+              type="date"
+              defaultValue={empleado.SUSPENSION_RETENCION_4TA_HASTA ?? ""}
+            />
             <div className="sm:col-span-2">
               <Campo name="fotoUrl" label="URL de foto (opcional)" defaultValue={empleado.FOTO_URL ?? ""} />
             </div>

@@ -148,6 +148,9 @@ export interface EmpleadoDirectorioRow extends RowDataPacket {
   ID_CIUDAD: number | null;
 }
 
+export type SistemaPensionCodigo = "AFP" | "ONP";
+export type AfpFondoCodigo = "INTEGRA" | "PRIMA" | "PROFUTURO" | "HABITAT";
+
 export interface EmpleadoDetalleRow extends RowDataPacket {
   ID_USUARIO: number;
   USUARIO: string;
@@ -172,6 +175,13 @@ export interface EmpleadoDetalleRow extends RowDataPacket {
   ID_CIUDAD: number | null;
   CIUDAD_DESCRIPCION: string | null;
   CORREO_CLOCKIFY: string | null;
+  ID_SISTEMA_PENSION: number | null;
+  SISTEMA_PENSION_CODIGO: SistemaPensionCodigo | null;
+  SISTEMA_PENSION_DESCRIPCION: string | null;
+  ID_AFP_FONDO: number | null;
+  AFP_FONDO_CODIGO: AfpFondoCodigo | null;
+  AFP_FONDO_DESCRIPCION: string | null;
+  SUSPENSION_RETENCION_4TA_HASTA: string | null;
 }
 
 export interface UsuarioListadoRow extends RowDataPacket {
@@ -487,6 +497,9 @@ export interface PasivoListadoRow extends RowDataPacket {
   ID_ESTADO_PASIVO: number;
   ESTADO_PASIVO_CODIGO: EstadoPasivoCodigo;
   ESTADO_PASIVO_DESCRIPCION: string;
+  MOTIVO_ANULACION: string | null;
+  FECHA_ANULACION: string | null;
+  ANULADO_POR: string | null;
   TIPO_REFERENCIA: string | null;
   ID_REFERENCIA: number | null;
   FINANCIA_DESCRIPCION: string | null;
@@ -521,6 +534,9 @@ export interface PasivoDetalleRow extends RowDataPacket {
   ID_ESTADO_PASIVO: number;
   ESTADO_PASIVO_CODIGO: EstadoPasivoCodigo;
   ESTADO_PASIVO_DESCRIPCION: string;
+  MOTIVO_ANULACION: string | null;
+  FECHA_ANULACION: string | null;
+  ANULADO_POR: string | null;
 }
 
 export interface PasivoCuotaRow extends RowDataPacket {
@@ -959,4 +975,178 @@ export interface DirectorioContactoConTipoRow extends DirectorioContactoRow {
 export interface DirectorioContactoDetalleRow extends DirectorioContactoConTipoRow {
   ID_CLIENTE: number | null;
   ID_PROVEEDOR: number | null;
+}
+
+// =====================================================================
+// Planilla Mensual (RRHH)
+// =====================================================================
+
+export type EstadoPlanillaMensualCodigo = "BORRADOR" | "EMITIDA";
+export type EstadoEmisionPlanillaDetalleCodigo = "PENDIENTE" | "EMITIDA";
+
+export interface PlanillaParametroRow extends RowDataPacket {
+  ID_PARAMETRO: number;
+  ANIO: number;
+  FECHA_VIGENCIA_DESDE: string;
+  UIT: string;
+  PORCENTAJE_ONP: string;
+  PORCENTAJE_ESSALUD: string;
+  APORTE_OBLIGATORIO_AFP_PORCENTAJE: string;
+  PRIMA_SEGURO_AFP_PORCENTAJE: string;
+  TOPE_ASEGURABLE_AFP: string;
+  PORCENTAJE_RENTA_4TA: string;
+  UMBRAL_RENTA_4TA: string;
+  UIT_DEDUCCION_RENTA_5TA: string;
+  FECHA_CREACION?: string;
+}
+
+export interface PlanillaParametroTramoRow extends RowDataPacket {
+  ID_TRAMO: number;
+  ID_PARAMETRO: number;
+  DESDE_UIT: string;
+  HASTA_UIT: string | null;
+  TASA: string;
+  ORDEN: number;
+}
+
+export interface PlanillaParametroAfpFondoRow extends RowDataPacket {
+  ID_PARAMETRO_AFP_FONDO: number;
+  ID_PARAMETRO: number;
+  ID_AFP_FONDO: number;
+  AFP_FONDO_CODIGO: AfpFondoCodigo;
+  AFP_FONDO_DESCRIPCION: string;
+  COMISION_PORCENTAJE: string;
+}
+
+export interface PlanillaMensualRow extends RowDataPacket {
+  ID_PLANILLA_MENSUAL: number;
+  ANIO: number;
+  MES: number;
+  PERIODO: string;
+  ID_ESTADO_PLANILLA: number;
+  ESTADO_PLANILLA_CODIGO: EstadoPlanillaMensualCodigo;
+  ESTADO_PLANILLA_DESCRIPCION: string;
+  FECHA_EMISION: string | null;
+  TOTAL_COLABORADORES?: number;
+  TOTAL_EMITIDOS?: number;
+}
+
+export interface PlanillaDetalleListadoRow extends RowDataPacket {
+  ID_PLANILLA_DETALLE: number;
+  ID_PLANILLA_MENSUAL: number;
+  ID_CONTRATO: number;
+  ID_USUARIO: number;
+  NOMBRES: string;
+  APELLIDOS: string;
+  CARGO: string;
+  ID_TIPO_CONTRATO: number;
+  TIPO_CONTRATO_CODIGO: string;
+  TIPO_CONTRATO_DESCRIPCION: string;
+  ID_TIPO_PAGO_LOCADOR: number | null;
+  TIPO_PAGO_LOCADOR_CODIGO: string | null;
+  TIPO_PAGO_LOCADOR_DESCRIPCION: string | null;
+  MONTO_BRUTO: string;
+  MONTO_APORTE_PENSION: string | null;
+  MONTO_RETENCION_RENTA: string | null;
+  MONTO_ESSALUD: string | null;
+  MONTO_NETO: string;
+  CALCULO_AUTOMATICO: number;
+  AFP_ESSALUD_PAGADO: number;
+  ID_ESTADO_EMISION: number;
+  ESTADO_EMISION_CODIGO: EstadoEmisionPlanillaDetalleCodigo;
+  ESTADO_EMISION_DESCRIPCION: string;
+  DOCUMENTO_PATH: string | null;
+  FECHA_EMISION: string | null;
+}
+
+export interface PlanillaDetalleRow extends RowDataPacket {
+  ID_PLANILLA_DETALLE: number;
+  ID_PLANILLA_MENSUAL: number;
+  PERIODO: string;
+  ANIO: number;
+  MES: number;
+  ID_CONTRATO: number;
+  ID_USUARIO: number;
+  NOMBRES: string;
+  APELLIDOS: string;
+  CORREO: string;
+  CARGO: string;
+  ID_TIPO_CONTRATO: number;
+  TIPO_CONTRATO_CODIGO: string;
+  TIPO_CONTRATO_DESCRIPCION: string;
+  ID_TIPO_PAGO_LOCADOR: number | null;
+  TIPO_PAGO_LOCADOR_CODIGO: string | null;
+  TIPO_PAGO_LOCADOR_DESCRIPCION: string | null;
+  NRO_CUENTA: string | null;
+  CCI: string | null;
+  BANCO: string | null;
+  ID_TIPO_DOCUMENTO: number | null;
+  TIPO_DOCUMENTO_DESCRIPCION: string | null;
+  NRO_DOCUMENTO: string | null;
+  DIRECCION: string | null;
+  ID_SISTEMA_PENSION: number | null;
+  SISTEMA_PENSION_CODIGO: SistemaPensionCodigo | null;
+  SISTEMA_PENSION_DESCRIPCION: string | null;
+  ID_AFP_FONDO: number | null;
+  AFP_FONDO_CODIGO: AfpFondoCodigo | null;
+  AFP_FONDO_DESCRIPCION: string | null;
+  SUSPENSION_RETENCION_4TA_HASTA: string | null;
+  TIPO_REFERENCIA: string | null;
+  ID_REFERENCIA: number | null;
+  MONTO_BRUTO: string;
+  MONTO_APORTE_PENSION: string | null;
+  MONTO_RETENCION_RENTA: string | null;
+  MONTO_ESSALUD: string | null;
+  MONTO_NETO: string;
+  CALCULO_AUTOMATICO: number;
+  AFP_ESSALUD_PAGADO: number;
+  FECHA_MARCADO_PAGADO: string | null;
+  ID_ESTADO_EMISION: number;
+  ESTADO_EMISION_CODIGO: EstadoEmisionPlanillaDetalleCodigo;
+  ESTADO_EMISION_DESCRIPCION: string;
+  DOCUMENTO_PATH: string | null;
+  FECHA_EMISION: string | null;
+}
+
+export interface PlanillaDetalleHorasRow extends RowDataPacket {
+  ID_CONTRATO_HORAS: number;
+  PERIODO: string;
+  HORAS: string;
+  MONTO_CALCULADO: string;
+  PROYECTO_NOMBRE: string;
+  TARIFA_HORA: string;
+}
+
+export interface PlanillaContratoElegibleRow extends RowDataPacket {
+  ID_CONTRATO: number;
+  ID_USUARIO: number;
+  NOMBRES: string;
+  APELLIDOS: string;
+  CARGO: string;
+  FECHA_INICIO: string;
+  FECHA_FIN: string | null;
+  TARIFA: string | null;
+  ID_TIPO_CONTRATO: number;
+  TIPO_CONTRATO_CODIGO: string;
+  ID_TIPO_PAGO_LOCADOR: number | null;
+  TIPO_PAGO_LOCADOR_CODIGO: string | null;
+  ID_SISTEMA_PENSION: number | null;
+  SISTEMA_PENSION_CODIGO: SistemaPensionCodigo | null;
+  ID_AFP_FONDO: number | null;
+  AFP_FONDO_CODIGO: AfpFondoCodigo | null;
+  SUSPENSION_RETENCION_4TA_HASTA: string | null;
+}
+
+export interface PlanillaContratoHorasDelPeriodoRow extends RowDataPacket {
+  ID_CONTRATO_HORAS: number;
+  HORAS: string;
+  MONTO_CALCULADO: string;
+  ID_CONTRATO_PROYECTO: number;
+  ID_MONEDA: number;
+  MONEDA_CODIGO: MonedaCodigo;
+}
+
+export interface PlanillaAcumuladoAnioRow extends RowDataPacket {
+  BRUTO_ACUMULADO: string;
+  RETENCION_ACUMULADA: string;
 }

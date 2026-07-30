@@ -88,8 +88,8 @@ export async function actualizarPasivo(params: ActualizarPasivoParams): Promise<
   ]);
 }
 
-export async function anularPasivo(idPasivo: number, idUsuarioModificacion: number): Promise<void> {
-  await callProcedure("SP_PASIVO_ANULAR", [idPasivo, idUsuarioModificacion]);
+export async function anularPasivo(idPasivo: number, motivo: string, idUsuarioModificacion: number): Promise<void> {
+  await callProcedure("SP_PASIVO_ANULAR", [idPasivo, motivo, idUsuarioModificacion]);
 }
 
 interface AgregarCuotaParams {

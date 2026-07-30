@@ -161,15 +161,26 @@ export async function actualizarPasivoAction(formData: FormData): Promise<void> 
 
 // Anular es mas delicado que operar dia a dia (cierra el pasivo por
 // completo), por eso pide ADMIN igual que cambiarEstadoCuentaAction.
+// El motivo es obligatorio (justificacion de la anulacion, ver
+// MOTIVO_ANULACION/037_pasivo_anulacion.sql). SP_PASIVO_ANULAR ya se
+// encarga de anular en cascada las cuotas pendientes/protestadas del
+// pasivo (para no dejar una carga fantasma en Plan de pagos/Cuentas por
+// pagar) y de recalcular el estado de la compra si la financiaba -- aca
+// solo falta revalidar el proyecto afectado, si el pasivo tenia uno.
 export async function anularPasivoAction(formData: FormData): Promise<void> {
   const sesion = await requirePermiso(PASIVOS_APP_CODIGO, "ADMIN");
 
   const idPasivo = Number(formData.get("idPasivo"));
-  if (!idPasivo) return;
+  const motivo = String(formData.get("motivo") ?? "").trim();
+  const idProyecto = Number(formData.get("idProyecto") || 0) || null;
+  if (!idPasivo || !motivo) return;
 
-  await anularPasivo(idPasivo, sesion.idUsuario);
+  await anularPasivo(idPasivo, motivo, sesion.idUsuario);
   revalidatePath("/facturacion/pasivos");
   revalidatePath(`/facturacion/pasivos/${idPasivo}`);
+  revalidatePath("/facturacion/pasivos/plan-de-pagos");
+  revalidatePath("/facturacion/cuentas-por-pagar");
+  if (idProyecto) revalidatePath(`/facturacion/proyectos/${idProyecto}`);
   refresh();
 }
 
