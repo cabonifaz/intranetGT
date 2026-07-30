@@ -1,0 +1,65 @@
+-- =====================================================================
+-- 009_contrato_conceptos_proyectos.sql
+-- Reestructura los ingresos del contrato:
+--  - PLANILLA: en vez de un SUELDO_MENSUAL unico, N lineas de concepto
+--    remunerativo (ingreso base, bono, movilidad, bonificacion familiar...)
+--    via catalogo, cada una con su monto (RRHH_CONTRATO_CONCEPTO).
+--  - LOCADOR por hora: en vez de un solo NOMBRE_PROYECTO/TARIFA, el
+--    contrato puede tener varios proyectos, cada uno con su propia
+--    tarifa/hora (RRHH_CONTRATO_PROYECTO). Las horas trabajadas por
+--    proyecto/periodo se registran aparte (RRHH_CONTRATO_HORAS) y el
+--    monto se calcula automaticamente (horas x tarifa del proyecto).
+--    LOCADOR mensual/por jornada sigue usando TARIFA + NOMBRE_PROYECTO
+--    directo en RRHH_CONTRATO (un solo monto, no varia por proyecto).
+-- =====================================================================
+
+ALTER TABLE RRHH_CONTRATO
+    DROP COLUMN SUELDO_MENSUAL;
+
+-- Identificador de la persona en Clockify (puede diferir de su correo de
+-- la intranet). Groundwork para cuando se automatice la carga de horas
+-- desde el Excel que exporta Clockify -- por ahora las horas se cargan
+-- manuales via RRHH_CONTRATO_HORAS.
+ALTER TABLE RRHH_EMPLEADO
+    ADD COLUMN CORREO_CLOCKIFY VARCHAR(150) NULL AFTER DIRECCION;
+
+CREATE TABLE IF NOT EXISTS RRHH_CONTRATO_CONCEPTO (
+    ID_CONTRATO_CONCEPTO       INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ID_CONTRATO                 INT UNSIGNED NOT NULL,
+    ID_CONCEPTO                 INT UNSIGNED NOT NULL,
+    MONTO                       DECIMAL(10,2) NOT NULL,
+    ID_ESTADO                   INT UNSIGNED NOT NULL,
+    FECHA_CREACION               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT UQ_CONTRATO_CONCEPTO UNIQUE (ID_CONTRATO, ID_CONCEPTO),
+    CONSTRAINT FK_CC_CONTRATO FOREIGN KEY (ID_CONTRATO) REFERENCES RRHH_CONTRATO (ID_CONTRATO),
+    CONSTRAINT FK_CC_CONCEPTO FOREIGN KEY (ID_CONCEPTO) REFERENCES MAESTRO_MAESTRO (ID_MAESTRO),
+    CONSTRAINT FK_CC_ESTADO FOREIGN KEY (ID_ESTADO) REFERENCES MAESTRO_MAESTRO (ID_MAESTRO)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS RRHH_CONTRATO_PROYECTO (
+    ID_CONTRATO_PROYECTO       INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ID_CONTRATO                 INT UNSIGNED NOT NULL,
+    NOMBRE_PROYECTO             VARCHAR(150) NOT NULL,
+    TARIFA_HORA                 DECIMAL(10,2) NOT NULL,
+    ID_ESTADO                   INT UNSIGNED NOT NULL,
+    FECHA_CREACION               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT FK_CP_CONTRATO FOREIGN KEY (ID_CONTRATO) REFERENCES RRHH_CONTRATO (ID_CONTRATO),
+    CONSTRAINT FK_CP_ESTADO FOREIGN KEY (ID_ESTADO) REFERENCES MAESTRO_MAESTRO (ID_MAESTRO)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS RRHH_CONTRATO_HORAS (
+    ID_CONTRATO_HORAS          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ID_CONTRATO_PROYECTO        INT UNSIGNED NOT NULL,
+    PERIODO                     VARCHAR(100) NOT NULL,
+    HORAS                       DECIMAL(6,2) NOT NULL,
+    MONTO_CALCULADO             DECIMAL(10,2) NOT NULL,
+    ID_ESTADO                   INT UNSIGNED NOT NULL,
+    FECHA_CREACION               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    USUARIO_CREACION             INT UNSIGNED NULL,
+    CONSTRAINT FK_CH_PROYECTO FOREIGN KEY (ID_CONTRATO_PROYECTO) REFERENCES RRHH_CONTRATO_PROYECTO (ID_CONTRATO_PROYECTO),
+    CONSTRAINT FK_CH_ESTADO FOREIGN KEY (ID_ESTADO) REFERENCES MAESTRO_MAESTRO (ID_MAESTRO)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE INDEX IX_CC_CONTRATO ON RRHH_CONTRATO_CONCEPTO (ID_CONTRATO, ID_ESTADO);
+CREATE INDEX IX_CP_CONTRATO ON RRHH_CONTRATO_PROYECTO (ID_CONTRATO, ID_ESTADO);
+CREATE INDEX IX_CH_PROYECTO ON RRHH_CONTRATO_HORAS (ID_CONTRATO_PROYECTO, ID_ESTADO);

@@ -1,0 +1,46 @@
+-- =====================================================================
+-- 022_directorio_contacto_externo.sql
+-- Reemplaza CLIENTE_CONTACTO (creada esta misma sesion, sin datos reales)
+-- por un modelo generico de contacto externo, para no triplicar la misma
+-- tabla por cada tipo de entidad (cliente/proveedor/socio comercial).
+--
+-- ID_TIPO_RELACION distingue el origen: CLIENTE (enlaza ID_CLIENTE),
+-- PROVEEDOR (enlaza ID_PROVEEDOR), SOCIO_COMERCIAL/OTRO (no hay tabla de
+-- entidad propia -- se usa EMPRESA_EXTERNA como texto libre). El SP de
+-- alta/edicion fuerza a NULL los campos que no correspondan al tipo.
+--
+-- Al igual que CLIENTE_CONTACTO, nunca pasa por USUARIO -- se muestra en
+-- /rrhh/directorio (pestaña "Contactos externos") sin tocar
+-- RRHH_EMPLEADO/USUARIO.
+-- =====================================================================
+
+DROP TABLE IF EXISTS CLIENTE_CONTACTO;
+
+CREATE TABLE IF NOT EXISTS DIRECTORIO_CONTACTO_EXTERNO (
+    ID_CONTACTO              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ID_TIPO_RELACION         INT UNSIGNED NOT NULL,
+    ID_CLIENTE                INT UNSIGNED NULL,
+    ID_PROVEEDOR               INT UNSIGNED NULL,
+    EMPRESA_EXTERNA           VARCHAR(150) NULL,
+    NOMBRES                   VARCHAR(100) NOT NULL,
+    APELLIDOS                 VARCHAR(100) NOT NULL,
+    AREA                      VARCHAR(100) NULL,
+    CARGO                     VARCHAR(100) NULL,
+    TEMA_INTERES              VARCHAR(300) NULL,
+    RELACION_GT               VARCHAR(200) NULL,
+    TELEFONO                  VARCHAR(30)  NULL,
+    CORREO                    VARCHAR(150) NULL,
+    ID_ESTADO                 INT UNSIGNED NOT NULL,
+    FECHA_CREACION            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FECHA_MODIFICACION        DATETIME     NULL ON UPDATE CURRENT_TIMESTAMP,
+    USUARIO_CREACION          INT UNSIGNED NULL,
+    USUARIO_MODIFICACION      INT UNSIGNED NULL,
+    CONSTRAINT FK_DIRECTORIO_CONTACTO_TIPO FOREIGN KEY (ID_TIPO_RELACION) REFERENCES MAESTRO_MAESTRO (ID_MAESTRO),
+    CONSTRAINT FK_DIRECTORIO_CONTACTO_CLIENTE FOREIGN KEY (ID_CLIENTE) REFERENCES CLIENTE (ID_CLIENTE),
+    CONSTRAINT FK_DIRECTORIO_CONTACTO_PROVEEDOR FOREIGN KEY (ID_PROVEEDOR) REFERENCES PROVEEDOR (ID_PROVEEDOR),
+    CONSTRAINT FK_DIRECTORIO_CONTACTO_ESTADO FOREIGN KEY (ID_ESTADO) REFERENCES MAESTRO_MAESTRO (ID_MAESTRO)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE INDEX IX_DIRECTORIO_CONTACTO_TIPO ON DIRECTORIO_CONTACTO_EXTERNO (ID_TIPO_RELACION);
+CREATE INDEX IX_DIRECTORIO_CONTACTO_CLIENTE ON DIRECTORIO_CONTACTO_EXTERNO (ID_CLIENTE);
+CREATE INDEX IX_DIRECTORIO_CONTACTO_PROVEEDOR ON DIRECTORIO_CONTACTO_EXTERNO (ID_PROVEEDOR);
