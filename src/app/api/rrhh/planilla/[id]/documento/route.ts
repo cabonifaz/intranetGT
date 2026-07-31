@@ -3,11 +3,11 @@ import { requirePermiso } from "@/lib/auth/require-permiso";
 import { obtenerDetalle } from "@/lib/db/repositories/rrhh-planilla.repository";
 import { leerArchivo } from "@/lib/storage/local-storage";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ idDetalle: string }> }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requirePermiso("RRHH_PLANILLA", "LECTURA");
 
-  const { idDetalle } = await params;
-  const detalle = await obtenerDetalle(Number(idDetalle));
+  const { id } = await params;
+  const detalle = await obtenerDetalle(Number(id));
 
   if (!detalle?.DOCUMENTO_PATH) {
     return NextResponse.json({ error: "Documento no disponible." }, { status: 404 });

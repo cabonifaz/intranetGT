@@ -10,11 +10,11 @@ function etiquetaRegimen(tipoContratoCodigo: string, tipoPagoLocadorDescripcion:
 
 // Agregado de solo lectura -- se regenera cada vez que se pide, no se
 // persiste (ver generar-resumen-planilla-pdf.ts).
-export async function GET(_request: Request, { params }: { params: Promise<{ idPlanillaMensual: string }> }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requirePermiso("RRHH_PLANILLA", "LECTURA");
 
-  const { idPlanillaMensual } = await params;
-  const idPlanilla = Number(idPlanillaMensual);
+  const { id } = await params;
+  const idPlanilla = Number(id);
 
   const [planilla, filas, logo] = await Promise.all([
     obtenerPlanillaMensual(idPlanilla),
