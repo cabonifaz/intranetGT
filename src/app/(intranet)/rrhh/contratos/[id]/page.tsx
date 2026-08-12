@@ -34,6 +34,7 @@ import {
   generarPeriodosPendientesAction,
   eliminarPeriodoPagoAction,
   actualizarFuncionesContratoAction,
+  eliminarContratoAction,
 } from "@/lib/actions/rrhh";
 
 function formatearFecha(fecha: string | null): string {
@@ -521,6 +522,25 @@ export default async function DetalleContratoPage({
         <section>
           <h2 className="mb-2 text-sm font-semibold text-slate-800 dark:text-white">Link de firma</h2>
           <GenerarLinkContratoButton idContrato={contrato.ID_CONTRATO} />
+        </section>
+      ) : null}
+
+      {puedeGenerarLink ? (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-slate-800 dark:text-white">Eliminar contrato</h2>
+          <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+            Todavia no se firmo -- se puede borrar por completo, no queda historial. Un contrato ya firmado nunca se
+            puede eliminar.
+          </p>
+          <form action={eliminarContratoAction}>
+            <input type="hidden" name="idContrato" value={contrato.ID_CONTRATO} />
+            <ConfirmSubmitButton
+              mensaje="¿Eliminar este contrato? Todavia no se firmo, se borra por completo y no se puede deshacer."
+              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+            >
+              Eliminar contrato
+            </ConfirmSubmitButton>
+          </form>
         </section>
       ) : null}
 

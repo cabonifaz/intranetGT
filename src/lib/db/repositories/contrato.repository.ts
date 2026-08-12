@@ -114,6 +114,12 @@ export async function actualizarFuncionesContrato(idContrato: number, funciones:
   await callProcedure("SP_RRHH_CONTRATO_ACTUALIZAR_FUNCIONES", [idContrato, funciones]);
 }
 
+// Borrado real, solo mientras el contrato sigue BORRADOR/PENDIENTE_FIRMA
+// (no-op silencioso en cualquier otro estado, ver SP_RRHH_CONTRATO_ELIMINAR).
+export async function eliminarContrato(idContrato: number): Promise<void> {
+  await callProcedure("SP_RRHH_CONTRATO_ELIMINAR", [idContrato]);
+}
+
 // --- Conceptos remunerativos (planilla) ---
 
 export async function agregarConceptoContrato(

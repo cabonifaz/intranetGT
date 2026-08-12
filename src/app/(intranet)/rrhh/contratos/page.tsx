@@ -2,12 +2,14 @@ import Link from "next/link";
 import { requirePermiso } from "@/lib/auth/require-permiso";
 import { listarContratos } from "@/lib/db/repositories/contrato.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
+import { eliminarContratoAction } from "@/lib/actions/rrhh";
 import type { ContratoListadoRow } from "@/types/db";
 import IconoAlertaVencimiento, {
   diasHastaVencimiento,
   DIAS_PROXIMOS,
   DIAS_SIGUIENTE_SEMANA,
 } from "@/components/ui/IconoAlertaVencimiento";
+import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 
 const DIAS_ALERTA_VENCIMIENTO = 30;
 
@@ -181,6 +183,16 @@ export default async function ContratosPage({
                     >
                       Descargar
                     </a>
+                  ) : c.ESTADO_CONTRATO_CODIGO === "BORRADOR" || c.ESTADO_CONTRATO_CODIGO === "PENDIENTE_FIRMA" ? (
+                    <form action={eliminarContratoAction}>
+                      <input type="hidden" name="idContrato" value={c.ID_CONTRATO} />
+                      <ConfirmSubmitButton
+                        mensaje={`¿Eliminar el contrato de ${c.NOMBRES} ${c.APELLIDOS} (${c.ESTADO_CONTRATO_DESCRIPCION})? Todavia no se firmo, se borra por completo.`}
+                        className="font-medium text-red-600 hover:underline dark:text-red-400"
+                      >
+                        Eliminar
+                      </ConfirmSubmitButton>
+                    </form>
                   ) : (
                     <span className="text-slate-400 dark:text-slate-600">-</span>
                   )}

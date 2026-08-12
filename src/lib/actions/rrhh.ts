@@ -24,6 +24,7 @@ import {
   eliminarHorasContrato,
   marcarHorasPagadas,
   actualizarFuncionesContrato,
+  eliminarContrato,
 } from "@/lib/db/repositories/contrato.repository";
 import { registrarMovimientoCuenta, obtenerIdTipoMovimientoEgreso } from "@/lib/db/repositories/cuenta.repository";
 import {
@@ -288,6 +289,26 @@ export async function actualizarFuncionesContratoAction(formData: FormData): Pro
   await actualizarFuncionesContrato(idContrato, funciones);
   revalidatePath(`/rrhh/contratos/${idContrato}`);
   refresh();
+}
+
+// Solo borra de verdad contratos BORRADOR/PENDIENTE_FIRMA -- todavia no
+// son un documento legal, no se firmaron, no generaron ningun movimiento
+// de dinero (ver SP_RRHH_CONTRATO_ELIMINAR). No-op silencioso en
+// cualquier otro estado -- un FIRMADO/VENCIDO/RENOVADO/ANULADO nunca se
+// borra, para eso existe ANULADO.
+export async function eliminarContratoAction(formData: FormData): Promise<void> {
+  await requirePermiso(CONTRATOS_APP_CODIGO, "ESCRITURA");
+
+  const idContrato = Number(formData.get("idContrato"));
+  if (!idContrato) return;
+
+  await eliminarContrato(idContrato);
+  revalidatePath("/rrhh/contratos");
+  // redirect() sirve para los dos lugares desde donde se llama esta accion:
+  // desde el listado, redirige al mismo listado (la fila ya desaparecio,
+  // efecto igual a un refresh); desde el detalle, saca a la persona de una
+  // pagina cuyo contrato ya no existe.
+  redirect("/rrhh/contratos");
 }
 
 export async function agregarConceptoContratoAction(formData: FormData): Promise<void> {

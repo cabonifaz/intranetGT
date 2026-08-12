@@ -11,6 +11,7 @@ DROP PROCEDURE IF EXISTS SP_RRHH_CONTRATO_OBTENER_POR_TOKEN;
 DROP PROCEDURE IF EXISTS SP_RRHH_CONTRATO_FIRMAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_CONTRATO_RENOVAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_CONTRATO_ACTUALIZAR_FUNCIONES;
+DROP PROCEDURE IF EXISTS SP_RRHH_CONTRATO_ELIMINAR;
 -- SP_RRHH_CONTRATO_LISTAR_PARA_PAGOS ya no existe -- la reemplazo el
 -- flujo de periodos de pago (ver sp_rrhh_contrato_periodo_pago.sql), que
 -- calcula el monto sugerido de un periodo nuevo en la app (mismos datos
@@ -342,6 +343,38 @@ BEGIN
      WHERE ID_CONTRATO = p_id_contrato_anterior AND ID_ESTADO = v_id_activo;
 
     UPDATE RRHH_CONTRATO SET ID_ESTADO_CONTRATO = v_id_renovado WHERE ID_CONTRATO = p_id_contrato_anterior;
+END$$
+
+-- Borrado real solo mientras el contrato sigue BORRADOR/PENDIENTE_FIRMA
+-- (todavia no es un documento legal -- nunca se firmo, no genero ningun
+-- movimiento de dinero). Un contrato FIRMADO/VENCIDO/RENOVADO/ANULADO
+-- nunca se borra de verdad, mismo criterio que PASIVO_CUOTA/RRHH_CONTRATO_
+-- PERIODO_PAGO ("borrado real solo mientras no paso nada todavia"). No-op
+-- silencioso en cualquier otro estado. SP_RRHH_CONTRATO_RENOVAR siempre
+-- crea el contrato nuevo en BORRADOR enlazado via ID_CONTRATO_ANTERIOR al
+-- ANTERIOR (nunca al reves), asi que un contrato BORRADOR jamas es el
+-- "anterior" de otro -- no hace falta revisar ese FK antes de borrar.
+CREATE PROCEDURE SP_RRHH_CONTRATO_ELIMINAR(
+    IN p_id_contrato INT UNSIGNED
+)
+BEGIN
+    DECLARE v_puede_eliminar INT;
+
+    SELECT COUNT(*) INTO v_puede_eliminar
+      FROM RRHH_CONTRATO c
+      JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = c.ID_ESTADO_CONTRATO
+     WHERE c.ID_CONTRATO = p_id_contrato AND ec.CODIGO IN ('BORRADOR', 'PENDIENTE_FIRMA');
+
+    IF v_puede_eliminar = 1 THEN
+        DELETE h FROM RRHH_CONTRATO_HORAS h
+          JOIN RRHH_CONTRATO_PROYECTO cp ON cp.ID_CONTRATO_PROYECTO = h.ID_CONTRATO_PROYECTO
+         WHERE cp.ID_CONTRATO = p_id_contrato;
+
+        DELETE FROM RRHH_CONTRATO_PROYECTO WHERE ID_CONTRATO = p_id_contrato;
+        DELETE FROM RRHH_CONTRATO_PERIODO_PAGO WHERE ID_CONTRATO = p_id_contrato;
+        DELETE FROM RRHH_CONTRATO_CONCEPTO WHERE ID_CONTRATO = p_id_contrato;
+        DELETE FROM RRHH_CONTRATO WHERE ID_CONTRATO = p_id_contrato;
+    END IF;
 END$$
 
 DELIMITER ;
