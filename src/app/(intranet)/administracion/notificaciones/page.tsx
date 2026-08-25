@@ -4,6 +4,7 @@ import { listarRoles } from "@/lib/db/repositories/rol.repository";
 import { listarAreas } from "@/lib/db/repositories/area.repository";
 import { enviarNotificacionAction } from "@/lib/actions/administracion";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 export default async function NotificacionesAdminPage() {
   const [categorias, usuarios, roles, areas] = await Promise.all([
@@ -86,9 +87,9 @@ export default async function NotificacionesAdminPage() {
           </div>
         </div>
 
-        <button type="submit" className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        <SubmitButton className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Enviando...">
           Enviar
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );

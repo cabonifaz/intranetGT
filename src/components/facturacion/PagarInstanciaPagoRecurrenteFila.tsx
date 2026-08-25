@@ -4,6 +4,7 @@ import { useState } from "react";
 import { pagarInstanciaAction } from "@/lib/actions/pago-recurrente";
 import type { CuentaListadoRow } from "@/types/db";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 interface PagarInstanciaPagoRecurrenteFilaProps {
   idPagoRecurrente: number;
@@ -88,9 +89,9 @@ export default function PagarInstanciaPagoRecurrenteFila({
         defaultValue={monto}
         className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
       />
-      <button type="submit" className="rounded-full bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700">
+      <SubmitButton className="rounded-full bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700">
         Confirmar
-      </button>
+      </SubmitButton>
       <button
         type="button"
         onClick={() => setAbierto(false)}

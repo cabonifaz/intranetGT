@@ -4,6 +4,7 @@ import { useState } from "react";
 import { actualizarInstanciaAction } from "@/lib/actions/pago-recurrente";
 import type { CuentaListadoRow } from "@/types/db";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 interface EditarInstanciaPagoRecurrenteFilaProps {
   idPagoRecurrente: number;
@@ -62,9 +63,9 @@ export default function EditarInstanciaPagoRecurrenteFila({
           opciones={cuentas.map((c) => ({ value: String(c.ID_CUENTA), label: c.NOMBRE }))}
         />
       </div>
-      <button type="submit" className="rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">
+      <SubmitButton className="rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
         Guardar
-      </button>
+      </SubmitButton>
       <button
         type="button"
         onClick={() => setAbierto(false)}

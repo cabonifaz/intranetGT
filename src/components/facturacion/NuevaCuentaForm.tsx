@@ -4,6 +4,7 @@ import { useState } from "react";
 import { crearCuentaAction } from "@/lib/actions/cuentas";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 interface NuevaCuentaFormProps {
   tiposCuenta: MaestroRow[];
@@ -58,9 +59,9 @@ export default function NuevaCuentaForm({ tiposCuenta, bancos, monedas }: NuevaC
 
       <Campo name="saldoInicial" label="Saldo inicial" type="number" required={false} placeholder="0.00" />
 
-      <button type="submit" className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700">
+      <SubmitButton className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Creando...">
         Crear cuenta
-      </button>
+      </SubmitButton>
     </form>
   );
 }

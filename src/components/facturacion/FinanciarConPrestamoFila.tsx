@@ -6,6 +6,7 @@ import type { ProveedorListadoRow, DirectorioContactoConTipoRow, EmpleadoDirecto
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
 import SelectorAcreedorPasivo from "@/components/facturacion/SelectorAcreedorPasivo";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 interface FinanciarConPrestamoFilaProps {
   tipoReferencia: string;
@@ -144,9 +145,9 @@ export default function FinanciarConPrestamoFila({
         />
       </div>
       <div className="flex items-end gap-2 sm:col-span-2">
-        <button type="submit" className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-700">
+        <SubmitButton className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-700">
           Confirmar prestamo
-        </button>
+        </SubmitButton>
         <button
           type="button"
           onClick={() => setAbierto(false)}

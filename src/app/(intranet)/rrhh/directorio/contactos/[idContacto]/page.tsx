@@ -4,6 +4,7 @@ import { requirePermiso } from "@/lib/auth/require-permiso";
 import { obtenerContactoExterno } from "@/lib/db/repositories/directorio-contacto.repository";
 import { actualizarContactoExternoAction, cambiarEstadoContactoExternoAction } from "@/lib/actions/directorio-contacto";
 import { BADGE_TIPO_CONTACTO } from "@/lib/directorio/tipo-contacto";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 export default async function DetalleContactoExternoPage({
   params,
@@ -59,8 +60,7 @@ export default async function DetalleContactoExternoPage({
           {contacto.ID_CLIENTE ? <input type="hidden" name="idCliente" value={contacto.ID_CLIENTE} /> : null}
           {contacto.ID_PROVEEDOR ? <input type="hidden" name="idProveedor" value={contacto.ID_PROVEEDOR} /> : null}
           <input type="hidden" name="activo" value={activo ? "0" : "1"} />
-          <button
-            type="submit"
+          <SubmitButton
             className={`rounded-lg px-4 py-2 text-sm font-medium ${
               activo
                 ? "border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -68,7 +68,7 @@ export default async function DetalleContactoExternoPage({
             }`}
           >
             {activo ? "Desactivar" : "Activar"}
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -92,9 +92,9 @@ export default async function DetalleContactoExternoPage({
             <Campo name="telefono" label="Telefono" defaultValue={contacto.TELEFONO ?? ""} required={false} />
             <Campo name="correo" label="Correo" type="email" defaultValue={contacto.CORREO ?? ""} required={false} />
           </div>
-          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
             Guardar
-          </button>
+          </SubmitButton>
         </form>
       </section>
     </div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { anularPasivoAction } from "@/lib/actions/pasivos";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 interface AnularPasivoBotonProps {
   idPasivo: number;
@@ -46,9 +47,9 @@ export default function AnularPasivoBoton({ idPasivo, idProyecto }: AnularPasivo
         placeholder="Motivo de la anulacion"
         className="w-56 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
       />
-      <button type="submit" className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700">
+      <SubmitButton className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700">
         Confirmar
-      </button>
+      </SubmitButton>
       <button
         type="button"
         onClick={() => setExpandido(false)}

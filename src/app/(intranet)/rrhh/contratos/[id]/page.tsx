@@ -22,6 +22,7 @@ import PagarHorasContratoFila from "@/components/rrhh/PagarHorasContratoFila";
 import PagarPeriodoContratoFila from "@/components/rrhh/PagarPeriodoContratoFila";
 import EditarPeriodoPagoFila from "@/components/rrhh/EditarPeriodoPagoFila";
 import FinanciarConPrestamoFila from "@/components/facturacion/FinanciarConPrestamoFila";
+import SubmitButton from "@/components/ui/SubmitButton";
 import {
   renovarContratoAction,
   agregarConceptoContratoAction,
@@ -185,9 +186,9 @@ export default async function DetalleContratoPage({
                 placeholder="Detalle de funciones del puesto"
                 className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
-              <button type="submit" className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+              <SubmitButton className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
                 Guardar funciones
-              </button>
+              </SubmitButton>
             </form>
           ) : (
             <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
@@ -241,9 +242,9 @@ export default async function DetalleContratoPage({
               <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Monto (S/)</label>
               <input type="number" step="0.01" name="monto" required className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
             </div>
-            <button type="submit" className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+            <SubmitButton className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700" pendingText="Agregando...">
               Agregar
-            </button>
+            </SubmitButton>
           </form>
         </section>
       ) : null}
@@ -260,9 +261,9 @@ export default async function DetalleContratoPage({
             </div>
             <form action={generarPeriodosPendientesAction}>
               <input type="hidden" name="idContrato" value={idContrato} />
-              <button type="submit" className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
+              <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700" pendingText="Generando...">
                 Generar periodos pendientes
-              </button>
+              </SubmitButton>
             </form>
           </div>
 
@@ -333,9 +334,9 @@ export default async function DetalleContratoPage({
                   className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
-              <button type="submit" className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+              <SubmitButton className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700" pendingText="Agregando...">
                 Agregar periodo
-              </button>
+              </SubmitButton>
             </form>
           </details>
         </section>
@@ -409,9 +410,9 @@ export default async function DetalleContratoPage({
                 className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
-            <button type="submit" className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+            <SubmitButton className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700" pendingText="Agregando...">
               Agregar proyecto
-            </button>
+            </SubmitButton>
           </form>
           <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
             El TC es obligatorio solo si la moneda elegida es distinta a la del proyecto.
@@ -499,9 +500,9 @@ export default async function DetalleContratoPage({
                 <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Horas</label>
                 <input type="number" step="0.01" name="horas" required className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
               </div>
-              <button type="submit" className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+              <SubmitButton className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700" pendingText="Registrando...">
                 Registrar
-              </button>
+              </SubmitButton>
             </form>
           ) : null}
         </section>
@@ -562,9 +563,9 @@ export default async function DetalleContratoPage({
               <input type="date" name="fechaFin" required className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
             </div>
             <div className="sm:col-span-2">
-              <button type="submit" className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto sm:px-6">
+              <SubmitButton className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto sm:px-6" pendingText="Creando...">
                 Crear renovación
-              </button>
+              </SubmitButton>
             </div>
           </form>
         </section>

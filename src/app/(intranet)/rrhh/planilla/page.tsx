@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermiso } from "@/lib/auth/require-permiso";
 import { listarPlanillasMensuales } from "@/lib/db/repositories/rrhh-planilla.repository";
 import { generarPlanillaMensualAction } from "@/lib/actions/rrhh-planilla";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 const MESES = [
   "Enero",
@@ -47,9 +48,9 @@ export default async function PlanillaMensualPage() {
           <form action={generarPlanillaMensualAction}>
             <input type="hidden" name="anio" value={anioActual} />
             <input type="hidden" name="mes" value={mesActual} />
-            <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
               {yaExisteMesActual ? `Actualizar planilla de ${MESES[mesActual - 1]}` : `Generar planilla de ${MESES[mesActual - 1]}`}
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>

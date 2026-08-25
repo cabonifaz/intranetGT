@@ -5,6 +5,7 @@ import {
   obtenerTipoCambioSunatDia,
 } from "@/lib/db/repositories/tipo-cambio.repository";
 import { fijarTipoCambioAction, actualizarTipoCambioSunatAction } from "@/lib/actions/tipo-cambio";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 function formatearFecha(fecha: string): string {
   return new Date(`${fecha}T00:00:00`).toLocaleDateString("es-PE", { dateStyle: "medium" });
@@ -39,13 +40,13 @@ export default async function TipoCambioPage() {
           </p>
         </div>
         <form action={actualizarTipoCambioSunatAction}>
-          <button
-            type="submit"
+          <SubmitButton
             title="Vuelve a consultar el TC oficial SUNAT del dia y fija las 4 categorias con el TC Venta obtenido, aunque el sync automatico de hoy ya haya corrido."
             className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            pendingText="Actualizando..."
           >
             Actualizar TC ahora
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -98,9 +99,9 @@ export default async function TipoCambioPage() {
                   className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
-              <button type="submit" className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+              <SubmitButton className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700" pendingText="Fijando...">
                 Fijar
-              </button>
+              </SubmitButton>
             </form>
 
             {historicos[indice].length > 0 ? (

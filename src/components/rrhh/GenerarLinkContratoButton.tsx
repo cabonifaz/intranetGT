@@ -2,11 +2,12 @@
 
 import { useActionState, useState } from "react";
 import { generarLinkContratoAction, type GenerarLinkContratoState } from "@/lib/actions/rrhh";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 const ESTADO_INICIAL: GenerarLinkContratoState = { ok: false };
 
 export default function GenerarLinkContratoButton({ idContrato }: { idContrato: number }) {
-  const [estado, formAction, enviando] = useActionState(generarLinkContratoAction, ESTADO_INICIAL);
+  const [estado, formAction] = useActionState(generarLinkContratoAction, ESTADO_INICIAL);
   const [copiado, setCopiado] = useState(false);
 
   async function copiar() {
@@ -20,13 +21,12 @@ export default function GenerarLinkContratoButton({ idContrato }: { idContrato: 
     <div>
       <form action={formAction}>
         <input type="hidden" name="idContrato" value={idContrato} />
-        <button
-          type="submit"
-          disabled={enviando}
+        <SubmitButton
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          pendingText="Generando..."
         >
-          {enviando ? "Generando..." : "Generar link de firma"}
-        </button>
+          Generar link de firma
+        </SubmitButton>
       </form>
 
       {estado.error ? <p className="mt-2 text-sm text-red-600 dark:text-red-400">{estado.error}</p> : null}

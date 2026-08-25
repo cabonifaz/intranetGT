@@ -42,6 +42,7 @@ import PagarCostoManoObraFila from "@/components/facturacion/PagarCostoManoObraF
 import PagarHorasContratoFila from "@/components/rrhh/PagarHorasContratoFila";
 import FinanciarConPrestamoFila from "@/components/facturacion/FinanciarConPrestamoFila";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 function formatearMonto(monto: string | number, monedaCodigo: string | null): string {
   const valor = Number(monto);
@@ -391,9 +392,9 @@ export default async function DetalleProyectoPage({
             <Campo name="costoPresupuestado" label="Costo presupuestado" type="number" defaultValue={proyecto.COSTO_PRESUPUESTADO} />
             <Campo name="ingresoEsperado" label="Ingreso esperado" type="number" defaultValue={proyecto.INGRESO_ESPERADO} />
           </div>
-          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
             Guardar
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -425,9 +426,9 @@ export default async function DetalleProyectoPage({
           <Campo name="porcentaje" label="% del ingreso esperado (o monto fijo abajo)" type="number" required={false} min={0} max={100} />
           <Campo name="montoFijo" label="Monto fijo (si no usas %)" type="number" required={false} />
           <div className="flex items-end">
-            <button type="submit" className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <SubmitButton className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Agregando...">
               Agregar
-            </button>
+            </SubmitButton>
           </div>
         </form>
 
@@ -534,9 +535,9 @@ export default async function DetalleProyectoPage({
             del proyecto ({proyecto.MONEDA_CODIGO}).
           </p>
           <div className="sm:col-span-4">
-            <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Agregando...">
               Agregar
-            </button>
+            </SubmitButton>
           </div>
         </form>
 

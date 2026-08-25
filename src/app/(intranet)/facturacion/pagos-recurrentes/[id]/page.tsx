@@ -24,6 +24,7 @@ import IconoAlertaVencimiento, { diasHastaVencimiento } from "@/components/ui/Ic
 import PagarInstanciaPagoRecurrenteFila from "@/components/facturacion/PagarInstanciaPagoRecurrenteFila";
 import EditarInstanciaPagoRecurrenteFila from "@/components/facturacion/EditarInstanciaPagoRecurrenteFila";
 import FinanciarConPrestamoFila from "@/components/facturacion/FinanciarConPrestamoFila";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 function formatearMonto(monto: string | number, monedaCodigo: string | null): string {
   const valor = Number(monto);
@@ -88,8 +89,7 @@ export default async function DetallePagoRecurrentePage({
         <form action={cambiarEstadoPagoRecurrenteAction}>
           <input type="hidden" name="idPagoRecurrente" value={pago.ID_PAGO_RECURRENTE} />
           <input type="hidden" name="activo" value={activo ? "0" : "1"} />
-          <button
-            type="submit"
+          <SubmitButton
             className={`rounded-lg px-4 py-2 text-sm font-medium ${
               activo
                 ? "border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -97,7 +97,7 @@ export default async function DetallePagoRecurrentePage({
             }`}
           >
             {activo ? "Desactivar" : "Activar"}
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -150,9 +150,9 @@ export default async function DetallePagoRecurrentePage({
               opciones={cuentas.map((c) => ({ value: String(c.ID_CUENTA), label: c.NOMBRE }))}
             />
           </div>
-          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
             Guardar
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -165,9 +165,9 @@ export default async function DetallePagoRecurrentePage({
           </p>
           <form action={generarInstanciasPendientesAction} className="mt-3">
             <input type="hidden" name="idPagoRecurrente" value={pago.ID_PAGO_RECURRENTE} />
-            <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Generando...">
               Generar
-            </button>
+            </SubmitButton>
           </form>
         </section>
       ) : null}
@@ -183,9 +183,9 @@ export default async function DetallePagoRecurrentePage({
           <Campo name="fechaVencimiento" label="Vencimiento" type="date" />
           <Campo name="monto" label="Monto" type="number" defaultValue={pago.ES_VARIABLE === 1 ? "" : pago.MONTO_FIJO ?? ""} />
           <div className="flex items-end">
-            <button type="submit" className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <SubmitButton className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Agregando...">
               Agregar
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>

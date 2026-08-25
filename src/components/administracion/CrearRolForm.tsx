@@ -4,11 +4,12 @@ import { useActionState } from "react";
 import { crearRolAction, type CrearRolState } from "@/lib/actions/administracion";
 import type { AreaRow } from "@/types/db";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 const ESTADO_INICIAL: CrearRolState = { ok: false };
 
 export default function CrearRolForm({ areas }: { areas: AreaRow[] }) {
-  const [estado, formAction, enviando] = useActionState(crearRolAction, ESTADO_INICIAL);
+  const [estado, formAction] = useActionState(crearRolAction, ESTADO_INICIAL);
 
   return (
     <div>
@@ -29,13 +30,12 @@ export default function CrearRolForm({ areas }: { areas: AreaRow[] }) {
         <Campo name="codigo" label="Codigo (ej. LOGISTICA_JEFATURA)" />
         <Campo name="nombre" label="Nombre" />
         <Campo name="nivelJerarquico" label="Nivel jerarquico (menor = mas privilegio)" type="number" defaultValue="50" />
-        <button
-          type="submit"
-          disabled={enviando}
+        <SubmitButton
           className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          pendingText="Creando..."
         >
-          {enviando ? "Creando..." : "Crear rol"}
-        </button>
+          Crear rol
+        </SubmitButton>
       </form>
 
       {estado.error ? (

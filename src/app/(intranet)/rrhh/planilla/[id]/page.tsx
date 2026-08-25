@@ -4,6 +4,7 @@ import { requirePermiso } from "@/lib/auth/require-permiso";
 import { obtenerPlanillaMensual, listarDetalle } from "@/lib/db/repositories/rrhh-planilla.repository";
 import { marcarPagadoDetalleAction, marcarPagadoMasivoAction, emitirPlanillaMensualAction } from "@/lib/actions/rrhh-planilla";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 function formatearMonto(monto: string | number): string {
   return `S/ ${Number(monto).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -49,9 +50,9 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
           <form action={marcarPagadoMasivoAction}>
             <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
             <input type="hidden" name="pagado" value="1" />
-            <button type="submit" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+            <SubmitButton className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
               Marcar todos como pagados
-            </button>
+            </SubmitButton>
           </form>
           {!emitida ? (
             <form action={emitirPlanillaMensualAction}>
@@ -127,8 +128,7 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
                       <input type="hidden" name="idPlanillaDetalle" value={f.ID_PLANILLA_DETALLE} />
                       <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
                       <input type="hidden" name="pagado" value={f.AFP_ESSALUD_PAGADO ? "0" : "1"} />
-                      <button
-                        type="submit"
+                      <SubmitButton
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           f.AFP_ESSALUD_PAGADO
                             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
@@ -136,7 +136,7 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
                         }`}
                       >
                         {f.AFP_ESSALUD_PAGADO ? "Pagado" : "Marcar pagado"}
-                      </button>
+                      </SubmitButton>
                     </form>
                   </td>
                 </tr>

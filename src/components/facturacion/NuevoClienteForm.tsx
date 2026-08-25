@@ -1,6 +1,7 @@
 "use client";
 
 import { crearClienteAction } from "@/lib/actions/proyectos";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 export default function NuevoClienteForm() {
   return (
@@ -16,9 +17,9 @@ export default function NuevoClienteForm() {
         <Campo name="correo" label="Correo (opcional)" type="email" required={false} />
       </div>
 
-      <button type="submit" className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700">
+      <SubmitButton className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Creando...">
         Crear cliente
-      </button>
+      </SubmitButton>
     </form>
   );
 }

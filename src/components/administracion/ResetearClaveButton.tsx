@@ -2,11 +2,12 @@
 
 import { useActionState, type FormEvent } from "react";
 import { resetearClaveAction, type ResetearClaveState } from "@/lib/actions/administracion";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 const ESTADO_INICIAL: ResetearClaveState = { ok: false };
 
 export default function ResetearClaveButton({ idUsuario, usuario }: { idUsuario: number; usuario: string }) {
-  const [estado, formAction, enviando] = useActionState(resetearClaveAction, ESTADO_INICIAL);
+  const [estado, formAction] = useActionState(resetearClaveAction, ESTADO_INICIAL);
 
   function confirmarEnvio(event: FormEvent<HTMLFormElement>) {
     if (!window.confirm(`¿Generar una nueva clave temporal para "${usuario}"? La clave actual dejara de funcionar.`)) {
@@ -18,13 +19,12 @@ export default function ResetearClaveButton({ idUsuario, usuario }: { idUsuario:
     <div>
       <form action={formAction} onSubmit={confirmarEnvio}>
         <input type="hidden" name="idUsuario" value={idUsuario} />
-        <button
-          type="submit"
-          disabled={enviando}
+        <SubmitButton
           className="text-xs font-medium text-blue-600 hover:underline disabled:opacity-60 dark:text-blue-400"
+          pendingText="Generando..."
         >
-          {enviando ? "Generando..." : "Resetear clave"}
-        </button>
+          Resetear clave
+        </SubmitButton>
       </form>
 
       {estado.error ? <p className="mt-1 text-xs text-red-600 dark:text-red-400">{estado.error}</p> : null}

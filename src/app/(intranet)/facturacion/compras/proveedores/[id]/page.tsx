@@ -5,6 +5,7 @@ import { obtenerProveedor, listarCompras } from "@/lib/db/repositories/compra.re
 import { listarContactosPorProveedor } from "@/lib/db/repositories/directorio-contacto.repository";
 import { actualizarProveedorAction, cambiarEstadoProveedorAction } from "@/lib/actions/compras";
 import { crearContactoExternoAction } from "@/lib/actions/directorio-contacto";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 function formatearMonto(monto: string | number, monedaCodigo: string | null): string {
   const valor = Number(monto);
@@ -34,8 +35,7 @@ export default async function DetalleProveedorPage({
         <form action={cambiarEstadoProveedorAction}>
           <input type="hidden" name="idProveedor" value={proveedor.ID_PROVEEDOR} />
           <input type="hidden" name="activo" value={activo ? "0" : "1"} />
-          <button
-            type="submit"
+          <SubmitButton
             className={`rounded-lg px-4 py-2 text-sm font-medium ${
               activo
                 ? "border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -43,7 +43,7 @@ export default async function DetalleProveedorPage({
             }`}
           >
             {activo ? "Desactivar" : "Activar"}
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -67,9 +67,9 @@ export default async function DetalleProveedorPage({
             <Campo name="telefono" label="Telefono" defaultValue={proveedor.TELEFONO ?? ""} required={false} />
             <Campo name="correo" label="Correo" type="email" defaultValue={proveedor.CORREO ?? ""} required={false} />
           </div>
-          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
             Guardar
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -92,9 +92,9 @@ export default async function DetalleProveedorPage({
           <Campo name="telefono" label="Telefono" required={false} />
           <Campo name="correo" label="Correo" type="email" required={false} />
           <div className="sm:col-span-2">
-            <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Agregando...">
               Agregar contacto
-            </button>
+            </SubmitButton>
           </div>
         </form>
 

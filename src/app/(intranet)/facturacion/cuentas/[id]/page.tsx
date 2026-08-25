@@ -16,6 +16,7 @@ import {
 import { calcularIgvConsolidado } from "@/lib/proyectos/impuestos";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 function formatearMonto(monto: string | number, monedaCodigo: string | null): string {
   const valor = Number(monto);
@@ -78,8 +79,7 @@ export default async function DetalleCuentaPage({
           <form action={cambiarEstadoCuentaAction}>
             <input type="hidden" name="idCuenta" value={cuenta.ID_CUENTA} />
             <input type="hidden" name="activo" value={activa ? "0" : "1"} />
-            <button
-              type="submit"
+            <SubmitButton
               className={`rounded-lg px-4 py-2 text-sm font-medium ${
                 activa
                   ? "border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -87,7 +87,7 @@ export default async function DetalleCuentaPage({
               }`}
             >
               {activa ? "Desactivar" : "Activar"}
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>
@@ -109,9 +109,9 @@ export default async function DetalleCuentaPage({
               <Campo name="cci" label="CCI" defaultValue={cuenta.CCI ?? ""} required={false} />
             </div>
           ) : null}
-          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
             Guardar
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -143,9 +143,9 @@ export default async function DetalleCuentaPage({
               <Campo name="fechaMovimiento" label="Fecha" type="date" defaultValue={hoy} />
               <Campo name="monto" label="Monto a aplicar" type="number" defaultValue={montoAplicable.toFixed(2)} />
               <div className="flex items-end">
-                <button type="submit" className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                <SubmitButton className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Aplicando...">
                   Aplicar contra saldo a favor
-                </button>
+                </SubmitButton>
               </div>
             </form>
           ) : (
@@ -183,9 +183,9 @@ export default async function DetalleCuentaPage({
               opciones={contratos.map((c) => ({ value: String(c.ID_CONTRATO), label: `${c.NOMBRES} ${c.APELLIDOS} - ${c.CARGO}` }))}
             />
           </div>
-          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Registrando...">
             Registrar
-          </button>
+          </SubmitButton>
         </form>
       </section>
 

@@ -3,6 +3,7 @@ import { listarRoles } from "@/lib/db/repositories/rol.repository";
 import { listarPermisosPorRol } from "@/lib/db/repositories/permiso.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { asignarPermisoAction } from "@/lib/actions/administracion";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 export default async function PermisosPage({
   searchParams,
@@ -66,9 +67,9 @@ export default async function PermisosPage({
                         </option>
                       ))}
                     </select>
-                    <button type="submit" className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700">
+                    <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
                       Guardar
-                    </button>
+                    </SubmitButton>
                   </form>
                 </td>
               </tr>

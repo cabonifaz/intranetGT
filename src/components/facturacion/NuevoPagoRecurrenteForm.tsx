@@ -5,6 +5,7 @@ import { crearPagoRecurrenteAction } from "@/lib/actions/pago-recurrente";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
 import type { CuentaListadoRow } from "@/types/db";
 import { ComboBusqueda, type OpcionCombo } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 interface NuevoPagoRecurrenteFormProps {
   monedas: MaestroRow[];
@@ -102,9 +103,9 @@ export default function NuevoPagoRecurrenteForm({ monedas, cuentas, proyectos }:
         </p>
       </div>
 
-      <button type="submit" className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700">
+      <SubmitButton className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Creando...">
         Crear pago recurrente
-      </button>
+      </SubmitButton>
     </form>
   );
 }

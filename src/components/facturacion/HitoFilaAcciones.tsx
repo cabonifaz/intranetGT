@@ -9,6 +9,7 @@ import {
   eliminarHitoProyectoAction,
 } from "@/lib/actions/proyectos";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
+import SubmitButton from "@/components/ui/SubmitButton";
 import type { ProyectoHitoRow } from "@/types/db";
 
 interface HitoFilaAccionesProps {
@@ -58,9 +59,9 @@ export default function HitoFilaAcciones({ hito, idProyecto, nombreProyecto }: H
           defaultValue={hoy}
           className="rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         />
-        <button type="submit" className="rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">
+        <SubmitButton className="rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">
           Confirmar
-        </button>
+        </SubmitButton>
         <button type="button" onClick={() => setModo("ninguno")} className="rounded-full px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
           Cancelar
         </button>
@@ -89,9 +90,9 @@ export default function HitoFilaAcciones({ hito, idProyecto, nombreProyecto }: H
           defaultValue={hito.MONTO}
           className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         />
-        <button type="submit" className="rounded-full bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700">
+        <SubmitButton className="rounded-full bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700">
           Confirmar
-        </button>
+        </SubmitButton>
         <button type="button" onClick={() => setModo("ninguno")} className="rounded-full px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
           Cancelar
         </button>

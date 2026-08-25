@@ -6,6 +6,7 @@ import RevocarRolButton from "@/components/administracion/RevocarRolButton";
 import ResetearClaveButton from "@/components/administracion/ResetearClaveButton";
 import type { UsuarioRolActivoRow } from "@/types/db";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 export default async function UsuariosPage() {
   const [usuarios, roles, rolesActivos] = await Promise.all([
@@ -114,9 +115,9 @@ export default async function UsuariosPage() {
             <input type="checkbox" name="esPrincipal" className="h-3.5 w-3.5" />
             Rol principal
           </label>
-          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+          <SubmitButton className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700" pendingText="Asignando...">
             Asignar
-          </button>
+          </SubmitButton>
         </form>
       </div>
 

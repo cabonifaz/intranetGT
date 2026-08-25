@@ -2,11 +2,12 @@
 
 import { useActionState } from "react";
 import { crearUsuarioAction, type CrearUsuarioState } from "@/lib/actions/administracion";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 const ESTADO_INICIAL: CrearUsuarioState = { ok: false };
 
 export default function CrearUsuarioForm() {
-  const [estado, formAction, enviando] = useActionState(crearUsuarioAction, ESTADO_INICIAL);
+  const [estado, formAction] = useActionState(crearUsuarioAction, ESTADO_INICIAL);
 
   return (
     <div>
@@ -23,13 +24,12 @@ export default function CrearUsuarioForm() {
         <Campo name="correo" label="Correo" type="email" />
         <Campo name="nombres" label="Nombres" />
         <Campo name="apellidos" label="Apellidos" />
-        <button
-          type="submit"
-          disabled={enviando}
+        <SubmitButton
           className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          pendingText="Creando..."
         >
-          {enviando ? "Creando..." : "Crear"}
-        </button>
+          Crear
+        </SubmitButton>
       </form>
 
       {estado.error ? (

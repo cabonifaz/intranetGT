@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { pagarCuotaAction, protestarCuotaAction, anularCuotaAction, eliminarCuotaAction } from "@/lib/actions/pasivos";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
+import SubmitButton from "@/components/ui/SubmitButton";
 import type { CuentaListadoRow, PasivoCuotaRow } from "@/types/db";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
 
@@ -50,9 +51,9 @@ export default function CuotaFilaAcciones({ cuota, idPasivo, acreedor, cuentas }
           defaultValue={cuota.MONTO}
           className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         />
-        <button type="submit" className="rounded-full bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700">
+        <SubmitButton className="rounded-full bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700">
           Confirmar
-        </button>
+        </SubmitButton>
         <button type="button" onClick={() => setModo("ninguno")} className="rounded-full px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
           Cancelar
         </button>
@@ -79,9 +80,9 @@ export default function CuotaFilaAcciones({ cuota, idPasivo, acreedor, cuentas }
           defaultValue={hoy}
           className="rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         />
-        <button type="submit" className="rounded-full bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700">
+        <SubmitButton className="rounded-full bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700">
           Confirmar
-        </button>
+        </SubmitButton>
         <button type="button" onClick={() => setModo("ninguno")} className="rounded-full px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
           Cancelar
         </button>

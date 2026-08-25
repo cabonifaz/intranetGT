@@ -5,6 +5,7 @@ import { crearAplicacionAction, type CrearAplicacionState } from "@/lib/actions/
 import type { AreaRow } from "@/types/db";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 const ESTADO_INICIAL: CrearAplicacionState = { ok: false };
 
@@ -14,7 +15,7 @@ interface CrearAplicacionFormProps {
 }
 
 export default function CrearAplicacionForm({ areas, tiposAplicacion }: CrearAplicacionFormProps) {
-  const [estado, formAction, enviando] = useActionState(crearAplicacionAction, ESTADO_INICIAL);
+  const [estado, formAction] = useActionState(crearAplicacionAction, ESTADO_INICIAL);
 
   return (
     <div>
@@ -55,13 +56,12 @@ export default function CrearAplicacionForm({ areas, tiposAplicacion }: CrearApl
           Requiere SSO (app externa, disponible en Fase 4)
         </label>
 
-        <button
-          type="submit"
-          disabled={enviando}
+        <SubmitButton
           className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          pendingText="Creando..."
         >
-          {enviando ? "Creando..." : "Crear aplicacion"}
-        </button>
+          Crear aplicacion
+        </SubmitButton>
       </form>
 
       {estado.error ? (

@@ -10,6 +10,7 @@ import {
   regenerarDocumentoDetalleAction,
 } from "@/lib/actions/rrhh-planilla";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 function formatearMonto(monto: string | number | null): string {
   if (monto === null) return "S/ 0.00";
@@ -136,9 +137,9 @@ export default async function PlanillaDetalleColaboradorPage({
             />
             {esPlanilla ? <Campo name="montoEssalud" label="EsSalud (informativo)" defaultValue={detalle.MONTO_ESSALUD ?? "0"} /> : null}
             <div className="flex items-end gap-2 sm:col-span-2">
-              <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
                 Guardar montos
-              </button>
+              </SubmitButton>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Neto = Bruto - Aporte de pension - Retencion (se recalcula solo al guardar).
               </p>
@@ -159,12 +160,12 @@ export default async function PlanillaDetalleColaboradorPage({
           <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
             <form action={recalcularDetalleAction}>
               <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
-              <button
-                type="submit"
+              <SubmitButton
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                pendingText="Recalculando..."
               >
                 Recalcular con tasas vigentes
-              </button>
+              </SubmitButton>
             </form>
             {!faltaPension ? (
               <form action={emitirDetalleAction}>
@@ -190,8 +191,7 @@ export default async function PlanillaDetalleColaboradorPage({
           <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
           <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
           <input type="hidden" name="pagado" value={detalle.AFP_ESSALUD_PAGADO ? "0" : "1"} />
-          <button
-            type="submit"
+          <SubmitButton
             className={`rounded-full px-3 py-1.5 text-sm font-medium ${
               detalle.AFP_ESSALUD_PAGADO
                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
@@ -199,7 +199,7 @@ export default async function PlanillaDetalleColaboradorPage({
             }`}
           >
             {detalle.AFP_ESSALUD_PAGADO ? "Pagado" : "Marcar como pagado"}
-          </button>
+          </SubmitButton>
         </form>
       </section>
     </div>

@@ -3,6 +3,7 @@ import { requirePermiso } from "@/lib/auth/require-permiso";
 import { listarVersionesParametro } from "@/lib/db/repositories/rrhh-planilla-parametro.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { crearVersionParametrosAction } from "@/lib/actions/rrhh-planilla";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 function formatearFecha(fecha: string): string {
   return new Date(`${fecha}T00:00:00`).toLocaleDateString("es-PE", { dateStyle: "medium" });
@@ -96,9 +97,9 @@ export default async function ParametrosPlanillaPage() {
             </div>
           </div>
 
-          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Creando...">
             Crear version
-          </button>
+          </SubmitButton>
         </form>
       </section>
 

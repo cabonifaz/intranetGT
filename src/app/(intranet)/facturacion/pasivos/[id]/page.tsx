@@ -11,6 +11,7 @@ import AnularPasivoBoton from "@/components/facturacion/AnularPasivoBoton";
 import CuotaFilaAcciones from "@/components/facturacion/CuotaFilaAcciones";
 import SelectorAcreedorPasivo from "@/components/facturacion/SelectorAcreedorPasivo";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 function formatearMonto(monto: string | number, monedaCodigo: string | null): string {
   const valor = Number(monto);
@@ -120,9 +121,9 @@ export default async function DetallePasivoPage({
               opciones={cuentas.map((c) => ({ value: String(c.ID_CUENTA), label: c.NOMBRE }))}
             />
           </div>
-          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
             Guardar
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -143,9 +144,9 @@ export default async function DetallePasivoPage({
             />
           </div>
           <div className="sm:col-span-2">
-            <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Agregando...">
               Agregar
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>

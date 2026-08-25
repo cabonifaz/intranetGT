@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { actualizarPeriodoPagoAction } from "@/lib/actions/rrhh";
 import type { ContratoPeriodoPagoRow } from "@/types/db";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 interface EditarPeriodoPagoFilaProps {
   idContrato: number;
@@ -43,9 +44,9 @@ export default function EditarPeriodoPagoFila({ idContrato, periodo }: EditarPer
         defaultValue={periodo.MONTO}
         className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white"
       />
-      <button type="submit" className="rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700">
+      <SubmitButton className="rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
         Guardar
-      </button>
+      </SubmitButton>
       <button
         type="button"
         onClick={() => setAbierto(false)}

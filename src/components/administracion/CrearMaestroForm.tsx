@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { crearMaestroAction, type CrearMaestroState } from "@/lib/actions/administracion";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 const ESTADO_INICIAL: CrearMaestroState = { ok: false };
 
@@ -19,7 +20,7 @@ interface CrearMaestroFormProps {
 // se quedaria pegado al tipo anterior (los inputs no controlados solo
 // leen defaultValue en el primer render).
 export default function CrearMaestroForm({ tipoActivo, esCiudad, paises }: CrearMaestroFormProps) {
-  const [estado, formAction, enviando] = useActionState(crearMaestroAction, ESTADO_INICIAL);
+  const [estado, formAction] = useActionState(crearMaestroAction, ESTADO_INICIAL);
 
   return (
     <div>
@@ -60,13 +61,12 @@ export default function CrearMaestroForm({ tipoActivo, esCiudad, paises }: Crear
           </div>
         ) : null}
         <Campo name="orden" label="Orden" type="number" defaultValue="10" />
-        <button
-          type="submit"
-          disabled={enviando}
+        <SubmitButton
           className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          pendingText="Agregando..."
         >
-          {enviando ? "Agregando..." : "Agregar"}
-        </button>
+          Agregar
+        </SubmitButton>
       </form>
 
       {estado.error ? (

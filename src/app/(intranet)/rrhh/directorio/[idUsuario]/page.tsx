@@ -11,6 +11,7 @@ import { calcularVisibilidadFicha } from "@/lib/rrhh/visibilidad-directorio";
 import { actualizarEmpleadoAction } from "@/lib/actions/rrhh";
 import { SelectorPaisCiudad } from "@/components/rrhh/SelectorPaisCiudad";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 function formatearFecha(fecha: string | null): string {
   if (!fecha) return "-";
@@ -207,9 +208,9 @@ export default async function FichaEmpleadoPage({
               <Campo name="fotoUrl" label="URL de foto (opcional)" defaultValue={empleado.FOTO_URL ?? ""} />
             </div>
             <div className="sm:col-span-2">
-              <button type="submit" className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto sm:px-6">
+              <SubmitButton className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto sm:px-6" pendingText="Guardando...">
                 Guardar
-              </button>
+              </SubmitButton>
             </div>
           </form>
         </section>
@@ -230,9 +231,9 @@ export default async function FichaEmpleadoPage({
               <Campo name="fotoUrl" label="URL de foto (opcional)" defaultValue={empleado.FOTO_URL ?? ""} />
             </div>
             <div className="sm:col-span-2">
-              <button type="submit" className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto sm:px-6">
+              <SubmitButton className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto sm:px-6" pendingText="Guardando...">
                 Guardar
-              </button>
+              </SubmitButton>
             </div>
           </form>
         </section>

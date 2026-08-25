@@ -5,6 +5,7 @@ import { agregarCostoManoObraAction } from "@/lib/actions/proyectos";
 import type { ContratoListadoRow, ProveedorListadoRow, ContratoPeriodoPagoRow, ContratoHorasTodosRow } from "@/types/db";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 interface AgregarCostoManoObraFormProps {
   idProyecto: number;
@@ -224,9 +225,9 @@ export default function AgregarCostoManoObraForm({
         />
       </div>
       <div className="sm:col-span-2">
-        <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Agregando...">
           Agregar
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );

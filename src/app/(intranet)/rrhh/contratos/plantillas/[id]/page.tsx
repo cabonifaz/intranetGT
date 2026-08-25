@@ -10,6 +10,7 @@ import {
 } from "@/lib/actions/rrhh";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import { TokensAyuda } from "@/components/rrhh/NuevaPlantillaForm";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 export default async function DetallePlantillaPage({
   params,
@@ -48,8 +49,7 @@ export default async function DetallePlantillaPage({
           <form action={cambiarEstadoPlantillaAction}>
             <input type="hidden" name="idPlantilla" value={plantilla.ID_PLANTILLA} />
             <input type="hidden" name="activo" value={activa ? "0" : "1"} />
-            <button
-              type="submit"
+            <SubmitButton
               className={`rounded-lg px-4 py-2 text-sm font-medium ${
                 activa
                   ? "border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -57,7 +57,7 @@ export default async function DetallePlantillaPage({
               }`}
             >
               {activa ? "Desactivar" : "Activar"}
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>
@@ -88,9 +88,9 @@ export default async function DetallePlantillaPage({
             />
           </div>
           <TokensAyuda />
-          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
             Guardar
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -146,9 +146,9 @@ export default async function DetallePlantillaPage({
                 />
               </div>
               <div className="mt-3 flex items-center gap-2">
-                <button type="submit" className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
+                <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
                   Guardar
-                </button>
+                </SubmitButton>
               </div>
             </form>
           ))}
@@ -205,9 +205,9 @@ export default async function DetallePlantillaPage({
               className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
             />
           </div>
-          <button type="submit" className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          <SubmitButton className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Agregando...">
             Agregar
-          </button>
+          </SubmitButton>
         </form>
       </section>
     </div>

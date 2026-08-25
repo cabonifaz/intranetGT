@@ -2,11 +2,12 @@
 
 import { useActionState } from "react";
 import { crearAreaAction, type CrearAreaState } from "@/lib/actions/administracion";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 const ESTADO_INICIAL: CrearAreaState = { ok: false };
 
 export default function CrearAreaForm() {
-  const [estado, formAction, enviando] = useActionState(crearAreaAction, ESTADO_INICIAL);
+  const [estado, formAction] = useActionState(crearAreaAction, ESTADO_INICIAL);
 
   return (
     <div>
@@ -19,13 +20,12 @@ export default function CrearAreaForm() {
         <Campo name="codigo" label="Codigo (ej. LOGISTICA)" />
         <Campo name="nombre" label="Nombre" />
         <Campo name="orden" label="Orden" type="number" defaultValue="10" />
-        <button
-          type="submit"
-          disabled={enviando}
+        <SubmitButton
           className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          pendingText="Creando..."
         >
-          {enviando ? "Creando..." : "Crear area"}
-        </button>
+          Crear area
+        </SubmitButton>
       </form>
 
       {estado.error ? (

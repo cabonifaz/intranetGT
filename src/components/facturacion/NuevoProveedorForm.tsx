@@ -1,6 +1,7 @@
 "use client";
 
 import { crearProveedorAction } from "@/lib/actions/compras";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 export default function NuevoProveedorForm() {
   return (
@@ -20,9 +21,9 @@ export default function NuevoProveedorForm() {
         <Campo name="correo" label="Correo (opcional)" type="email" required={false} />
       </div>
 
-      <button type="submit" className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700">
+      <SubmitButton className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Creando...">
         Crear proveedor
-      </button>
+      </SubmitButton>
     </form>
   );
 }
