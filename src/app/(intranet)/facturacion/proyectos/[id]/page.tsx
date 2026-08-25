@@ -370,7 +370,11 @@ export default async function DetalleProyectoPage({
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <form action={actualizarProyectoAction} className="space-y-3">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Editar proyecto</h2>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          Aqui se define el costo presupuestado y el ingreso esperado que usan las barras y el reporte de Costeo.
+        </p>
+        <form action={actualizarProyectoAction} className="mt-3 space-y-3">
           <input type="hidden" name="idProyecto" value={proyecto.ID_PROYECTO} />
           <Campo name="nombre" label="Nombre" defaultValue={proyecto.NOMBRE} />
           <SelectorClienteProyecto
