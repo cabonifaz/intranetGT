@@ -734,6 +734,11 @@ interface ProyectoCosteoBase {
   COSTO_PAGOS_RECURRENTES: string;
   INGRESO_REAL: string;
   MONTO_PLAN_PENDIENTE: string;
+  // Suma de PROYECTO_HITO.MONTO en estado FACTURADO o COBRADO -- lo
+  // realmente facturado a la fecha, sin importar si ya se cobro o no
+  // (distinto de MONTO_PLAN_PENDIENTE, que es lo AUN no cobrado incluyendo
+  // lo que ni siquiera se facturo todavia).
+  MONTO_FACTURADO: string;
   PASIVO_GENERADO: string;
 }
 

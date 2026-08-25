@@ -170,6 +170,11 @@ BEGIN
                 WHERE h.ID_PROYECTO = p.ID_PROYECTO AND eh.CODIGO IN ('PLANEADO', 'FACTURADO')
            ), 0) AS MONTO_PLAN_PENDIENTE,
            COALESCE((
+               SELECT SUM(h.MONTO) FROM PROYECTO_HITO h
+                 JOIN MAESTRO_MAESTRO eh ON eh.ID_MAESTRO = h.ID_ESTADO_HITO
+                WHERE h.ID_PROYECTO = p.ID_PROYECTO AND eh.CODIGO IN ('FACTURADO', 'COBRADO')
+           ), 0) AS MONTO_FACTURADO,
+           COALESCE((
                SELECT SUM(
                           CASE WHEN ps.ID_MONEDA = p.ID_MONEDA THEN ps.MONTO_TOTAL
                                WHEN ps.TIPO_CAMBIO IS NULL THEN ps.MONTO_TOTAL
@@ -357,6 +362,11 @@ BEGIN
                  JOIN MAESTRO_MAESTRO eh ON eh.ID_MAESTRO = h.ID_ESTADO_HITO
                 WHERE h.ID_PROYECTO = p.ID_PROYECTO AND eh.CODIGO IN ('PLANEADO', 'FACTURADO')
            ), 0) AS MONTO_PLAN_PENDIENTE,
+           COALESCE((
+               SELECT SUM(h.MONTO) FROM PROYECTO_HITO h
+                 JOIN MAESTRO_MAESTRO eh ON eh.ID_MAESTRO = h.ID_ESTADO_HITO
+                WHERE h.ID_PROYECTO = p.ID_PROYECTO AND eh.CODIGO IN ('FACTURADO', 'COBRADO')
+           ), 0) AS MONTO_FACTURADO,
            COALESCE((
                SELECT SUM(
                           CASE WHEN ps5.ID_MONEDA = p.ID_MONEDA THEN ps5.MONTO_TOTAL

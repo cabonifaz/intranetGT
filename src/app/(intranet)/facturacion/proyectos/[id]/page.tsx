@@ -190,7 +190,8 @@ export default async function DetalleProyectoPage({
         <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Costeo</h2>
         <div className="mt-3 space-y-3">
           <BarraProgreso etiqueta="Costo a hoy vs presupuesto" valor={costeo.costoReal} total={costeo.costoPresupuestado} monedaCodigo={proyecto.MONEDA_CODIGO} invertido />
-          <BarraProgreso etiqueta="Ingreso a hoy vs esperado" valor={costeo.ingresoReal} total={costeo.ingresoEsperado} monedaCodigo={proyecto.MONEDA_CODIGO} />
+          <BarraProgreso etiqueta="Facturado vs esperado" valor={Number(proyecto.MONTO_FACTURADO)} total={costeo.ingresoEsperado} monedaCodigo={proyecto.MONEDA_CODIGO} />
+          <BarraProgreso etiqueta="Cobrado vs esperado" valor={costeo.ingresoReal} total={costeo.ingresoEsperado} monedaCodigo={proyecto.MONEDA_CODIGO} />
         </div>
 
         <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-sm dark:border-slate-800 sm:grid-cols-4">
