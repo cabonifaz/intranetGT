@@ -15,10 +15,14 @@ function formatearMonto(monto: number, monedaCodigo: string | null): string {
 }
 
 export default function BarraProgreso({ etiqueta, valor, total, monedaCodigo, invertido = false }: BarraProgresoProps) {
-  const pct = total > 0 ? valor / total : 0;
-  const pctTexto = total > 0 ? `${Math.round(pct * 100)}%` : "sin presupuesto";
-  const sobrepasado = invertido && pct > 1;
-  const cercaDelLimite = invertido && !sobrepasado && pct > 0.85;
+  // Sin total de referencia (ej. proyecto sin costo presupuestado) no
+  // hay nada contra que comparar -- mostrar "de US$ 0.00" leeria como
+  // "se supero un presupuesto de cero", asi que en ese caso se corta el
+  // mensaje ahi y se deja la barra vacia en vez de simular un 0%/100%.
+  const sinReferencia = total <= 0;
+  const pct = sinReferencia ? 0 : valor / total;
+  const sobrepasado = invertido && !sinReferencia && pct > 1;
+  const cercaDelLimite = invertido && !sinReferencia && !sobrepasado && pct > 0.85;
 
   const colorBarra = sobrepasado
     ? "bg-red-600"
@@ -31,11 +35,13 @@ export default function BarraProgreso({ etiqueta, valor, total, monedaCodigo, in
       <div className="flex items-baseline justify-between text-xs text-slate-500 dark:text-slate-400">
         <span>{etiqueta}</span>
         <span className={sobrepasado ? "font-medium text-red-600 dark:text-red-400" : ""}>
-          {formatearMonto(valor, monedaCodigo)} de {formatearMonto(total, monedaCodigo)} ({pctTexto})
+          {sinReferencia
+            ? `${formatearMonto(valor, monedaCodigo)} (sin presupuesto definido)`
+            : `${formatearMonto(valor, monedaCodigo)} de ${formatearMonto(total, monedaCodigo)} (${Math.round(pct * 100)}%)`}
         </span>
       </div>
       <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-        <div className={`h-full rounded-full ${colorBarra}`} style={{ width: `${Math.min(pct, 1) * 100}%` }} />
+        {!sinReferencia ? <div className={`h-full rounded-full ${colorBarra}`} style={{ width: `${Math.min(pct, 1) * 100}%` }} /> : null}
       </div>
     </div>
   );
