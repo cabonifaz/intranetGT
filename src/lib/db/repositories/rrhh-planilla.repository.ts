@@ -134,6 +134,10 @@ export async function emitirDetalle(idPlanillaDetalle: number, documentoPath: st
   await callProcedure("SP_RRHH_PLANILLA_DETALLE_EMITIR", [idPlanillaDetalle, documentoPath, idUsuarioEmision]);
 }
 
+export async function regenerarDocumentoDetalle(idPlanillaDetalle: number, documentoPath: string): Promise<void> {
+  await callProcedure("SP_RRHH_PLANILLA_DETALLE_REGENERAR_DOCUMENTO", [idPlanillaDetalle, documentoPath]);
+}
+
 export async function eliminarDetalle(idPlanillaDetalle: number): Promise<void> {
   await callProcedure("SP_RRHH_PLANILLA_DETALLE_ELIMINAR", [idPlanillaDetalle]);
 }

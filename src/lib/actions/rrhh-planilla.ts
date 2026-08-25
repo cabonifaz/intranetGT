@@ -17,6 +17,7 @@ import {
   marcarPagadoDetalle,
   marcarPagadoMasivo,
   emitirDetalle,
+  regenerarDocumentoDetalle,
   eliminarDetalle,
 } from "@/lib/db/repositories/rrhh-planilla.repository";
 import {
@@ -361,12 +362,11 @@ export async function marcarPagadoMasivoAction(formData: FormData): Promise<void
   refresh();
 }
 
-// Genera el PDF (boleta o RxH segun regimen), lo guarda, y recien
-// entonces marca el detalle como EMITIDA -- mismo orden que la firma de
-// contratos (primero el archivo, despues persistir la ruta).
-async function emitirDetalleInterno(detalle: PlanillaDetalleRow, idUsuario: number): Promise<void> {
-  if (detalle.ESTADO_EMISION_CODIGO === "EMITIDA") return;
-
+// Genera el PDF de un detalle (boleta o RxH segun regimen) y lo guarda
+// en su ruta fija -- comun a la primera emision y a una regeneracion
+// posterior (ej. cambio de formato de boleta), que reusan el mismo
+// archivo/ruta, solo cambia si ademas se marca como EMITIDA.
+async function generarYGuardarDocumentoDetalle(detalle: PlanillaDetalleRow): Promise<string> {
   const esPlanilla = detalle.TIPO_CONTRATO_CODIGO !== "LOCADOR";
   const logo = await cargarLogoEmpresa();
 
@@ -424,7 +424,36 @@ async function emitirDetalleInterno(detalle: PlanillaDetalleRow, idUsuario: numb
 
   const documentoPath = `rrhh/planilla/${carpeta}/${detalle.ID_PLANILLA_DETALLE}.pdf`;
   await guardarArchivo(documentoPath, bytes);
+  return documentoPath;
+}
+
+// Genera el PDF (boleta o RxH segun regimen), lo guarda, y recien
+// entonces marca el detalle como EMITIDA -- mismo orden que la firma de
+// contratos (primero el archivo, despues persistir la ruta).
+async function emitirDetalleInterno(detalle: PlanillaDetalleRow, idUsuario: number): Promise<void> {
+  if (detalle.ESTADO_EMISION_CODIGO === "EMITIDA") return;
+
+  const documentoPath = await generarYGuardarDocumentoDetalle(detalle);
   await emitirDetalle(detalle.ID_PLANILLA_DETALLE, documentoPath, idUsuario);
+}
+
+// Re-genera el PDF de un detalle YA EMITIDA sobre la misma ruta (ej.
+// cambio el formato de boleta y hay que refrescar las ya emitidas) --
+// no-op si todavia no se emitio (para eso esta "Emitir").
+export async function regenerarDocumentoDetalleAction(formData: FormData): Promise<void> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPlanillaDetalle = Number(formData.get("idPlanillaDetalle"));
+  if (!idPlanillaDetalle) return;
+
+  const detalle = await obtenerDetalle(idPlanillaDetalle);
+  if (!detalle || detalle.ESTADO_EMISION_CODIGO !== "EMITIDA") return;
+
+  const documentoPath = await generarYGuardarDocumentoDetalle(detalle);
+  await regenerarDocumentoDetalle(idPlanillaDetalle, documentoPath);
+
+  revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${idPlanillaDetalle}`);
+  refresh();
 }
 
 export async function emitirDetalleAction(formData: FormData): Promise<void> {

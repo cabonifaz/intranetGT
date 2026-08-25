@@ -28,6 +28,7 @@ DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_ACTUALIZAR_MONTOS;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_MARCAR_PAGADO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_MARCAR_PAGADO_MASIVO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_EMITIR;
+DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_REGENERAR_DOCUMENTO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_ELIMINAR;
 
 DELIMITER $$
@@ -343,6 +344,24 @@ BEGIN
        SET d.ID_ESTADO_EMISION = v_id_emitida, d.DOCUMENTO_PATH = p_documento_path,
            d.FECHA_EMISION = NOW(), d.USUARIO_EMISION = p_id_usuario_emision
      WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle AND ee.CODIGO != 'EMITIDA';
+END$$
+
+-- Vuelve a generar el PDF de un detalle YA EMITIDA (ej. cambio el
+-- formato de la boleta, o se corrigio algo en el archivo guardado) sin
+-- tocar el estado ni los montos -- distinto de SP_RRHH_PLANILLA_DETALLE_EMITIR,
+-- que es la primera emision y solo actua si NO estaba emitida. La app ya
+-- genero y guardo el PDF nuevo (mismo path, lo pisa) antes de llamar
+-- esto. No-op silencioso si el detalle no esta EMITIDA -- no tiene
+-- sentido "regenerar" algo que nunca se emitio, para eso esta "Emitir".
+CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_REGENERAR_DOCUMENTO(
+    IN p_id_planilla_detalle INT UNSIGNED,
+    IN p_documento_path VARCHAR(300)
+)
+BEGIN
+    UPDATE RRHH_PLANILLA_DETALLE d
+      JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+       SET d.DOCUMENTO_PATH = p_documento_path, d.FECHA_EMISION = NOW()
+     WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle AND ee.CODIGO = 'EMITIDA';
 END$$
 
 -- Cierra el header solo si ya no queda ningun detalle PENDIENTE -- no-op

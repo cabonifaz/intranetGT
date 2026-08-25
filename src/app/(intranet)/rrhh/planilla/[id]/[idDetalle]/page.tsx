@@ -7,6 +7,7 @@ import {
   recalcularDetalleAction,
   marcarPagadoDetalleAction,
   emitirDetalleAction,
+  regenerarDocumentoDetalleAction,
 } from "@/lib/actions/rrhh-planilla";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 
@@ -55,14 +56,25 @@ export default async function PlanillaDetalleColaboradorPage({
             </p>
           </div>
           {emitida ? (
-            <a
-              href={`/api/rrhh/planilla/${idPlanillaDetalle}/documento`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-            >
-              {esPlanilla ? "Ver boleta" : "Ver RxH"}
-            </a>
+            <div className="flex items-center gap-2">
+              <a
+                href={`/api/rrhh/planilla/${idPlanillaDetalle}/documento`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+              >
+                {esPlanilla ? "Ver boleta" : "Ver RxH"}
+              </a>
+              <form action={regenerarDocumentoDetalleAction}>
+                <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+                <ConfirmSubmitButton
+                  mensaje={`¿Regenerar ${esPlanilla ? "la boleta" : "el RxH"} con los datos y formato actuales? Se reemplaza el PDF ya emitido, sin cambiar montos ni estado.`}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Regenerar {esPlanilla ? "boleta" : "RxH"}
+                </ConfirmSubmitButton>
+              </form>
+            </div>
           ) : null}
         </div>
       </div>
