@@ -374,6 +374,7 @@ async function generarYGuardarDocumentoDetalle(detalle: PlanillaDetalleRow): Pro
   let carpeta: string;
 
   if (esPlanilla) {
+    const conceptos = await listarConceptosContrato(detalle.ID_CONTRATO);
     bytes = await generarBoletaPdf({
       idPlanillaDetalle: detalle.ID_PLANILLA_DETALLE,
       periodo: detalle.PERIODO,
@@ -388,6 +389,7 @@ async function generarYGuardarDocumentoDetalle(detalle: PlanillaDetalleRow): Pro
       banco: detalle.BANCO,
       sistemaPensionDescripcion: detalle.SISTEMA_PENSION_DESCRIPCION,
       afpFondoDescripcion: detalle.AFP_FONDO_DESCRIPCION,
+      conceptosIngreso: conceptos.map((c) => ({ descripcion: c.CONCEPTO_DESCRIPCION, monto: Number(c.MONTO) })),
       bruto: Number(detalle.MONTO_BRUTO),
       aportePension: Number(detalle.MONTO_APORTE_PENSION ?? 0),
       retencionRenta: Number(detalle.MONTO_RETENCION_RENTA ?? 0),

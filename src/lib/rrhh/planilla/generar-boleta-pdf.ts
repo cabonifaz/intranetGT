@@ -38,6 +38,7 @@ export interface DatosBoletaPdf {
   banco: string | null;
   sistemaPensionDescripcion: string | null;
   afpFondoDescripcion: string | null;
+  conceptosIngreso: { descripcion: string; monto: number }[];
   bruto: number;
   aportePension: number;
   retencionRenta: number;
@@ -121,9 +122,12 @@ export async function generarBoletaPdf(datos: DatosBoletaPdf): Promise<Uint8Arra
   pagina.drawLine({ start: { x: MARGEN, y }, end: { x: PAGE_WIDTH - MARGEN, y }, thickness: 1.5, color: COLOR_MARCA });
   y -= 16;
 
-  // ---- Bloque de identificacion: 2 columnas x 3 filas, con fondo suave
-  // y borde -- el formato clasico de boleta siempre abre con esto.
-  const altoIdent = 70;
+  // ---- Bloque de identificacion: 2 columnas x 3 filas + fila de cuenta
+  // de pago, con fondo suave y borde -- el formato clasico de boleta
+  // siempre abre con esto. altoIdent deja ~17pt de aire debajo de la
+  // ultima fila (cuenta de pago) para que no quede pegada/cortada por
+  // el borde inferior del recuadro.
+  const altoIdent = 92;
   pagina.drawRectangle({ x: MARGEN, y: y - altoIdent, width: ANCHO_UTIL, height: altoIdent, color: COLOR_FONDO_ENCABEZADO, borderColor: COLOR_BORDE, borderWidth: 0.75 });
   const colIzq = MARGEN + 12;
   const colDer = MARGEN + ANCHO_UTIL / 2 + 12;
@@ -132,13 +136,13 @@ export async function generarBoletaPdf(datos: DatosBoletaPdf): Promise<Uint8Arra
     ["RUC", EMPLEADOR.ruc, `${datos.tipoDocumentoDescripcion ?? "DNI"}`, datos.nroDocumento ?? "-"],
     ["Cargo", datos.cargo, "Sistema de pension", `${datos.sistemaPensionDescripcion ?? "-"}${datos.afpFondoDescripcion ? ` (${datos.afpFondoDescripcion})` : ""}`],
   ];
-  let yFila = y - 16;
+  let yFila = y - 18;
   for (const [etiqIzq, valIzq, etiqDer, valDer] of filas) {
     dibujarTexto(pagina, `${etiqIzq}:`, colIzq, yFila, negrita, 8.5);
     dibujarTexto(pagina, valIzq, colIzq + 70, yFila, normal, 8.5);
     dibujarTexto(pagina, `${etiqDer}:`, colDer, yFila, negrita, 8.5);
     dibujarTexto(pagina, valDer, colDer + 100, yFila, normal, 8.5);
-    yFila -= 18;
+    yFila -= 19;
   }
   dibujarTexto(pagina, "Cuenta de pago:", colIzq, yFila, negrita, 8.5);
   dibujarTexto(pagina, `${datos.nroCuenta ?? "-"}  |  CCI: ${datos.cci ?? "-"}  |  ${datos.banco ?? "-"}`, colIzq + 70, yFila, normal, 8.5);
@@ -151,7 +155,17 @@ export async function generarBoletaPdf(datos: DatosBoletaPdf): Promise<Uint8Arra
   const xDescuentos = MARGEN + anchoTabla + 16;
   const altoEncabezadoTabla = 20;
   const altoFila = 20;
-  const filasIngresos: [string, number][] = [["Remuneracion", datos.bruto]];
+  // Detalle de ingresos por concepto (Sueldo basico, Asignacion familiar,
+  // etc., segun RRHH_CONTRATO_CONCEPTO) en vez de un solo monto lumped --
+  // si por algun motivo la suma de conceptos no calza con el bruto ya
+  // persistido (ej. se edito el monto a mano despues), se agrega una
+  // fila de ajuste para que el total de la tabla siempre calce con el
+  // neto/aporte/retencion ya calculados sobre `datos.bruto`.
+  const conceptosIngreso = datos.conceptosIngreso.length > 0 ? datos.conceptosIngreso : [{ descripcion: "Remuneracion", monto: datos.bruto }];
+  const filasIngresos: [string, number][] = conceptosIngreso.map((c) => [c.descripcion, c.monto]);
+  const sumaConceptos = conceptosIngreso.reduce((s, c) => s + c.monto, 0);
+  const ajuste = Math.round((datos.bruto - sumaConceptos) * 100) / 100;
+  if (Math.abs(ajuste) >= 0.01) filasIngresos.push(["Ajuste", ajuste]);
   const filasDescuentos: [string, number][] = [
     [datos.sistemaPensionDescripcion === "ONP" ? "ONP (13%)" : `AFP${datos.afpFondoDescripcion ? ` - ${datos.afpFondoDescripcion}` : ""}`, datos.aportePension],
     ["Retencion Renta de 5ta categoria", datos.retencionRenta],
@@ -193,16 +207,18 @@ export async function generarBoletaPdf(datos: DatosBoletaPdf): Promise<Uint8Arra
   y -= altoNeto + 12;
 
   dibujarTexto(pagina, `Son: ${montoEnLetras(datos.neto)}`, MARGEN, y, negrita, 9);
-  y -= 18;
-  dibujarTexto(
-    pagina,
-    `Nota: el aporte a EsSalud (${formatearMoneda(datos.essalud)}) es un costo asumido por el empleador -- no forma parte de los descuentos del colaborador ni afecta el neto.`,
-    MARGEN,
-    y,
-    normal,
-    8,
-    COLOR_TEXTO_TENUE,
-  );
+  y -= 24;
+
+  // ---- Aportes del empleador (EsSalud): cuadro propio, no una nota al
+  // pie -- es un aporte real, solo que no forma parte de los descuentos
+  // del colaborador ni afecta el neto a pagar.
+  const altoAportes = 40;
+  const altoEncabezadoAportes = 16;
+  pagina.drawRectangle({ x: MARGEN, y: y - altoAportes, width: ANCHO_UTIL, height: altoAportes, borderColor: COLOR_BORDE, borderWidth: 0.75 });
+  pagina.drawRectangle({ x: MARGEN, y: y - altoEncabezadoAportes, width: ANCHO_UTIL, height: altoEncabezadoAportes, color: COLOR_FONDO_ENCABEZADO });
+  dibujarTexto(pagina, "APORTES DEL EMPLEADOR (no forma parte de los descuentos ni afecta el neto)", MARGEN + 8, y - 11.5, negrita, 8, COLOR_TEXTO_TENUE);
+  dibujarFilaConcepto(pagina, MARGEN, y - altoEncabezadoAportes - 15, ANCHO_UTIL, "EsSalud", formatearMoneda(datos.essalud), fonts);
+  y -= altoAportes;
 
   // ---- Firmas, al pie.
   const yFirma = MARGEN + 34;
