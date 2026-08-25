@@ -33,6 +33,7 @@ import {
 import { calcularCosteo } from "@/lib/proyectos/costeo";
 import { calcularImpuestosItem, calcularImpuestosProyecto } from "@/lib/proyectos/impuestos";
 import BarraProgreso from "@/components/facturacion/BarraProgreso";
+import ComparativoCostoIngreso from "@/components/facturacion/ComparativoCostoIngreso";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import HitoFilaAcciones from "@/components/facturacion/HitoFilaAcciones";
 import SelectorClienteProyecto from "@/components/facturacion/SelectorClienteProyecto";
@@ -187,11 +188,41 @@ export default async function DetalleProyectoPage({
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Costeo</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Costeo</h2>
+          <div className="flex gap-2">
+            <a
+              href={`/api/proyectos/${idProyecto}/reporte-financiero?tipo=resumen`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              Reporte (resumen)
+            </a>
+            <a
+              href={`/api/proyectos/${idProyecto}/reporte-financiero?tipo=detallado`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              Reporte (detallado)
+            </a>
+          </div>
+        </div>
         <div className="mt-3 space-y-3">
           <BarraProgreso etiqueta="Costo a hoy vs presupuesto" valor={costeo.costoReal} total={costeo.costoPresupuestado} monedaCodigo={proyecto.MONEDA_CODIGO} invertido />
           <BarraProgreso etiqueta="Facturado vs esperado" valor={Number(proyecto.MONTO_FACTURADO)} total={costeo.ingresoEsperado} monedaCodigo={proyecto.MONEDA_CODIGO} />
           <BarraProgreso etiqueta="Cobrado vs esperado" valor={costeo.ingresoReal} total={costeo.ingresoEsperado} monedaCodigo={proyecto.MONEDA_CODIGO} />
+        </div>
+
+        <div className="mt-4">
+          <ComparativoCostoIngreso
+            costoReal={costeo.costoReal}
+            montoFacturado={costeo.montoFacturado}
+            ingresoReal={costeo.ingresoReal}
+            margenFacturado={costeo.margenFacturado}
+            monedaCodigo={proyecto.MONEDA_CODIGO}
+          />
         </div>
 
         <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-sm dark:border-slate-800 sm:grid-cols-4">
