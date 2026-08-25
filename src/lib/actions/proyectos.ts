@@ -18,6 +18,7 @@ import {
   agregarHitoProyecto,
   marcarHitoFacturado,
   marcarHitoCobrado,
+  deshacerCobroHito,
   anularHitoProyecto,
   eliminarHitoProyecto,
   crearCliente,
@@ -342,6 +343,26 @@ export async function cobrarHitoProyectoAction(formData: FormData): Promise<void
   });
   if (!ingreso.id_ingreso) return;
   await marcarHitoCobrado(idHito, ingreso.id_ingreso);
+
+  revalidatePath(`/facturacion/proyectos/${idProyecto}`);
+  refresh();
+}
+
+// Reverso de cobrarHitoProyectoAction, mismo flujo de dos pasos al reves:
+// primero se suelta el enlace hito->ingreso (SP_PROYECTO_HITO_DESHACER_COBRO,
+// vuelve el hito a FACTURADO o PLANEADO segun si ya tenia numero de
+// factura), y recien con el ingreso ya desenlazado se lo borra de verdad
+// (SP_PROYECTO_INGRESO_ELIMINAR rechaza borrar un ingreso todavia
+// enlazado a un hito, por eso el orden no se puede invertir).
+export async function deshacerCobroHitoAction(formData: FormData): Promise<void> {
+  await requirePermiso(PROYECTOS_APP_CODIGO, "ESCRITURA");
+
+  const idProyecto = Number(formData.get("idProyecto"));
+  const idHito = Number(formData.get("idHito"));
+  if (!idHito) return;
+
+  const { id_ingreso: idIngreso } = await deshacerCobroHito(idHito);
+  if (idIngreso) await eliminarIngresoProyecto(idIngreso);
 
   revalidatePath(`/facturacion/proyectos/${idProyecto}`);
   refresh();

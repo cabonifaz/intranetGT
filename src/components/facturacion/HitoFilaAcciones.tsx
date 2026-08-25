@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   marcarHitoFacturadoAction,
   cobrarHitoProyectoAction,
+  deshacerCobroHitoAction,
   anularHitoProyectoAction,
   eliminarHitoProyectoAction,
 } from "@/lib/actions/proyectos";
@@ -34,6 +35,7 @@ export default function HitoFilaAcciones({ hito, idProyecto, nombreProyecto }: H
 
   const puedeFacturar = hito.ESTADO_HITO_CODIGO === "PLANEADO";
   const puedeCobrar = hito.ESTADO_HITO_CODIGO === "PLANEADO" || hito.ESTADO_HITO_CODIGO === "FACTURADO";
+  const puedeDeshacerCobro = hito.ESTADO_HITO_CODIGO === "COBRADO";
   const puedeAnular = hito.ESTADO_HITO_CODIGO === "PLANEADO";
   const puedeEliminar = hito.ESTADO_HITO_CODIGO === "PLANEADO";
   const hoy = new Date().toISOString().slice(0, 10);
@@ -116,6 +118,18 @@ export default function HitoFilaAcciones({ hito, idProyecto, nombreProyecto }: H
         >
           Cobrar
         </button>
+      ) : null}
+      {puedeDeshacerCobro ? (
+        <form action={deshacerCobroHitoAction} className="inline-block">
+          <input type="hidden" name="idProyecto" value={idProyecto} />
+          <input type="hidden" name="idHito" value={hito.ID_HITO} />
+          <ConfirmSubmitButton
+            mensaje="¿Deshacer el cobro de este item? Se borra el ingreso registrado y el item vuelve a quedar pendiente de cobro."
+            className="rounded-full px-2 py-0.5 text-xs text-slate-500 hover:bg-red-100 hover:text-red-700 dark:text-slate-400 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+          >
+            Deshacer cobro
+          </ConfirmSubmitButton>
+        </form>
       ) : null}
       {puedeEliminar ? (
         <form action={eliminarHitoProyectoAction} className="inline-block">

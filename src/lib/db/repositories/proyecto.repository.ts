@@ -222,6 +222,13 @@ export async function marcarHitoCobrado(idHito: number, idIngreso: number): Prom
   await callProcedure("SP_PROYECTO_HITO_MARCAR_COBRADO", [idHito, idIngreso]);
 }
 
+// Devuelve el ID_INGRESO que quedo desenlazado (null si el hito no
+// estaba COBRADO) -- el llamador todavia tiene que borrar ese ingreso
+// aparte con eliminarIngresoProyecto, ver deshacerCobroHitoAction.
+export async function deshacerCobroHito(idHito: number): Promise<{ id_ingreso: number | null }> {
+  return callProcedureWithOut<{ id_ingreso: number | null }>("SP_PROYECTO_HITO_DESHACER_COBRO", [idHito], ["id_ingreso"]);
+}
+
 export async function anularHitoProyecto(idHito: number): Promise<void> {
   await callProcedure("SP_PROYECTO_HITO_ANULAR", [idHito]);
 }

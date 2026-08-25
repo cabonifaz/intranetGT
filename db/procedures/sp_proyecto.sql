@@ -25,6 +25,7 @@ DROP PROCEDURE IF EXISTS SP_PROYECTO_HITO_AGREGAR;
 DROP PROCEDURE IF EXISTS SP_PROYECTO_HITO_LISTAR;
 DROP PROCEDURE IF EXISTS SP_PROYECTO_HITO_MARCAR_FACTURADO;
 DROP PROCEDURE IF EXISTS SP_PROYECTO_HITO_MARCAR_COBRADO;
+DROP PROCEDURE IF EXISTS SP_PROYECTO_HITO_DESHACER_COBRO;
 DROP PROCEDURE IF EXISTS SP_PROYECTO_HITO_ANULAR;
 DROP PROCEDURE IF EXISTS SP_PROYECTO_HITO_ELIMINAR;
 DROP PROCEDURE IF EXISTS SP_PROYECTO_HITO_LISTAR_PENDIENTES;
@@ -779,6 +780,39 @@ BEGIN
       JOIN MAESTRO_MAESTRO eh ON eh.ID_MAESTRO = h.ID_ESTADO_HITO
        SET h.ID_ESTADO_HITO = v_id_cobrado, h.ID_INGRESO = p_id_ingreso
      WHERE h.ID_HITO = p_id_hito AND eh.CODIGO IN ('PLANEADO', 'FACTURADO');
+END$$
+
+-- Deshace un "Cobrar": vuelve el hito a FACTURADO (si ya tenia NRO_FACTURA/
+-- FECHA_FACTURADO, es decir paso por ahi antes de cobrarse) o a PLANEADO
+-- (si se cobro directo), y suelta el enlace ID_INGRESO -- el PROYECTO_INGRESO
+-- real que quedaba enlazado se borra despues desde la app, llamando a
+-- SP_PROYECTO_INGRESO_ELIMINAR con el ID que devuelve este procedimiento
+-- (esa SP ya rechaza borrar un ingreso todavia enlazado a un hito, por
+-- eso el orden importa: primero soltar el enlace aca, recien despues
+-- borrar el ingreso). No-op silencioso si el hito no esta COBRADO
+-- (p_id_ingreso queda NULL).
+CREATE PROCEDURE SP_PROYECTO_HITO_DESHACER_COBRO(
+    IN p_id_hito INT UNSIGNED,
+    OUT p_id_ingreso INT UNSIGNED
+)
+BEGIN
+    DECLARE v_id_facturado INT UNSIGNED;
+    DECLARE v_id_planeado INT UNSIGNED;
+    DECLARE v_nro_factura VARCHAR(30);
+
+    SET v_id_facturado = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_HITO_FACTURACION' AND CODIGO = 'FACTURADO' LIMIT 1);
+    SET v_id_planeado = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_HITO_FACTURACION' AND CODIGO = 'PLANEADO' LIMIT 1);
+
+    SELECT h.ID_INGRESO, h.NRO_FACTURA INTO p_id_ingreso, v_nro_factura
+      FROM PROYECTO_HITO h
+      JOIN MAESTRO_MAESTRO eh ON eh.ID_MAESTRO = h.ID_ESTADO_HITO
+     WHERE h.ID_HITO = p_id_hito AND eh.CODIGO = 'COBRADO';
+
+    IF p_id_ingreso IS NOT NULL THEN
+        UPDATE PROYECTO_HITO
+           SET ID_ESTADO_HITO = IF(v_nro_factura IS NOT NULL, v_id_facturado, v_id_planeado), ID_INGRESO = NULL
+         WHERE ID_HITO = p_id_hito;
+    END IF;
 END$$
 
 -- Un item ya facturado/cobrado no se anula (es historial real) -- solo
