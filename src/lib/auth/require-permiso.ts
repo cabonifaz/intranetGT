@@ -30,3 +30,20 @@ export async function requireSuperAdmin(): Promise<SesionUsuario> {
   }
   return sesion;
 }
+
+// Cierre de proyecto: decision de negocio reservada a SUPER_ADMIN o al
+// rol GERENCIA_GENERAL (Gerente General/CEO) -- a diferencia del resto
+// de acciones ADMIN sobre PROYECTOS_EMPRESA (reset de costeo, anular),
+// no basta con tener el permiso ADMIN otorgado sobre esa app puntual.
+export async function puedeCerrarProyecto(idUsuario: number): Promise<boolean> {
+  const roles = await listarRolesActivosDeUsuario(idUsuario);
+  return roles.some((r) => r.ROL_CODIGO === "SUPER_ADMIN" || r.ROL_CODIGO === "GERENCIA_GENERAL");
+}
+
+export async function requireCierreProyecto(): Promise<SesionUsuario> {
+  const sesion = await requireSession();
+  if (!(await puedeCerrarProyecto(sesion.idUsuario))) {
+    redirect("/");
+  }
+  return sesion;
+}

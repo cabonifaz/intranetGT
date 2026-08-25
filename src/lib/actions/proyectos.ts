@@ -2,7 +2,7 @@
 
 import { revalidatePath, refresh } from "next/cache";
 import { redirect } from "next/navigation";
-import { requirePermiso } from "@/lib/auth/require-permiso";
+import { requirePermiso, requireCierreProyecto } from "@/lib/auth/require-permiso";
 import {
   crearProyecto,
   actualizarProyecto,
@@ -100,12 +100,15 @@ export async function actualizarProyectoAction(formData: FormData): Promise<void
 
 // Cerrar/anular es mas delicado que operar dia a dia, por eso pide ADMIN
 // igual que cambiarEstadoCuentaAction/anularPasivoAction.
+// Cerrar (CERRADO) es la unica transicion reservada a SUPER_ADMIN/
+// GERENCIA_GENERAL -- el resto (ej. ANULADO) sigue bastando con ADMIN
+// sobre PROYECTOS_EMPRESA, ver requireCierreProyecto.
 export async function cambiarEstadoProyectoAction(formData: FormData): Promise<void> {
-  const sesion = await requirePermiso(PROYECTOS_APP_CODIGO, "ADMIN");
-
   const idProyecto = Number(formData.get("idProyecto"));
   const codigoEstado = String(formData.get("codigoEstado") ?? "").trim();
   if (!idProyecto || !codigoEstado) return;
+
+  const sesion = codigoEstado === "CERRADO" ? await requireCierreProyecto() : await requirePermiso(PROYECTOS_APP_CODIGO, "ADMIN");
 
   await cambiarEstadoProyecto(idProyecto, codigoEstado, sesion.idUsuario);
   revalidatePath("/facturacion/proyectos");

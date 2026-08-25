@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { requirePermiso } from "@/lib/auth/require-permiso";
+import { requirePermiso, puedeCerrarProyecto } from "@/lib/auth/require-permiso";
 import {
   obtenerProyecto,
   listarIngresosProyecto,
@@ -59,12 +59,13 @@ export default async function DetalleProyectoPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermiso("PROYECTOS_EMPRESA", "LECTURA");
+  const sesion = await requirePermiso("PROYECTOS_EMPRESA", "LECTURA");
   const { id } = await params;
   const idProyecto = Number(id);
 
   const proyecto = await obtenerProyecto(idProyecto);
   if (!proyecto) notFound();
+  const puedeCerrar = await puedeCerrarProyecto(sesion.idUsuario);
 
   const [
     ingresos,
@@ -163,16 +164,18 @@ export default async function DetalleProyectoPage({
         </div>
         {enCurso ? (
           <div className="flex gap-2">
-            <form action={cambiarEstadoProyectoAction}>
-              <input type="hidden" name="idProyecto" value={proyecto.ID_PROYECTO} />
-              <input type="hidden" name="codigoEstado" value="CERRADO" />
-              <ConfirmSubmitButton
-                mensaje="¿Cerrar este proyecto?"
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-              >
-                Cerrar
-              </ConfirmSubmitButton>
-            </form>
+            {puedeCerrar ? (
+              <form action={cambiarEstadoProyectoAction}>
+                <input type="hidden" name="idProyecto" value={proyecto.ID_PROYECTO} />
+                <input type="hidden" name="codigoEstado" value="CERRADO" />
+                <ConfirmSubmitButton
+                  mensaje="¿Cerrar este proyecto?"
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Cerrar
+                </ConfirmSubmitButton>
+              </form>
+            ) : null}
             <form action={cambiarEstadoProyectoAction}>
               <input type="hidden" name="idProyecto" value={proyecto.ID_PROYECTO} />
               <input type="hidden" name="codigoEstado" value="ANULADO" />
