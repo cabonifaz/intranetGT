@@ -9,6 +9,9 @@ import { claveRegimen } from "@/lib/rrhh/regimen";
 import { tieneIdentidadCompleta } from "@/lib/rrhh/identidad";
 import { ComboBusqueda, type OpcionCombo } from "@/components/ui/ComboBusqueda";
 import { SelectorPaisCiudad } from "./SelectorPaisCiudad";
+import PasosContratacion, { type RegimenPasos } from "./PasosContratacion";
+import NotaAyuda from "@/components/ui/NotaAyuda";
+import SubmitButton from "@/components/ui/SubmitButton";
 
 interface NuevoContratoFormProps {
   usuarios: EmpleadoDirectorioRow[];
@@ -60,8 +63,14 @@ export default function NuevoContratoForm({
   const faltaPlantilla =
     regimenListo && !regimenesConPlantilla.includes(claveRegimen(Number(idTipoContrato), idTipoPagoLocador || null));
 
+  const regimenPasos: RegimenPasos = esPlanilla ? "PLANILLA" : esPorHora ? "LOCADOR_POR_HORA" : esLocador ? "LOCADOR" : null;
+
   return (
-    <form action={crearContratoAction} className="mt-6 space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+    <>
+    <div className="mt-6">
+      <PasosContratacion paso={1} regimen={regimenPasos} />
+    </div>
+    <form action={crearContratoAction} className="mt-4 space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
       <div>
         <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Persona</label>
         <ComboBusqueda
@@ -72,6 +81,10 @@ export default function NuevoContratoForm({
           opciones={usuarios.map((u) => ({ value: String(u.ID_USUARIO), label: `${u.NOMBRES} ${u.APELLIDOS} (${u.CORREO})` }))}
           onSeleccionar={setIdUsuarioSel}
         />
+        <NotaAyuda>
+          La lista trae a las personas del Directorio. Si no aparece, registrala primero ahi. Necesita tipo y numero de
+          documento para poder emitir el contrato.
+        </NotaAyuda>
       </div>
 
       {personaSel && !identidadCompleta ? (
@@ -128,9 +141,17 @@ export default function NuevoContratoForm({
             setIdTipoPagoLocador("");
           }}
         />
+        <NotaAyuda>
+          <strong>Planilla</strong> (full/part-time): relacion laboral, con boleta de pago, AFP/ONP y Renta de 5ta.{" "}
+          <strong>Locador</strong>: prestacion de servicios independiente, con recibo por honorarios (Renta de 4ta).
+          El tipo define que plantilla se usa y que datos se piden abajo.
+        </NotaAyuda>
       </div>
 
-      <Campo name="cargo" label="Cargo" />
+      <div>
+        <Campo name="cargo" label="Cargo" placeholder="Ej. Analista de sistemas" />
+        <NotaAyuda>Puesto o servicio tal como debe aparecer escrito en el contrato.</NotaAyuda>
+      </div>
 
       {!esLocador ? (
         <div>
@@ -143,12 +164,18 @@ export default function NuevoContratoForm({
             rows={3}
             className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
           />
+          <NotaAyuda>Se imprimen en el contrato. Puedes editarlas despues, desde el detalle, mientras no este firmado.</NotaAyuda>
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Campo name="fechaInicio" label="Fecha de inicio" type="date" required />
-        <Campo name="fechaFin" label="Fecha de fin" type="date" required />
+      <div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Campo name="fechaInicio" label="Fecha de inicio" type="date" required />
+          <Campo name="fechaFin" label="Fecha de fin" type="date" required />
+        </div>
+        <NotaAyuda>
+          Definen la vigencia del contrato. Los periodos de pago mensuales se generan a partir de la fecha de inicio.
+        </NotaAyuda>
       </div>
 
       {esPlanilla ? (
@@ -185,6 +212,11 @@ export default function NuevoContratoForm({
             opciones={tiposPagoLocador.map((t) => ({ value: String(t.ID_MAESTRO), label: t.DESCRIPCION }))}
             onSeleccionar={(v) => setIdTipoPagoLocador(v ? Number(v) : "")}
           />
+          <NotaAyuda>
+            <strong>Mensual</strong>: monto fijo cada mes. <strong>Por jornada</strong>: tarifa por dia trabajado.{" "}
+            <strong>Por proyecto</strong>: monto fijo por proyecto. <strong>Por hora</strong>: tarifa por hora en cada
+            proyecto, las horas se cargan despues.
+          </NotaAyuda>
 
           {necesitaTarifaUnica ? (
             <div className="mt-3 space-y-3">
@@ -260,14 +292,18 @@ export default function NuevoContratoForm({
         </p>
       ) : null}
 
-      <button
-        type="submit"
+      <SubmitButton
         disabled={usuarios.length === 0 || faltaPlantilla}
         className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+        pendingText="Creando contrato..."
       >
         Crear contrato
-      </button>
+      </SubmitButton>
+      <NotaAyuda className="justify-center">
+        Al crearlo queda como borrador. Luego agregas las condiciones economicas y generas el link de firma.
+      </NotaAyuda>
     </form>
+    </>
   );
 }
 

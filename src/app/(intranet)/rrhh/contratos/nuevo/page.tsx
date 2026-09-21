@@ -30,7 +30,7 @@ export default async function NuevoContratoPage({
     .map((p) => claveRegimen(p.ID_TIPO_CONTRATO, p.ID_TIPO_PAGO_LOCADOR));
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-3xl">
       <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Nuevo contrato</h1>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
         Se crea como borrador; despues generas el link para que la persona lo complete y firme.

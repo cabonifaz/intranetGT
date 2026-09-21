@@ -23,6 +23,8 @@ import PagarPeriodoContratoFila from "@/components/rrhh/PagarPeriodoContratoFila
 import EditarPeriodoPagoFila from "@/components/rrhh/EditarPeriodoPagoFila";
 import FinanciarConPrestamoFila from "@/components/facturacion/FinanciarConPrestamoFila";
 import SubmitButton from "@/components/ui/SubmitButton";
+import NotaAyuda from "@/components/ui/NotaAyuda";
+import PasosContratacion, { etapaDesdeEstado, type RegimenPasos } from "@/components/rrhh/PasosContratacion";
 import {
   renovarContratoAction,
   agregarConceptoContratoAction,
@@ -113,8 +115,11 @@ export default async function DetalleContratoPage({
   const puedeGenerarLink = contrato.ESTADO_CONTRATO_CODIGO === "BORRADOR" || contrato.ESTADO_CONTRATO_CODIGO === "PENDIENTE_FIRMA";
   const puedeRenovar = contrato.ESTADO_CONTRATO_CODIGO === "FIRMADO" || contrato.ESTADO_CONTRATO_CODIGO === "VENCIDO";
 
+  const etapa = etapaDesdeEstado(contrato.ESTADO_CONTRATO_CODIGO);
+  const regimenPasos: RegimenPasos = esPlanilla ? "PLANILLA" : esPorHora ? "LOCADOR_POR_HORA" : "LOCADOR";
+
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-white">
           {contrato.NOMBRES} {contrato.APELLIDOS}
@@ -123,6 +128,8 @@ export default async function DetalleContratoPage({
           {contrato.TIPO_CONTRATO_DESCRIPCION} - {contrato.ESTADO_CONTRATO_DESCRIPCION}
         </p>
       </div>
+
+      <PasosContratacion paso={etapa.paso} finalizado={etapa.finalizado} anulado={etapa.anulado} regimen={regimenPasos} />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
@@ -204,6 +211,10 @@ export default async function DetalleContratoPage({
             <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Conceptos remunerativos</h2>
             <span className="text-sm font-semibold text-slate-800 dark:text-white">{formatearMoneda(totalConceptos)}</span>
           </div>
+          <NotaAyuda>
+            Ingreso base, bono, movilidad, etc. La suma de los conceptos es la remuneracion bruta mensual que usa la
+            Planilla Mensual para calcular AFP/ONP y Renta de 5ta. Agregalos antes de generar el link de firma.
+          </NotaAyuda>
 
           <ul className="mt-3 divide-y divide-slate-100 text-sm dark:divide-slate-800">
             {conceptos.map((c) => (
@@ -522,6 +533,10 @@ export default async function DetalleContratoPage({
       {puedeGenerarLink ? (
         <section>
           <h2 className="mb-2 text-sm font-semibold text-slate-800 dark:text-white">Link de firma</h2>
+          <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+            Al generarlo el contrato pasa a &quot;Pendiente de firma&quot;. La persona abre el link sin iniciar sesion,
+            revisa el contrato, completa su cuenta bancaria/CCI y firma. Vale 7 dias; si vence, genera otro.
+          </p>
           <GenerarLinkContratoButton idContrato={contrato.ID_CONTRATO} />
         </section>
       ) : null}
