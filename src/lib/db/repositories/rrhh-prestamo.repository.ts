@@ -57,6 +57,11 @@ export interface SolicitarPrestamoParams {
   montoTotal: number;
   idMoneda: number;
   descripcion: string | null;
+  // Cronograma propuesto -- solo para PRESTAMO, null para ADELANTO_SUELDO
+  // (una sola cuota, cronograma lo define RRHH al otorgar).
+  nroCuotas: number | null;
+  anioInicio: number | null;
+  mesInicio: number | null;
   idUsuarioCreacion: number;
 }
 
@@ -70,6 +75,9 @@ export async function solicitarPrestamo(params: SolicitarPrestamoParams): Promis
       params.montoTotal,
       params.idMoneda,
       params.descripcion,
+      params.nroCuotas,
+      params.anioInicio,
+      params.mesInicio,
       params.idUsuarioCreacion,
     ],
     ["id_prestamo"],

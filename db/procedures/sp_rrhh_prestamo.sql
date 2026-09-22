@@ -34,7 +34,12 @@ DELIMITER $$
 -- con descuento en planilla) o p_id_contacto (contacto externo del
 -- directorio, sin planilla) -- no-op silencioso (p_id_prestamo queda
 -- NULL) si viene mas de uno o ninguno, mismo criterio que el acreedor de
--- PASIVO en SP_PASIVO_CREAR.
+-- PASIVO en SP_PASIVO_CREAR. Si el tipo es ADELANTO_SUELDO, ademas: el
+-- beneficiario debe ser un trabajador (nunca un contacto -- un adelanto
+-- es a cuenta de un sueldo, un contacto no tiene) con un contrato FIRMADO
+-- de sueldo fijo (ver SP_RRHH_CONTRATO_SUELDO_FIJO_VIGENTE), y el monto
+-- no puede superar el 70% de ese sueldo fijo -- no-op silencioso si no se
+-- cumple, mismo criterio que el resto de guards de este archivo.
 CREATE PROCEDURE SP_RRHH_PRESTAMO_CREAR(
     IN p_id_usuario INT UNSIGNED,
     IN p_id_contacto INT UNSIGNED,
@@ -50,9 +55,35 @@ CREATE PROCEDURE SP_RRHH_PRESTAMO_CREAR(
 )
 BEGIN
     DECLARE v_id_pendiente_firma INT UNSIGNED;
+    DECLARE v_es_adelanto TINYINT;
+    DECLARE v_sueldo_fijo DECIMAL(12,2) DEFAULT NULL;
+    DECLARE v_id_moneda_sueldo INT UNSIGNED DEFAULT NULL;
     SET v_id_pendiente_firma = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PRESTAMO' AND CODIGO = 'PENDIENTE_FIRMA' LIMIT 1);
+    SET v_es_adelanto = (SELECT tp.CODIGO = 'ADELANTO_SUELDO' FROM MAESTRO_MAESTRO tp WHERE tp.ID_MAESTRO = p_id_tipo_prestamo);
 
-    IF (p_id_usuario IS NOT NULL) != (p_id_contacto IS NOT NULL) THEN
+    IF v_es_adelanto = 1 AND p_id_usuario IS NOT NULL THEN
+        SELECT CASE WHEN tc.CODIGO = 'LOCADOR' THEN c.TARIFA
+                    ELSE (SELECT COALESCE(SUM(cc.MONTO), 0) FROM RRHH_CONTRATO_CONCEPTO cc WHERE cc.ID_CONTRATO = c.ID_CONTRATO)
+               END,
+               COALESCE(c.ID_MONEDA, (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'MONEDA' AND CODIGO = 'PEN' LIMIT 1))
+          INTO v_sueldo_fijo, v_id_moneda_sueldo
+          FROM RRHH_CONTRATO c
+          JOIN MAESTRO_MAESTRO tc ON tc.ID_MAESTRO = c.ID_TIPO_CONTRATO
+          JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = c.ID_ESTADO_CONTRATO
+          LEFT JOIN MAESTRO_MAESTRO tpl ON tpl.ID_MAESTRO = c.ID_TIPO_PAGO_LOCADOR
+         WHERE c.ID_USUARIO = p_id_usuario
+           AND ec.CODIGO = 'FIRMADO'
+           AND (tc.CODIGO != 'LOCADOR' OR tpl.CODIGO != 'POR_HORA')
+         ORDER BY c.FECHA_INICIO DESC
+         LIMIT 1;
+    END IF;
+
+    IF (p_id_usuario IS NOT NULL) != (p_id_contacto IS NOT NULL)
+       AND (v_es_adelanto = 0 OR (
+                p_id_contacto IS NULL AND v_sueldo_fijo IS NOT NULL AND p_id_moneda = v_id_moneda_sueldo
+                AND p_monto_total <= v_sueldo_fijo * 0.70
+            ))
+    THEN
         INSERT INTO RRHH_PRESTAMO (
             ID_USUARIO, ID_CONTACTO, ID_TIPO_PRESTAMO, MONTO_TOTAL, ID_MONEDA, TIPO_CAMBIO, DESCRIPCION, FECHA_ORIGEN,
             ID_CUENTA_DESEMBOLSO, ID_ESTADO_PRESTAMO, USUARIO_CREACION
@@ -65,14 +96,18 @@ BEGIN
     END IF;
 END$$
 
--- Solicitud: nace SOLICITADO -- sin cronograma, sin cuenta de desembolso,
--- sin TC -- eso lo completa RRHH al otorgarlo (SP_RRHH_PRESTAMO_OTORGAR).
--- El colaborador solicita para si mismo (p_id_usuario = su propia sesion,
--- p_id_contacto NULL); Gerencia/Administracion/RRHH pueden solicitar en
--- nombre de un trabajador o un contacto -- misma regla de "exactamente
--- uno" que SP_RRHH_PRESTAMO_CREAR. p_fecha_origen queda como fecha de
--- solicitud (informativa, se pisa con la fecha real de desembolso al
--- otorgar).
+-- Solicitud: nace SOLICITADO -- sin cuenta de desembolso ni TC -- eso lo
+-- completa RRHH al otorgarlo (SP_RRHH_PRESTAMO_OTORGAR). El colaborador
+-- solicita para si mismo (p_id_usuario = su propia sesion, p_id_contacto
+-- NULL); Gerencia/Administracion/RRHH pueden solicitar en nombre de un
+-- trabajador o un contacto -- misma regla de "exactamente uno" que
+-- SP_RRHH_PRESTAMO_CREAR. p_fecha_origen queda como fecha de solicitud
+-- (informativa, se pisa con la fecha real de desembolso al otorgar).
+-- p_nro_cuotas/p_anio_inicio/p_mes_inicio son el cronograma que el
+-- solicitante propone para un PRESTAMO (RRHH los usa como punto de
+-- partida al otorgar, pero puede ajustarlos) -- para un ADELANTO_SUELDO
+-- se guardan NULL (una sola cuota, cronograma lo define RRHH). Mismo tope
+-- del 70% del sueldo fijo que SP_RRHH_PRESTAMO_CREAR para un adelanto.
 CREATE PROCEDURE SP_RRHH_PRESTAMO_SOLICITAR(
     IN p_id_usuario INT UNSIGNED,
     IN p_id_contacto INT UNSIGNED,
@@ -80,19 +115,50 @@ CREATE PROCEDURE SP_RRHH_PRESTAMO_SOLICITAR(
     IN p_monto_total DECIMAL(12,2),
     IN p_id_moneda INT UNSIGNED,
     IN p_descripcion VARCHAR(300),
+    IN p_nro_cuotas INT UNSIGNED,
+    IN p_anio_inicio SMALLINT UNSIGNED,
+    IN p_mes_inicio TINYINT UNSIGNED,
     IN p_id_usuario_creacion INT UNSIGNED,
     OUT p_id_prestamo INT UNSIGNED
 )
 BEGIN
     DECLARE v_id_solicitado INT UNSIGNED;
+    DECLARE v_es_adelanto TINYINT;
+    DECLARE v_sueldo_fijo DECIMAL(12,2) DEFAULT NULL;
+    DECLARE v_id_moneda_sueldo INT UNSIGNED DEFAULT NULL;
     SET v_id_solicitado = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PRESTAMO' AND CODIGO = 'SOLICITADO' LIMIT 1);
+    SET v_es_adelanto = (SELECT tp.CODIGO = 'ADELANTO_SUELDO' FROM MAESTRO_MAESTRO tp WHERE tp.ID_MAESTRO = p_id_tipo_prestamo);
 
-    IF (p_id_usuario IS NOT NULL) != (p_id_contacto IS NOT NULL) THEN
+    IF v_es_adelanto = 1 AND p_id_usuario IS NOT NULL THEN
+        SELECT CASE WHEN tc.CODIGO = 'LOCADOR' THEN c.TARIFA
+                    ELSE (SELECT COALESCE(SUM(cc.MONTO), 0) FROM RRHH_CONTRATO_CONCEPTO cc WHERE cc.ID_CONTRATO = c.ID_CONTRATO)
+               END,
+               COALESCE(c.ID_MONEDA, (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'MONEDA' AND CODIGO = 'PEN' LIMIT 1))
+          INTO v_sueldo_fijo, v_id_moneda_sueldo
+          FROM RRHH_CONTRATO c
+          JOIN MAESTRO_MAESTRO tc ON tc.ID_MAESTRO = c.ID_TIPO_CONTRATO
+          JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = c.ID_ESTADO_CONTRATO
+          LEFT JOIN MAESTRO_MAESTRO tpl ON tpl.ID_MAESTRO = c.ID_TIPO_PAGO_LOCADOR
+         WHERE c.ID_USUARIO = p_id_usuario
+           AND ec.CODIGO = 'FIRMADO'
+           AND (tc.CODIGO != 'LOCADOR' OR tpl.CODIGO != 'POR_HORA')
+         ORDER BY c.FECHA_INICIO DESC
+         LIMIT 1;
+    END IF;
+
+    IF (p_id_usuario IS NOT NULL) != (p_id_contacto IS NOT NULL)
+       AND (v_es_adelanto = 0 OR (
+                p_id_contacto IS NULL AND v_sueldo_fijo IS NOT NULL AND p_id_moneda = v_id_moneda_sueldo
+                AND p_monto_total <= v_sueldo_fijo * 0.70
+            ))
+    THEN
         INSERT INTO RRHH_PRESTAMO (
-            ID_USUARIO, ID_CONTACTO, ID_TIPO_PRESTAMO, MONTO_TOTAL, ID_MONEDA, DESCRIPCION, FECHA_ORIGEN,
+            ID_USUARIO, ID_CONTACTO, ID_TIPO_PRESTAMO, MONTO_TOTAL, ID_MONEDA, DESCRIPCION,
+            NRO_CUOTAS_SOLICITADO, ANIO_INICIO_SOLICITADO, MES_INICIO_SOLICITADO, FECHA_ORIGEN,
             ID_ESTADO_PRESTAMO, USUARIO_CREACION
         ) VALUES (
-            p_id_usuario, p_id_contacto, p_id_tipo_prestamo, p_monto_total, p_id_moneda, p_descripcion, CURDATE(),
+            p_id_usuario, p_id_contacto, p_id_tipo_prestamo, p_monto_total, p_id_moneda, p_descripcion,
+            IF(v_es_adelanto = 1, NULL, p_nro_cuotas), IF(v_es_adelanto = 1, NULL, p_anio_inicio), IF(v_es_adelanto = 1, NULL, p_mes_inicio), CURDATE(),
             v_id_solicitado, p_id_usuario_creacion
         );
 
@@ -193,6 +259,7 @@ BEGIN
            td.DESCRIPCION AS TIPO_DOCUMENTO_DESCRIPCION, e.NRO_DOCUMENTO, e.DIRECCION,
            p.MONTO_TOTAL, p.ID_MONEDA, mo.CODIGO AS MONEDA_CODIGO, mo.DESCRIPCION AS MONEDA_DESCRIPCION, p.TIPO_CAMBIO,
            p.DESCRIPCION, p.FECHA_ORIGEN,
+           p.NRO_CUOTAS_SOLICITADO, p.ANIO_INICIO_SOLICITADO, p.MES_INICIO_SOLICITADO,
            p.ID_TIPO_PRESTAMO, tp.CODIGO AS TIPO_PRESTAMO_CODIGO, tp.DESCRIPCION AS TIPO_PRESTAMO_DESCRIPCION,
            p.ID_CUENTA_DESEMBOLSO, ce.NOMBRE AS CUENTA_DESEMBOLSO_NOMBRE, p.ID_MOVIMIENTO_DESEMBOLSO,
            p.ID_ESTADO_PRESTAMO, ep.CODIGO AS ESTADO_PRESTAMO_CODIGO, ep.DESCRIPCION AS ESTADO_PRESTAMO_DESCRIPCION,

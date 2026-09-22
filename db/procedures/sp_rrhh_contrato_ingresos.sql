@@ -15,6 +15,7 @@ DROP PROCEDURE IF EXISTS SP_RRHH_CONTRATO_HORAS_ELIMINAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_CONTRATO_HORAS_MARCAR_PAGADA;
 DROP PROCEDURE IF EXISTS SP_RRHH_CONTRATO_HORAS_LISTAR_PENDIENTES;
 DROP PROCEDURE IF EXISTS SP_RRHH_CONTRATO_HORAS_LISTAR_TODOS;
+DROP PROCEDURE IF EXISTS SP_RRHH_CONTRATO_SUELDO_FIJO_VIGENTE;
 
 DELIMITER $$
 
@@ -248,6 +249,38 @@ BEGIN
       JOIN RRHH_CONTRATO c ON c.ID_CONTRATO = p.ID_CONTRATO
       LEFT JOIN PROYECTO py ON py.ID_PROYECTO = p.ID_PROYECTO
      ORDER BY c.ID_CONTRATO, h.FECHA_CREACION DESC;
+END$$
+
+-- "Sueldo fijo" del contrato FIRMADO vigente de un trabajador, para
+-- calcular el tope de un adelanto de sueldo (ver SP_RRHH_PRESTAMO_CREAR/
+-- SOLICITAR). "Fijo" = PLANILLA (suma de sus conceptos remunerativos,
+-- pactada por contrato, no varia mes a mes) o LOCADOR con tarifa unica
+-- (MENSUAL/POR_JORNADA/POR_PROYECTO, un solo monto pactado en TARIFA).
+-- LOCADOR POR_HORA queda fuera -- su ingreso depende de las horas que
+-- registre cada periodo, no hay "sueldo fijo" que adelantar. Sin filas
+-- si no tiene contrato FIRMADO o su pago es por hora. ID_MONEDA sale NULL
+-- en PLANILLA (la planilla siempre es en soles, ver calculo.ts) -- se
+-- resuelve a PEN aqui mismo para que el llamador no tenga que adivinar.
+CREATE PROCEDURE SP_RRHH_CONTRATO_SUELDO_FIJO_VIGENTE(
+    IN p_id_usuario INT UNSIGNED
+)
+BEGIN
+    SELECT c.ID_CONTRATO,
+           COALESCE(c.ID_MONEDA, (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'MONEDA' AND CODIGO = 'PEN' LIMIT 1)) AS ID_MONEDA,
+           COALESCE(mo.CODIGO, 'PEN') AS MONEDA_CODIGO,
+           CASE WHEN tc.CODIGO = 'LOCADOR' THEN c.TARIFA
+                ELSE (SELECT COALESCE(SUM(cc.MONTO), 0) FROM RRHH_CONTRATO_CONCEPTO cc WHERE cc.ID_CONTRATO = c.ID_CONTRATO)
+           END AS SUELDO_FIJO
+      FROM RRHH_CONTRATO c
+      JOIN MAESTRO_MAESTRO tc ON tc.ID_MAESTRO = c.ID_TIPO_CONTRATO
+      JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = c.ID_ESTADO_CONTRATO
+      LEFT JOIN MAESTRO_MAESTRO tpl ON tpl.ID_MAESTRO = c.ID_TIPO_PAGO_LOCADOR
+      LEFT JOIN MAESTRO_MAESTRO mo ON mo.ID_MAESTRO = c.ID_MONEDA
+     WHERE c.ID_USUARIO = p_id_usuario
+       AND ec.CODIGO = 'FIRMADO'
+       AND (tc.CODIGO != 'LOCADOR' OR tpl.CODIGO != 'POR_HORA')
+     ORDER BY c.FECHA_INICIO DESC
+     LIMIT 1;
 END$$
 
 DELIMITER ;

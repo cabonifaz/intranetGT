@@ -20,9 +20,12 @@ function formatear(monto: number, codigo: string): string {
 export default function OtorgarPrestamoForm({ prestamo, cuentas, tcSugerido, hoy }: { prestamo: PrestamoRow; cuentas: CuentaListadoRow[]; tcSugerido: string | null; hoy: string }) {
   const enSoles = prestamo.MONEDA_CODIGO === "PEN";
   const hoyDate = new Date(hoy);
-  const [nroCuotas, setNroCuotas] = useState("6");
-  const [anioInicio, setAnioInicio] = useState(String(hoyDate.getFullYear()));
-  const [mesInicio, setMesInicio] = useState(String(hoyDate.getMonth() + 1));
+  // Si el solicitante propuso un cronograma (siempre que pidio un
+  // PRESTAMO, no un adelanto -- ver SP_RRHH_PRESTAMO_SOLICITAR), parte de
+  // ahi -- RRHH igual puede ajustarlo antes de otorgar.
+  const [nroCuotas, setNroCuotas] = useState(prestamo.NRO_CUOTAS_SOLICITADO ? String(prestamo.NRO_CUOTAS_SOLICITADO) : "6");
+  const [anioInicio, setAnioInicio] = useState(prestamo.ANIO_INICIO_SOLICITADO ? String(prestamo.ANIO_INICIO_SOLICITADO) : String(hoyDate.getFullYear()));
+  const [mesInicio, setMesInicio] = useState(prestamo.MES_INICIO_SOLICITADO ? String(prestamo.MES_INICIO_SOLICITADO) : String(hoyDate.getMonth() + 1));
 
   const cuotasNum = Math.trunc(Number(nroCuotas));
   const vistaPrevia =
@@ -69,6 +72,11 @@ export default function OtorgarPrestamoForm({ prestamo, cuentas, tcSugerido, hoy
 
       <div className="rounded-lg border border-dashed border-slate-300 p-3 dark:border-slate-700">
         <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Cronograma de descuentos</p>
+        {prestamo.NRO_CUOTAS_SOLICITADO ? (
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Precargado con lo que propuso quien solicitó -- puedes ajustarlo antes de otorgar.
+          </p>
+        ) : null}
         <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <label htmlFor="nroCuotas" className="mb-1 block text-xs text-slate-500 dark:text-slate-400">

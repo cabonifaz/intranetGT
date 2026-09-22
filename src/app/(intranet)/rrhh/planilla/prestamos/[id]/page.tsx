@@ -1,6 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { requirePermiso, puedeGestionarPrestamos } from "@/lib/auth/require-permiso";
+import { notFound, redirect } from "next/navigation";
+import { requireSession } from "@/lib/auth/get-current-user";
+import { puedeGestionarPrestamos } from "@/lib/auth/require-permiso";
+import { obtenerPermisosUsuario } from "@/lib/db/repositories/permiso.repository";
+import { tienePermiso } from "@/lib/rbac/permissions";
 import { obtenerPrestamo, listarCuotasPrestamo } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { listarCuentas } from "@/lib/db/repositories/cuenta.repository";
 import { obtenerTipoCambioVigente } from "@/lib/db/repositories/tipo-cambio.repository";
@@ -10,6 +13,7 @@ import { formatearNroPrestamo } from "@/lib/rrhh/planilla/generar-compromiso-pre
 import AnularPrestamoBoton from "@/components/rrhh/AnularPrestamoBoton";
 import PrestamoCuotaAcciones from "@/components/rrhh/PrestamoCuotaAcciones";
 import OtorgarPrestamoForm from "@/components/rrhh/OtorgarPrestamoForm";
+import PasosPrestamo, { etapaDesdeEstadoPrestamo } from "@/components/rrhh/PasosPrestamo";
 import NotaAyuda from "@/components/ui/NotaAyuda";
 import SubmitButton from "@/components/ui/SubmitButton";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
@@ -26,13 +30,23 @@ function formatearFecha(fecha: string | null): string {
 }
 
 export default async function DetallePrestamoPage({ params }: { params: Promise<{ id: string }> }) {
-  const sesion = await requirePermiso("RRHH_PLANILLA", "LECTURA");
-  const puedeGestionar = await puedeGestionarPrestamos(sesion.idUsuario);
+  const sesion = await requireSession();
   const { id } = await params;
   const idPrestamo = Number(id);
 
   const prestamo = await obtenerPrestamo(idPrestamo);
   if (!prestamo) notFound();
+
+  // Ademas de quien tiene LECTURA sobre RRHH_PLANILLA, el propio
+  // beneficiario puede ver su solicitud (de solo lectura si no gestiona
+  // prestamos) -- para que conozca el proceso paso a paso, ver
+  // PasosPrestamo.
+  const permisos = await obtenerPermisosUsuario(sesion.idUsuario);
+  const tienePermisoPlanilla = tienePermiso(permisos, "RRHH_PLANILLA", "LECTURA");
+  const esBeneficiario = prestamo.ID_USUARIO === sesion.idUsuario;
+  if (!tienePermisoPlanilla && !esBeneficiario) redirect("/");
+
+  const puedeGestionar = await puedeGestionarPrestamos(sesion.idUsuario);
   const solicitado = prestamo.ESTADO_PRESTAMO_CODIGO === "SOLICITADO";
   const [cuotas, cuentas, tcPrestamo] = await Promise.all([
     listarCuotasPrestamo(idPrestamo),
@@ -69,13 +83,16 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
     );
 
   const hoy = new Date();
+  const etapa = etapaDesdeEstadoPrestamo(prestamo.ESTADO_PRESTAMO_CODIGO);
+  const volverHref = tienePermisoPlanilla ? "/rrhh/planilla/prestamos" : `/rrhh/directorio/${sesion.idUsuario}`;
+  const volverTexto = tienePermisoPlanilla ? "Préstamos" : "Mi ficha";
 
   return (
     <div className="max-w-4xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link href="/rrhh/planilla/prestamos" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
-            &larr; Préstamos
+          <Link href={volverHref} className="text-sm text-blue-600 hover:underline dark:text-blue-400">
+            &larr; {volverTexto}
           </Link>
           <h1 className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">
             {prestamo.TIPO_PRESTAMO_DESCRIPCION} a {prestamo.NOMBRES} {prestamo.APELLIDOS}
@@ -86,6 +103,8 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
         </div>
         {!anulado && puedeGestionar ? <AnularPrestamoBoton idPrestamo={prestamo.ID_PRESTAMO} /> : null}
       </div>
+
+      <PasosPrestamo paso={etapa.paso} finalizado={etapa.finalizado} anulado={etapa.anulado} esContacto={esContacto} />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">

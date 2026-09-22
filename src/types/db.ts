@@ -290,6 +290,16 @@ export interface ContratoConceptoRow extends RowDataPacket {
   MONTO: string;
 }
 
+// Sueldo/tarifa fija mensual del contrato FIRMADO vigente de un
+// trabajador (ver SP_RRHH_CONTRATO_SUELDO_FIJO_VIGENTE) -- usado para
+// calcular el tope de un adelanto de sueldo (hasta 70% de este monto).
+export interface ContratoSueldoFijoRow extends RowDataPacket {
+  ID_CONTRATO: number;
+  ID_MONEDA: number;
+  MONEDA_CODIGO: MonedaCodigo;
+  SUELDO_FIJO: string;
+}
+
 export interface ContratoProyectoRow extends RowDataPacket {
   ID_CONTRATO_PROYECTO: number;
   TARIFA_HORA: string;
@@ -1208,6 +1218,9 @@ export interface PrestamoRow extends RowDataPacket {
   TIPO_CAMBIO: string | null;
   DESCRIPCION: string | null;
   FECHA_ORIGEN: string;
+  NRO_CUOTAS_SOLICITADO: number | null;
+  ANIO_INICIO_SOLICITADO: number | null;
+  MES_INICIO_SOLICITADO: number | null;
   ID_TIPO_PRESTAMO: number;
   TIPO_PRESTAMO_CODIGO: TipoPrestamoCodigo;
   TIPO_PRESTAMO_DESCRIPCION: string;

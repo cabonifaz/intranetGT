@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { requirePermiso } from "@/lib/auth/require-permiso";
+import { requireSession } from "@/lib/auth/get-current-user";
+import { obtenerPermisosUsuario } from "@/lib/db/repositories/permiso.repository";
+import { tienePermiso } from "@/lib/rbac/permissions";
 import { obtenerPrestamo } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { leerArchivo } from "@/lib/storage/local-storage";
 
@@ -9,13 +11,17 @@ const CONTENT_TYPE_POR_EXTENSION: Record<string, string> = {
   jpg: "image/jpeg",
 };
 
+// Ademas de quien tiene LECTURA sobre RRHH_PLANILLA, el propio
+// beneficiario puede ver su compromiso ya firmado.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  await requirePermiso("RRHH_PLANILLA", "LECTURA");
-
+  const sesion = await requireSession();
   const { id } = await params;
-  const prestamo = await obtenerPrestamo(Number(id));
+  const [prestamo, permisos] = await Promise.all([obtenerPrestamo(Number(id)), obtenerPermisosUsuario(sesion.idUsuario)]);
   if (!prestamo?.DOCUMENTO_FIRMADO_PATH) {
     return NextResponse.json({ error: "Compromiso firmado no disponible." }, { status: 404 });
+  }
+  if (!tienePermiso(permisos, "RRHH_PLANILLA", "LECTURA") && prestamo.ID_USUARIO !== sesion.idUsuario) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 403 });
   }
 
   const extension = prestamo.DOCUMENTO_FIRMADO_PATH.split(".").pop() ?? "pdf";

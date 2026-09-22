@@ -21,8 +21,13 @@ import {
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { listarCuentas, registrarMovimientoCuenta, obtenerIdTipoMovimientoEgreso } from "@/lib/db/repositories/cuenta.repository";
 import { obtenerContactoExterno } from "@/lib/db/repositories/directorio-contacto.repository";
+import { obtenerSueldoFijoVigente } from "@/lib/db/repositories/contrato.repository";
+import { listarAplicaciones } from "@/lib/db/repositories/aplicacion.repository";
+import { crearNotificacion } from "@/lib/db/repositories/notificacion.repository";
 import { generarCuotasIguales } from "@/lib/rrhh/planilla/cronograma-prestamo";
+import { montoMaximoAdelanto } from "@/lib/rrhh/planilla/adelanto-sueldo";
 import { guardarArchivo } from "@/lib/storage/local-storage";
+import type { PrestamoRow } from "@/types/db";
 
 // La lectura (listados/detalle) vive bajo RRHH_PLANILLA; gestionar
 // (crear, otorgar, editar cronograma, anular, solicitar en nombre de
@@ -37,6 +42,21 @@ const TIPOS_COMPROMISO_FIRMADO: Record<string, string> = {
 
 function hoyIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+// Un adelanto es a cuenta de un sueldo -- nunca para un contacto, siempre
+// en la misma moneda del sueldo (no tiene sentido adelantar en una
+// moneda distinta a la que se paga), y nunca por mas del tope (ver
+// montoMaximoAdelanto) del sueldo fijo vigente del beneficiario (planilla
+// o locador con tarifa fija, no por hora). Chequeo previo en la app para
+// responder con un no-op limpio antes de llegar al guard equivalente en
+// SP_RRHH_PRESTAMO_CREAR/SOLICITAR (que es el que de verdad protege la
+// integridad si esto se saltara).
+async function excedeTopeAdelanto(idUsuario: number | null, idMoneda: number, montoTotal: number): Promise<boolean> {
+  if (!idUsuario) return true;
+  const sueldo = await obtenerSueldoFijoVigente(idUsuario);
+  if (!sueldo || sueldo.ID_MONEDA !== idMoneda) return true;
+  return montoTotal > montoMaximoAdelanto(Number(sueldo.SUELDO_FIJO));
 }
 
 // Crea el prestamo o adelanto de sueldo (nace PENDIENTE_FIRMA) con su cronograma de N cuotas
@@ -71,7 +91,15 @@ export async function crearPrestamoAction(formData: FormData): Promise<void> {
   if (idContacto && !(await obtenerContactoExterno(idContacto))) return;
 
   const tipos = await listarMaestros("TIPO_PRESTAMO");
-  if (!tipos.some((t) => t.ID_MAESTRO === idTipoPrestamo)) return;
+  const tipoSel = tipos.find((t) => t.ID_MAESTRO === idTipoPrestamo);
+  if (!tipoSel) return;
+
+  // Un adelanto es a cuenta de un sueldo: nunca para un contacto, y nunca
+  // por mas del tope de su sueldo fijo vigente.
+  if (tipoSel.CODIGO === "ADELANTO_SUELDO") {
+    if (idContacto) return;
+    if (await excedeTopeAdelanto(idUsuario, idMoneda, montoTotal)) return;
+  }
 
   const monedas = await listarMaestros("MONEDA");
   const monedaSel = monedas.find((m) => m.ID_MAESTRO === idMoneda);
@@ -138,8 +166,12 @@ export async function crearPrestamoAction(formData: FormData): Promise<void> {
 // puede ademas solicitar en nombre de un trabajador o de un contacto del
 // directorio -- para cualquier otro, idUsuario/idContacto del formulario
 // se ignoran y se fuerza la propia sesion, para que nadie solicite a
-// nombre de otro sin permiso. Nace SOLICITADO, sin cronograma ni cuenta
-// de desembolso -- eso lo define RRHH al otorgarlo (otorgarPrestamoAction).
+// nombre de otro sin permiso. Nace SOLICITADO, sin cuenta de desembolso
+// ni TC -- eso lo completa RRHH al otorgarlo (otorgarPrestamoAction). Un
+// PRESTAMO si debe traer de una vez el cronograma que propone (N de
+// cuotas + mes/anio de inicio) -- RRHH parte de eso al otorgar, pudiendo
+// ajustarlo. Un ADELANTO_SUELDO no pide cronograma (una sola cuota) y en
+// cambio esta limitado a un % del sueldo fijo del beneficiario.
 export async function solicitarPrestamoAction(formData: FormData): Promise<void> {
   const sesion = await requireSession();
   const puedeGestionar = await puedeGestionarPrestamos(sesion.idUsuario);
@@ -161,11 +193,39 @@ export async function solicitarPrestamoAction(formData: FormData): Promise<void>
   if (!idTipoPrestamo || !(montoTotal > 0) || !idMoneda) return;
 
   const tipos = await listarMaestros("TIPO_PRESTAMO");
-  if (!tipos.some((t) => t.ID_MAESTRO === idTipoPrestamo)) return;
+  const tipoSel = tipos.find((t) => t.ID_MAESTRO === idTipoPrestamo);
+  if (!tipoSel) return;
   const monedas = await listarMaestros("MONEDA");
   if (!monedas.some((m) => m.ID_MAESTRO === idMoneda)) return;
 
-  await solicitarPrestamo({ idUsuario, idContacto, idTipoPrestamo, montoTotal, idMoneda, descripcion, idUsuarioCreacion: sesion.idUsuario });
+  const esAdelanto = tipoSel.CODIGO === "ADELANTO_SUELDO";
+
+  let nroCuotas: number | null = null;
+  let anioInicio: number | null = null;
+  let mesInicio: number | null = null;
+  if (esAdelanto) {
+    if (idContacto) return;
+    if (await excedeTopeAdelanto(idUsuario, idMoneda, montoTotal)) return;
+  } else {
+    nroCuotas = Math.trunc(Number(formData.get("nroCuotas")));
+    anioInicio = Math.trunc(Number(formData.get("anioInicio")));
+    mesInicio = Math.trunc(Number(formData.get("mesInicio")));
+    if (!(nroCuotas >= 1 && nroCuotas <= 120)) return;
+    if (!(mesInicio >= 1 && mesInicio <= 12) || anioInicio < 2000) return;
+  }
+
+  await solicitarPrestamo({
+    idUsuario,
+    idContacto,
+    idTipoPrestamo,
+    montoTotal,
+    idMoneda,
+    descripcion,
+    nroCuotas,
+    anioInicio,
+    mesInicio,
+    idUsuarioCreacion: sesion.idUsuario,
+  });
 
   const destino = idContacto ? "/rrhh/planilla/prestamos" : `/rrhh/directorio/${idUsuario}`;
   revalidatePath(destino);
@@ -232,9 +292,40 @@ export async function otorgarPrestamoAction(formData: FormData): Promise<void> {
     if (movimiento.id_movimiento) await asignarMovimientoDesembolso(idPrestamo, movimiento.id_movimiento);
   }
 
+  await notificarSolicitudOtorgada(prestamo);
+
   revalidatePath(`/rrhh/planilla/prestamos/${idPrestamo}`);
   revalidatePath("/rrhh/planilla/prestamos");
   redirect(`/rrhh/planilla/prestamos/${idPrestamo}`);
+}
+
+// Avisa al beneficiario (si es un trabajador -- un contacto no tiene
+// cuenta que notificar) que su solicitud ya fue otorgada y esta lista
+// para firmar. No-op silencioso ante cualquier error: una notificacion
+// que falla no debe tumbar el otorgamiento, que ya quedo guardado.
+async function notificarSolicitudOtorgada(prestamo: PrestamoRow): Promise<void> {
+  if (!prestamo.ID_USUARIO) return;
+  try {
+    const [aplicaciones, categorias] = await Promise.all([listarAplicaciones(), listarMaestros("CATEGORIA_NOTIFICACION")]);
+    const idAplicacionOrigen = aplicaciones.find((a) => a.CODIGO === "RRHH_PLANILLA")?.ID_APLICACION ?? null;
+    const idCategoria = categorias.find((c) => c.CODIGO === "MODULO")?.ID_MAESTRO;
+    if (!idCategoria) return;
+
+    const nombreTipo = prestamo.TIPO_PRESTAMO_CODIGO === "ADELANTO_SUELDO" ? "adelanto de sueldo" : "préstamo";
+    const monto = `${prestamo.MONEDA_CODIGO === "USD" ? "US$" : "S/"} ${Number(prestamo.MONTO_TOTAL).toLocaleString("es-PE", { minimumFractionDigits: 2 })}`;
+
+    await crearNotificacion({
+      idCategoria,
+      titulo: `Tu ${nombreTipo} fue otorgado`,
+      mensaje: `Se otorgó tu solicitud de ${nombreTipo} por ${monto}. Descarga el compromiso de pago, fírmalo y súbelo firmado para activarlo.`,
+      idAplicacionOrigen,
+      urlDestino: `/rrhh/planilla/prestamos/${prestamo.ID_PRESTAMO}`,
+      idUsuarioEmisor: null,
+      destinatarios: { usuarios: [prestamo.ID_USUARIO] },
+    });
+  } catch {
+    // Silencioso -- ver comentario de la funcion.
+  }
 }
 
 function revalidarPrestamo(idPrestamo: number): void {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { EmpleadoDirectorioRow, DirectorioContactoConTipoRow } from "@/types/db";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
 
@@ -9,6 +9,10 @@ interface SelectorBeneficiarioPrestamoProps {
   contactos: DirectorioContactoConTipoRow[];
   defaultIdUsuario?: number | null;
   defaultIdContacto?: number | null;
+  // Un adelanto de sueldo nunca es para un contacto -- el formulario que
+  // usa este selector necesita saber cual de los dos esta activo para
+  // deshabilitar esa opcion (ver NuevoPrestamoForm/SolicitarPrestamoForm).
+  onFuenteChange?: (fuente: "trabajador" | "contacto") => void;
 }
 
 // El beneficiario de un prestamo/adelanto es exactamente uno de dos --
@@ -20,8 +24,15 @@ export default function SelectorBeneficiarioPrestamo({
   contactos,
   defaultIdUsuario = null,
   defaultIdContacto = null,
+  onFuenteChange,
 }: SelectorBeneficiarioPrestamoProps) {
   const [fuente, setFuente] = useState<"trabajador" | "contacto">(defaultIdContacto ? "contacto" : "trabajador");
+
+  useEffect(() => {
+    onFuenteChange?.(fuente);
+    // Solo al montar/cambiar fuente -- onFuenteChange no deberia disparar esto de nuevo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fuente]);
 
   return (
     <div className="space-y-2">

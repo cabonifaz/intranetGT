@@ -4,6 +4,8 @@ import { puedeGestionarPrestamos } from "@/lib/auth/require-permiso";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { listarDirectorio } from "@/lib/db/repositories/rrhh-empleado.repository";
 import { listarTodosLosContactosExternos } from "@/lib/db/repositories/directorio-contacto.repository";
+import { obtenerSueldoFijoVigente } from "@/lib/db/repositories/contrato.repository";
+import { montoMaximoAdelanto } from "@/lib/rrhh/planilla/adelanto-sueldo";
 import SolicitarPrestamoForm from "@/components/rrhh/SolicitarPrestamoForm";
 
 // Autoservicio: cualquier colaborador con sesion puede solicitar (no
@@ -15,12 +17,18 @@ export default async function SolicitarPrestamoPage() {
   const sesion = await requireSession();
   const puedeGestionar = await puedeGestionarPrestamos(sesion.idUsuario);
 
-  const [tipos, monedas, colaboradores, contactos] = await Promise.all([
+  const hoy = new Date();
+  const [tipos, monedas, colaboradores, contactos, sueldoFijo] = await Promise.all([
     listarMaestros("TIPO_PRESTAMO"),
     listarMaestros("MONEDA"),
     puedeGestionar ? listarDirectorio(null, null) : Promise.resolve([]),
     puedeGestionar ? listarTodosLosContactosExternos() : Promise.resolve([]),
+    obtenerSueldoFijoVigente(sesion.idUsuario),
   ]);
+
+  const sueldoFijoPropio = sueldoFijo
+    ? { montoMaximo: montoMaximoAdelanto(Number(sueldoFijo.SUELDO_FIJO)), monedaCodigo: sueldoFijo.MONEDA_CODIGO, idMoneda: sueldoFijo.ID_MONEDA }
+    : null;
 
   return (
     <div className="max-w-lg">
@@ -41,6 +49,9 @@ export default async function SolicitarPrestamoPage() {
         contactos={contactos}
         puedeGestionar={puedeGestionar}
         idUsuarioSesion={sesion.idUsuario}
+        sueldoFijoPropio={sueldoFijoPropio}
+        anioActual={hoy.getFullYear()}
+        mesActual={hoy.getMonth() + 1}
       />
     </div>
   );

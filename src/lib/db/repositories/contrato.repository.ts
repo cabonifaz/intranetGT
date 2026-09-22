@@ -6,6 +6,7 @@ import type {
   ContratoHorasTodosRow,
   ContratoListadoRow,
   ContratoProyectoRow,
+  ContratoSueldoFijoRow,
   HorasPendienteRow,
 } from "@/types/db";
 
@@ -206,4 +207,13 @@ export async function marcarHorasPagadas(idContratoHoras: number, idMovimiento: 
 
 export async function listarHorasPendientes(): Promise<HorasPendienteRow[]> {
   return callProcedure<HorasPendienteRow>("SP_RRHH_CONTRATO_HORAS_LISTAR_PENDIENTES", []);
+}
+
+// Sueldo/tarifa fija del contrato FIRMADO vigente de un trabajador --
+// null si no tiene contrato firmado o si es locador por hora (su ingreso
+// varia, no hay "sueldo fijo" que adelantar). Ver
+// SP_RRHH_CONTRATO_SUELDO_FIJO_VIGENTE.
+export async function obtenerSueldoFijoVigente(idUsuario: number): Promise<ContratoSueldoFijoRow | null> {
+  const rows = await callProcedure<ContratoSueldoFijoRow>("SP_RRHH_CONTRATO_SUELDO_FIJO_VIGENTE", [idUsuario]);
+  return rows[0] ?? null;
 }

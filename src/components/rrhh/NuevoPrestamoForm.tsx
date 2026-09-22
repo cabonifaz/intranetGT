@@ -29,15 +29,22 @@ function formatear(monto: number, codigo: string): string {
 }
 
 export default function NuevoPrestamoForm({ tipos, colaboradores, contactos, monedas, cuentas, tcSugerido, anioActual, mesActual, hoy }: NuevoPrestamoFormProps) {
+  const idTipoPrestamoNormal = tipos.find((t) => t.CODIGO === "PRESTAMO") ? String(tipos.find((t) => t.CODIGO === "PRESTAMO")!.ID_MAESTRO) : "";
   const [idMoneda, setIdMoneda] = useState<string>(monedas.find((m) => m.CODIGO === "PEN") ? String(monedas.find((m) => m.CODIGO === "PEN")!.ID_MAESTRO) : "");
-  const [idTipo, setIdTipo] = useState<string>(tipos.find((t) => t.CODIGO === "PRESTAMO") ? String(tipos.find((t) => t.CODIGO === "PRESTAMO")!.ID_MAESTRO) : "");
+  const [idTipo, setIdTipo] = useState<string>(idTipoPrestamoNormal);
   const [monto, setMonto] = useState("");
   const [nroCuotas, setNroCuotas] = useState("6");
   const [anioInicio, setAnioInicio] = useState(String(anioActual));
   const [mesInicio, setMesInicio] = useState(String(mesActual));
+  const [fuenteBeneficiario, setFuenteBeneficiario] = useState<"trabajador" | "contacto">("trabajador");
 
   const esAdelanto = tipos.find((t) => String(t.ID_MAESTRO) === idTipo)?.CODIGO === "ADELANTO_SUELDO";
   const nombreTipo = esAdelanto ? "adelanto" : "préstamo";
+  // Un adelanto es a cuenta de un sueldo -- nunca para un contacto del
+  // directorio (que no tiene planilla ni sueldo). Si cambian a contacto
+  // estando en adelanto, se vuelve a prestamo para no quedar en un
+  // estado invalido.
+  const tiposDisponibles = fuenteBeneficiario === "contacto" ? tipos.filter((t) => t.CODIGO !== "ADELANTO_SUELDO") : tipos;
 
   const monedaSel = monedas.find((m) => String(m.ID_MAESTRO) === idMoneda) ?? null;
   const enSoles = !monedaSel || monedaSel.CODIGO === "PEN";
@@ -58,9 +65,10 @@ export default function NuevoPrestamoForm({ tipos, colaboradores, contactos, mon
       <div>
         <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Tipo</label>
         <ComboBusqueda
+          key={fuenteBeneficiario}
           name="idTipoPrestamo"
           defaultValue={idTipo}
-          opciones={tipos.map((t) => ({ value: String(t.ID_MAESTRO), label: t.DESCRIPCION }))}
+          opciones={tiposDisponibles.map((t) => ({ value: String(t.ID_MAESTRO), label: t.DESCRIPCION }))}
           onSeleccionar={(v) => {
             setIdTipo(v);
             if (tipos.find((t) => String(t.ID_MAESTRO) === v)?.CODIGO === "ADELANTO_SUELDO") setNroCuotas("1");
@@ -68,17 +76,25 @@ export default function NuevoPrestamoForm({ tipos, colaboradores, contactos, mon
         />
         <NotaAyuda>
           <strong>Préstamo</strong>: dinero que se le presta al colaborador y devuelve en cuotas. <strong>Adelanto de sueldo</strong>:
-          adelanto a cuenta de su remuneración (o de sus honorarios) -- vale para cualquier tipo de contrato, planilla o locador, y
-          normalmente se descuenta en una sola cuota, en la planilla del mes.
+          adelanto a cuenta de su remuneración (o de sus honorarios) -- solo para un trabajador con sueldo fijo (planilla o locador
+          con tarifa fija, no por hora), hasta el 70% de ese sueldo, en una sola cuota.
         </NotaAyuda>
       </div>
 
       <div>
         <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Beneficiario</label>
-        <SelectorBeneficiarioPrestamo colaboradores={colaboradores} contactos={contactos} />
+        <SelectorBeneficiarioPrestamo
+          colaboradores={colaboradores}
+          contactos={contactos}
+          onFuenteChange={(fuente) => {
+            setFuenteBeneficiario(fuente);
+            if (fuente === "contacto" && esAdelanto) setIdTipo(idTipoPrestamoNormal);
+          }}
+        />
         <NotaAyuda>
           Un trabajador recibe el dinero y se le descuentan las cuotas en su planilla; un contacto del directorio no tiene planilla,
-          su repago se marca a mano desde el detalle del préstamo.
+          su repago se marca a mano desde el detalle del préstamo. El tope del 70% en un adelanto se valida contra el sueldo fijo
+          vigente del trabajador que elijas.
         </NotaAyuda>
       </div>
 
