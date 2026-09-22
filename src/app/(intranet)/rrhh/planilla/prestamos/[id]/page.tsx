@@ -2,11 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermiso } from "@/lib/auth/require-permiso";
 import { obtenerPrestamo, listarCuotasPrestamo } from "@/lib/db/repositories/rrhh-prestamo.repository";
+import { listarCuentas } from "@/lib/db/repositories/cuenta.repository";
+import { obtenerTipoCambioVigente } from "@/lib/db/repositories/tipo-cambio.repository";
 import { agregarCuotaPrestamoAction, subirCompromisoFirmadoAction } from "@/lib/actions/rrhh-prestamos";
 import { etiquetaPeriodoMensual } from "@/lib/rrhh/periodos-pago";
 import { formatearNroPrestamo } from "@/lib/rrhh/planilla/generar-compromiso-prestamo-pdf";
 import AnularPrestamoBoton from "@/components/rrhh/AnularPrestamoBoton";
 import PrestamoCuotaAcciones from "@/components/rrhh/PrestamoCuotaAcciones";
+import OtorgarPrestamoForm from "@/components/rrhh/OtorgarPrestamoForm";
 import NotaAyuda from "@/components/ui/NotaAyuda";
 import SubmitButton from "@/components/ui/SubmitButton";
 
@@ -28,14 +31,19 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
 
   const prestamo = await obtenerPrestamo(idPrestamo);
   if (!prestamo) notFound();
-  const cuotas = await listarCuotasPrestamo(idPrestamo);
+  const solicitado = prestamo.ESTADO_PRESTAMO_CODIGO === "SOLICITADO";
+  const [cuotas, cuentas, tcPrestamo] = await Promise.all([
+    listarCuotasPrestamo(idPrestamo),
+    solicitado ? listarCuentas() : Promise.resolve([]),
+    solicitado ? obtenerTipoCambioVigente("PRESTAMO") : Promise.resolve(null),
+  ]);
 
   const cod = prestamo.MONEDA_CODIGO;
   const enSoles = cod === "PEN";
   const tc = prestamo.TIPO_CAMBIO ? Number(prestamo.TIPO_CAMBIO) : null;
   const anulado = prestamo.ESTADO_PRESTAMO_CODIGO === "ANULADO";
   const firmado = prestamo.ESTADO_PRESTAMO_CODIGO === "ACTIVO";
-  const puedeEscribir = !anulado;
+  const puedeEscribir = !anulado && !solicitado;
 
   const vigentes = cuotas.filter((c) => c.ESTADO_CUOTA_CODIGO !== "ANULADA");
   const totalCuotas = vigentes.reduce((suma, c) => suma + Number(c.MONTO), 0);
@@ -81,14 +89,20 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
           <Dato etiqueta={`Monto del ${prestamo.TIPO_PRESTAMO_CODIGO === "ADELANTO_SUELDO" ? "adelanto" : "préstamo"}`} valor={formatearMonto(prestamo.MONTO_TOTAL, cod)} />
           <Dato etiqueta="Moneda" valor={prestamo.MONEDA_DESCRIPCION} />
           {!enSoles && tc ? <Dato etiqueta="Tipo de cambio pactado" valor={`S/ ${tc.toFixed(4)} por US$ 1.00`} /> : null}
-          <Dato etiqueta="Fecha de otorgamiento" valor={formatearFecha(prestamo.FECHA_ORIGEN)} />
+          {solicitado ? (
+            <Dato etiqueta="Fecha de solicitud" valor={formatearFecha(prestamo.FECHA_ORIGEN)} />
+          ) : (
+            <Dato etiqueta="Fecha de otorgamiento" valor={formatearFecha(prestamo.FECHA_ORIGEN)} />
+          )}
           {prestamo.DESCRIPCION ? <Dato etiqueta="Motivo" valor={prestamo.DESCRIPCION} /> : null}
-          <Dato etiqueta="Ya descontado" valor={formatearMonto(descontado, cod)} />
+          {!solicitado ? <Dato etiqueta="Ya descontado" valor={formatearMonto(descontado, cod)} /> : null}
           <Dato etiqueta="Documento" valor={`${prestamo.TIPO_DOCUMENTO_DESCRIPCION ?? "Documento"} ${prestamo.NRO_DOCUMENTO ?? "-"}`} />
-          <Dato
-            etiqueta="Cuenta de desembolso"
-            valor={prestamo.CUENTA_DESEMBOLSO_NOMBRE ? `${prestamo.CUENTA_DESEMBOLSO_NOMBRE}${prestamo.ID_MOVIMIENTO_DESEMBOLSO ? "" : " (sin movimiento)"}` : "Sin movimiento de caja"}
-          />
+          {!solicitado ? (
+            <Dato
+              etiqueta="Cuenta de desembolso"
+              valor={prestamo.CUENTA_DESEMBOLSO_NOMBRE ? `${prestamo.CUENTA_DESEMBOLSO_NOMBRE}${prestamo.ID_MOVIMIENTO_DESEMBOLSO ? "" : " (sin movimiento)"}` : "Sin movimiento de caja"}
+            />
+          ) : null}
           {anulado ? (
             <>
               <Dato etiqueta="Fecha de anulación" valor={formatearFecha(prestamo.FECHA_ANULACION)} />
@@ -98,7 +112,18 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
         </dl>
       </section>
 
-      {!anulado ? (
+      {solicitado ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Otorgar solicitud</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {prestamo.NOMBRES} {prestamo.APELLIDOS} solicitó este {prestamo.TIPO_PRESTAMO_CODIGO === "ADELANTO_SUELDO" ? "adelanto" : "préstamo"} el{" "}
+            {formatearFecha(prestamo.FECHA_ORIGEN)}. Define la fecha real de desembolso y el cronograma de descuentos para activarlo.
+          </p>
+          <OtorgarPrestamoForm prestamo={prestamo} cuentas={cuentas} tcSugerido={tcPrestamo} hoy={hoy.toISOString().slice(0, 10)} />
+        </section>
+      ) : null}
+
+      {!anulado && !solicitado ? (
         <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Compromiso de pago</h2>
@@ -169,6 +194,7 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
         </section>
       ) : null}
 
+      {!solicitado ? (
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Cronograma de descuentos</h2>
         <NotaAyuda>
@@ -309,6 +335,7 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
           </details>
         ) : null}
       </section>
+      ) : null}
 
     </div>
   );

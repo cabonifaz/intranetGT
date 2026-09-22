@@ -2,6 +2,7 @@
 
 import { revalidatePath, refresh } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireSession } from "@/lib/auth/get-current-user";
 import { requirePermiso } from "@/lib/auth/require-permiso";
 import {
   crearPrestamo,
@@ -13,6 +14,8 @@ import {
   listarCuotasPrestamo,
   actualizarCuotaPrestamo,
   eliminarCuotaPrestamo,
+  solicitarPrestamo,
+  otorgarPrestamo,
 } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { listarCuentas, registrarMovimientoCuenta, obtenerIdTipoMovimientoEgreso } from "@/lib/db/repositories/cuenta.repository";
@@ -116,6 +119,97 @@ export async function crearPrestamoAction(formData: FormData): Promise<void> {
     if (movimiento.id_movimiento) await asignarMovimientoDesembolso(idPrestamo, movimiento.id_movimiento);
   }
 
+  revalidatePath("/rrhh/planilla/prestamos");
+  redirect(`/rrhh/planilla/prestamos/${idPrestamo}`);
+}
+
+// Autoservicio: cualquier colaborador solicita un prestamo/adelanto para
+// si mismo -- idUsuario siempre es la propia sesion (nunca viene del
+// formulario), para que nadie pueda solicitar a nombre de otro. Nace
+// SOLICITADO, sin cronograma ni cuenta de desembolso -- eso lo define
+// RRHH al otorgarlo (ver otorgarPrestamoAction).
+export async function solicitarPrestamoAction(formData: FormData): Promise<void> {
+  const sesion = await requireSession();
+
+  const idTipoPrestamo = Number(formData.get("idTipoPrestamo"));
+  const montoTotal = Number(formData.get("montoTotal"));
+  const idMoneda = Number(formData.get("idMoneda"));
+  const descripcion = String(formData.get("descripcion") ?? "").trim() || null;
+
+  if (!idTipoPrestamo || !(montoTotal > 0) || !idMoneda) return;
+
+  const tipos = await listarMaestros("TIPO_PRESTAMO");
+  if (!tipos.some((t) => t.ID_MAESTRO === idTipoPrestamo)) return;
+  const monedas = await listarMaestros("MONEDA");
+  if (!monedas.some((m) => m.ID_MAESTRO === idMoneda)) return;
+
+  await solicitarPrestamo({ idUsuario: sesion.idUsuario, idTipoPrestamo, montoTotal, idMoneda, descripcion });
+
+  revalidatePath(`/rrhh/directorio/${sesion.idUsuario}`);
+  redirect(`/rrhh/directorio/${sesion.idUsuario}`);
+}
+
+// RRHH revisa una solicitud y la otorga: define fecha real de
+// desembolso, TC (si no es soles), cuenta de desembolso (opcional) y el
+// cronograma de cuotas -- desde aca sigue identico a un prestamo creado
+// directo (compromiso de pago, firma, descuento en planilla).
+export async function otorgarPrestamoAction(formData: FormData): Promise<void> {
+  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPrestamo = Number(formData.get("idPrestamo"));
+  const fechaOrigen = String(formData.get("fechaOrigen") ?? "").trim() || hoyIso();
+  const nroCuotas = Math.trunc(Number(formData.get("nroCuotas")));
+  const anioInicio = Math.trunc(Number(formData.get("anioInicio")));
+  const mesInicio = Math.trunc(Number(formData.get("mesInicio")));
+  const idCuentaRaw = Number(formData.get("idCuentaDesembolso") || 0);
+  const idCuentaDesembolso = idCuentaRaw || null;
+
+  if (!idPrestamo) return;
+  if (!(nroCuotas >= 1 && nroCuotas <= 120)) return;
+  if (!(mesInicio >= 1 && mesInicio <= 12) || anioInicio < 2000) return;
+
+  const prestamo = await obtenerPrestamo(idPrestamo);
+  if (!prestamo || prestamo.ESTADO_PRESTAMO_CODIGO !== "SOLICITADO") return;
+
+  const tipoCambioRaw = String(formData.get("tipoCambio") ?? "").trim();
+  const tipoCambio = prestamo.MONEDA_CODIGO === "PEN" ? null : Number(tipoCambioRaw);
+  if (prestamo.MONEDA_CODIGO !== "PEN" && !(tipoCambio && tipoCambio > 0)) return;
+
+  if (idCuentaDesembolso) {
+    const cuentas = await listarCuentas();
+    const cuenta = cuentas.find((c) => c.ID_CUENTA === idCuentaDesembolso);
+    if (!cuenta || cuenta.ID_MONEDA !== prestamo.ID_MONEDA) return;
+  }
+
+  await otorgarPrestamo(idPrestamo, fechaOrigen, tipoCambio, idCuentaDesembolso);
+
+  for (const cuota of generarCuotasIguales(Number(prestamo.MONTO_TOTAL), nroCuotas, anioInicio, mesInicio)) {
+    await agregarCuotaPrestamo({
+      idPrestamo,
+      nroCuota: cuota.nroCuota,
+      anio: cuota.anio,
+      mes: cuota.mes,
+      monto: cuota.monto,
+      calculoAutomatico: true,
+      idUsuarioCreacion: sesion.idUsuario,
+    });
+  }
+
+  if (idCuentaDesembolso) {
+    const movimiento = await registrarMovimientoCuenta({
+      idCuenta: idCuentaDesembolso,
+      idTipoMovimiento: await obtenerIdTipoMovimientoEgreso(),
+      fechaMovimiento: fechaOrigen,
+      monto: Number(prestamo.MONTO_TOTAL),
+      concepto: `${prestamo.TIPO_PRESTAMO_CODIGO === "ADELANTO_SUELDO" ? "Adelanto de sueldo" : "Prestamo"} a ${prestamo.NOMBRES} ${prestamo.APELLIDOS} (#${idPrestamo})`,
+      tipoReferencia: "RRHH_PRESTAMO",
+      idReferencia: idPrestamo,
+      idUsuarioCreacion: sesion.idUsuario,
+    });
+    if (movimiento.id_movimiento) await asignarMovimientoDesembolso(idPrestamo, movimiento.id_movimiento);
+  }
+
+  revalidatePath(`/rrhh/planilla/prestamos/${idPrestamo}`);
   revalidatePath("/rrhh/planilla/prestamos");
   redirect(`/rrhh/planilla/prestamos/${idPrestamo}`);
 }

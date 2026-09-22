@@ -1160,7 +1160,7 @@ export interface PlanillaAcumuladoAnioRow extends RowDataPacket {
 
 // --- Prestamos a colaboradores (ver 041_rrhh_prestamo.sql) ---
 
-export type EstadoPrestamoCodigo = "PENDIENTE_FIRMA" | "ACTIVO" | "ANULADO";
+export type EstadoPrestamoCodigo = "SOLICITADO" | "PENDIENTE_FIRMA" | "ACTIVO" | "ANULADO";
 export type TipoPrestamoCodigo = "PRESTAMO" | "ADELANTO_SUELDO";
 export type EstadoCuotaPrestamoCodigo = "PENDIENTE" | "DESCONTADA" | "ANULADA";
 

@@ -15,6 +15,7 @@ export default async function PrestamosPage() {
   await requirePermiso("RRHH_PLANILLA", "LECTURA");
 
   const prestamos = await listarPrestamos(null);
+  const solicitudes = prestamos.filter((p) => p.ESTADO_PRESTAMO_CODIGO === "SOLICITADO");
   const pendientesFirma = prestamos.filter((p) => p.ESTADO_PRESTAMO_CODIGO === "PENDIENTE_FIRMA").length;
 
   return (
@@ -36,6 +37,23 @@ export default async function PrestamosPage() {
           Nuevo préstamo / adelanto
         </Link>
       </div>
+
+      {solicitudes.length > 0 ? (
+        <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
+          <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+            {solicitudes.length} solicitud{solicitudes.length === 1 ? "" : "es"} pendiente{solicitudes.length === 1 ? "" : "s"} de otorgar
+          </p>
+          <ul className="mt-2 space-y-1 text-sm">
+            {solicitudes.map((s) => (
+              <li key={s.ID_PRESTAMO}>
+                <Link href={`/rrhh/planilla/prestamos/${s.ID_PRESTAMO}`} className="text-blue-700 hover:underline dark:text-blue-400">
+                  {s.NOMBRES} {s.APELLIDOS} -- {s.TIPO_PRESTAMO_DESCRIPCION} de {formatearMonto(s.MONTO_TOTAL, s.MONEDA_CODIGO)}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {pendientesFirma > 0 ? (
         <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">

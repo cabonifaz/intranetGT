@@ -10,6 +10,8 @@
 -- =====================================================================
 
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CREAR;
+DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_SOLICITAR;
+DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_OTORGAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_ASIGNAR_MOVIMIENTO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_LISTAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_OBTENER;
@@ -52,6 +54,61 @@ BEGIN
     );
 
     SET p_id_prestamo = LAST_INSERT_ID();
+END$$
+
+-- Autoservicio: cualquier colaborador solicita un prestamo/adelanto para
+-- si mismo (p_id_usuario es siempre la propia sesion, lo valida la app).
+-- Nace SOLICITADO -- sin cronograma, sin cuenta de desembolso, sin TC --
+-- eso lo completa RRHH al otorgarlo (SP_RRHH_PRESTAMO_OTORGAR).
+-- p_fecha_solicitud es informativa (se pisa con la fecha real de
+-- desembolso al otorgar).
+CREATE PROCEDURE SP_RRHH_PRESTAMO_SOLICITAR(
+    IN p_id_usuario INT UNSIGNED,
+    IN p_id_tipo_prestamo INT UNSIGNED,
+    IN p_monto_total DECIMAL(12,2),
+    IN p_id_moneda INT UNSIGNED,
+    IN p_descripcion VARCHAR(300),
+    OUT p_id_prestamo INT UNSIGNED
+)
+BEGIN
+    DECLARE v_id_solicitado INT UNSIGNED;
+    SET v_id_solicitado = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PRESTAMO' AND CODIGO = 'SOLICITADO' LIMIT 1);
+
+    INSERT INTO RRHH_PRESTAMO (
+        ID_USUARIO, ID_TIPO_PRESTAMO, MONTO_TOTAL, ID_MONEDA, DESCRIPCION, FECHA_ORIGEN,
+        ID_ESTADO_PRESTAMO, USUARIO_CREACION
+    ) VALUES (
+        p_id_usuario, p_id_tipo_prestamo, p_monto_total, p_id_moneda, p_descripcion, CURDATE(),
+        v_id_solicitado, p_id_usuario
+    );
+
+    SET p_id_prestamo = LAST_INSERT_ID();
+END$$
+
+-- RRHH revisa una solicitud y la otorga: fija la fecha real de
+-- desembolso, el tipo de cambio (si no es soles) y la cuenta de
+-- desembolso (opcional), y pasa a PENDIENTE_FIRMA -- desde ahi sigue
+-- identico a un prestamo creado directo (la app arma el cronograma con
+-- SP_RRHH_PRESTAMO_CUOTA_AGREGAR y, si hay cuenta, registra el
+-- movimiento con SP_RRHH_PRESTAMO_ASIGNAR_MOVIMIENTO). No-op silencioso
+-- si no estaba SOLICITADO.
+CREATE PROCEDURE SP_RRHH_PRESTAMO_OTORGAR(
+    IN p_id_prestamo INT UNSIGNED,
+    IN p_fecha_origen DATE,
+    IN p_tipo_cambio DECIMAL(10,4),
+    IN p_id_cuenta_desembolso INT UNSIGNED
+)
+BEGIN
+    DECLARE v_id_pendiente_firma INT UNSIGNED;
+    SET v_id_pendiente_firma = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PRESTAMO' AND CODIGO = 'PENDIENTE_FIRMA' LIMIT 1);
+
+    UPDATE RRHH_PRESTAMO p
+      JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = p.ID_ESTADO_PRESTAMO
+       SET p.FECHA_ORIGEN = p_fecha_origen,
+           p.TIPO_CAMBIO = p_tipo_cambio,
+           p.ID_CUENTA_DESEMBOLSO = p_id_cuenta_desembolso,
+           p.ID_ESTADO_PRESTAMO = v_id_pendiente_firma
+     WHERE p.ID_PRESTAMO = p_id_prestamo AND ep.CODIGO = 'SOLICITADO';
 END$$
 
 -- Guarda el movimiento EGRESO del desembolso. No-op silencioso si el

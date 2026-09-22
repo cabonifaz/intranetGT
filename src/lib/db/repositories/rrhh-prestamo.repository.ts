@@ -46,6 +46,33 @@ export async function asignarMovimientoDesembolso(idPrestamo: number, idMovimien
   await callProcedure("SP_RRHH_PRESTAMO_ASIGNAR_MOVIMIENTO", [idPrestamo, idMovimiento]);
 }
 
+export interface SolicitarPrestamoParams {
+  idUsuario: number;
+  idTipoPrestamo: number;
+  montoTotal: number;
+  idMoneda: number;
+  descripcion: string | null;
+}
+
+export async function solicitarPrestamo(params: SolicitarPrestamoParams): Promise<{ id_prestamo: number }> {
+  const resultado = await callProcedureWithOut<{ id_prestamo: number | null }>(
+    "SP_RRHH_PRESTAMO_SOLICITAR",
+    [params.idUsuario, params.idTipoPrestamo, params.montoTotal, params.idMoneda, params.descripcion],
+    ["id_prestamo"],
+  );
+  if (!resultado.id_prestamo) throw new Error("No se pudo registrar la solicitud.");
+  return resultado as { id_prestamo: number };
+}
+
+export async function otorgarPrestamo(
+  idPrestamo: number,
+  fechaOrigen: string,
+  tipoCambio: number | null,
+  idCuentaDesembolso: number | null,
+): Promise<void> {
+  await callProcedure("SP_RRHH_PRESTAMO_OTORGAR", [idPrestamo, fechaOrigen, tipoCambio, idCuentaDesembolso]);
+}
+
 export async function registrarFirmaPrestamo(idPrestamo: number, documentoPath: string, idUsuario: number): Promise<void> {
   await callProcedure("SP_RRHH_PRESTAMO_REGISTRAR_FIRMA", [idPrestamo, documentoPath, idUsuario]);
 }

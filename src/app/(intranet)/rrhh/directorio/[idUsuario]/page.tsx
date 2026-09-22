@@ -47,8 +47,10 @@ export default async function FichaEmpleadoPage({
     listarMaestros("AFP_FONDO"),
   ]);
 
+  const esUnoMismo = sesion.idUsuario === idUsuarioObjetivo;
+
   const { puedeVerCompleto, puedeEditarCompleto, puedeEditarBasico } = calcularVisibilidadFicha({
-    esUnoMismo: sesion.idUsuario === idUsuarioObjetivo,
+    esUnoMismo,
     tieneEscrituraRrhh: tienePermiso(permisos, "RRHH_DIRECTORIO", "ESCRITURA"),
     viewerNivelJerarquico: perfilVisor?.NIVEL_JERARQUICO ?? null,
     viewerIdArea: perfilVisor?.ID_AREA ?? null,
@@ -61,11 +63,20 @@ export default async function FichaEmpleadoPage({
   // ESCRITURA sobre RRHH_CONTRATOS (de solo lectura -- "Crear
   // contrato"/"Renovar" siguen requiriendo el permiso real), y ademas ven
   // el resumen de prestamos/adelantos activos y la alerta de vencimiento.
+  // Ver los propios prestamos/adelantos (y solicitar uno) no requiere
+  // ninguno de esos roles -- es informacion de uno mismo.
   const puedeVerResumenGerencial = await puedeVerResumenGerencialFicha(sesion.idUsuario);
   const puedeVerContratos = puedeGestionarContratos || puedeVerResumenGerencial;
+  const puedeVerPrestamos = puedeVerResumenGerencial || esUnoMismo;
+  // El link al detalle del prestamo (/rrhh/planilla/prestamos/[id]) exige
+  // el permiso real de esa app -- GERENCIA_GENERAL/ADMINISTRACION_JEFATURA
+  // pueden ver el resumen gerencial de la ficha sin tener ese permiso, asi
+  // que el link solo se muestra si de verdad pueden abrirlo (evita
+  // mandarlos a una pantalla que los rebota).
+  const tienePermisoPlanilla = tienePermiso(permisos, "RRHH_PLANILLA", "LECTURA");
   const [contratosDeTodos, prestamosDePersona] = await Promise.all([
     puedeVerContratos ? listarContratos() : Promise.resolve([]),
-    puedeVerResumenGerencial ? listarPrestamos(idUsuarioObjetivo) : Promise.resolve([]),
+    puedeVerPrestamos ? listarPrestamos(idUsuarioObjetivo) : Promise.resolve([]),
   ]);
   const contratosDePersona = contratosDeTodos.filter((c) => c.ID_USUARIO === idUsuarioObjetivo);
 
@@ -188,6 +199,56 @@ export default async function FichaEmpleadoPage({
             </ul>
           ) : (
             <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">Aun no tiene contratos.</p>
+          )}
+        </section>
+      ) : null}
+
+      {puedeVerPrestamos ? (
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-white">
+              {esUnoMismo ? "Mis préstamos y adelantos" : "Préstamos y adelantos"}
+            </h2>
+            {esUnoMismo ? (
+              <Link
+                href="/rrhh/planilla/prestamos/solicitar"
+                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              >
+                Solicitar
+              </Link>
+            ) : null}
+          </div>
+
+          {prestamosDePersona.length > 0 ? (
+            <ul className="mt-3 divide-y divide-slate-100 text-sm dark:divide-slate-800">
+              {prestamosDePersona.map((p) => (
+                <li key={p.ID_PRESTAMO} className="flex items-center justify-between py-2">
+                  <div>
+                    <span className="font-medium text-slate-700 dark:text-slate-200">{p.TIPO_PRESTAMO_DESCRIPCION}</span>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {p.MONEDA_CODIGO === "USD" ? "US$" : "S/"} {Number(p.MONTO_TOTAL).toLocaleString("es-PE", { minimumFractionDigits: 2 })}
+                      {p.DESCRIPCION ? ` -- ${p.DESCRIPCION}` : ""}
+                    </p>
+                  </div>
+                  {tienePermisoPlanilla ? (
+                    <Link
+                      href={`/rrhh/planilla/prestamos/${p.ID_PRESTAMO}`}
+                      className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                    >
+                      {p.ESTADO_PRESTAMO_DESCRIPCION}
+                    </Link>
+                  ) : (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      {p.ESTADO_PRESTAMO_DESCRIPCION}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+              {esUnoMismo ? "Aun no tienes prestamos ni adelantos." : "Aun no tiene prestamos ni adelantos."}
+            </p>
           )}
         </section>
       ) : null}
