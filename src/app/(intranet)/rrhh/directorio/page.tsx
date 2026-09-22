@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requirePermiso } from "@/lib/auth/require-permiso";
+import { requirePermiso, puedeGestionarPrestamos } from "@/lib/auth/require-permiso";
 import { listarDirectorio } from "@/lib/db/repositories/rrhh-empleado.repository";
 import { listarAreas } from "@/lib/db/repositories/area.repository";
 import { listarTodosLosContactosExternos } from "@/lib/db/repositories/directorio-contacto.repository";
@@ -13,7 +13,8 @@ export default async function DirectorioPage({
 }: {
   searchParams: Promise<{ area?: string; q?: string; vista?: string; tipo?: string }>;
 }) {
-  await requirePermiso("RRHH_DIRECTORIO", "LECTURA");
+  const sesion = await requirePermiso("RRHH_DIRECTORIO", "LECTURA");
+  const puedeGestionar = await puedeGestionarPrestamos(sesion.idUsuario);
 
   const { area, q, vista, tipo } = await searchParams;
   const idArea = area ? Number(area) : null;
@@ -60,7 +61,24 @@ export default async function DirectorioPage({
           <Link href="/rrhh/directorio/contactos/nuevo" className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
             Nuevo contacto
           </Link>
-        ) : null}
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {puedeGestionar ? (
+              <Link
+                href="/rrhh/planilla/prestamos/nuevo"
+                className="rounded-lg border border-blue-600 px-4 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+              >
+                Nuevo préstamo / adelanto
+              </Link>
+            ) : null}
+            <Link
+              href="/rrhh/planilla/prestamos/solicitar"
+              className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Solicitar préstamo / adelanto
+            </Link>
+          </div>
+        )}
       </div>
 
       {vistaClientes ? (
