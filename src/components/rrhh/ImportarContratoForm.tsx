@@ -12,9 +12,10 @@ interface ImportarContratoFormProps {
   colaboradores: EmpleadoDirectorioRow[];
   tiposContrato: MaestroRow[];
   tiposPagoLocador: MaestroRow[];
+  ocrActivo: boolean;
 }
 
-export default function ImportarContratoForm({ colaboradores, tiposContrato, tiposPagoLocador }: ImportarContratoFormProps) {
+export default function ImportarContratoForm({ colaboradores, tiposContrato, tiposPagoLocador, ocrActivo }: ImportarContratoFormProps) {
   const [idTipoContrato, setIdTipoContrato] = useState<number | "">("");
   const tipoContratoCodigo = tiposContrato.find((t) => t.ID_MAESTRO === idTipoContrato)?.CODIGO;
   const esLocador = tipoContratoCodigo === "LOCADOR";
@@ -76,12 +77,14 @@ export default function ImportarContratoForm({ colaboradores, tiposContrato, tip
       <SubmitButton
         disabled={colaboradores.length === 0}
         className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-        pendingText="Extrayendo datos..."
+        pendingText={ocrActivo ? "Extrayendo datos..." : "Subiendo..."}
       >
-        Subir y extraer datos
+        {ocrActivo ? "Subir y extraer datos" : "Subir solicitud"}
       </SubmitButton>
       <NotaAyuda className="justify-center">
-        Puede tardar unos segundos mientras se lee el documento. Al terminar pasas directo a revisar los datos extraidos.
+        {ocrActivo
+          ? "Puede tardar unos segundos mientras se lee el documento. Al terminar pasas directo a revisar los datos extraidos."
+          : "Al terminar pasas directo al paso de revision, con los campos en blanco para completarlos a mano."}
       </NotaAyuda>
     </form>
   );

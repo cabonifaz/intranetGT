@@ -20,6 +20,15 @@ function hoyIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Mientras no haya una ANTHROPIC_API_KEY configurada, ni se intenta la
+// llamada -- se pasa directo a carga manual (paso 3 vacio, sin marcar
+// nada como "fallo"). Evita una llamada que de todas formas va a
+// rechazar por autenticacion, y deja claro que es una eleccion
+// (OCR aun no activado), no un error.
+function ocrDisponible(): boolean {
+  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+}
+
 const DATOS_VACIOS: DatosExtraidosSolicitud = {
   nombres: null,
   apellidos: null,
@@ -75,12 +84,17 @@ export async function subirSolicitudContratoAction(formData: FormData): Promise<
   const bytesArchivo = new Uint8Array(await archivo.arrayBuffer());
 
   let datos: DatosExtraidosSolicitud;
-  let errorExtraccion: string | null = null;
-  try {
-    datos = await extraerSolicitudContrato(bytesArchivo, tipoArchivo.mime);
-  } catch (err) {
+  let notaOcr: string | null = null;
+  if (!ocrDisponible()) {
     datos = DATOS_VACIOS;
-    errorExtraccion = err instanceof Error ? err.message : "No se pudo extraer los datos del documento.";
+    notaOcr = "La lectura automatica (OCR) todavia no esta activada -- completa los datos manualmente abajo.";
+  } else {
+    try {
+      datos = await extraerSolicitudContrato(bytesArchivo, tipoArchivo.mime);
+    } catch (err) {
+      datos = DATOS_VACIOS;
+      notaOcr = `La extraccion automatica no funciono: ${err instanceof Error ? err.message : "error desconocido"}`;
+    }
   }
 
   const monedas = await listarMaestros("MONEDA");
@@ -90,7 +104,7 @@ export async function subirSolicitudContratoAction(formData: FormData): Promise<
   const fechaInicio = datos.fechaInicio ?? hoyIso();
 
   const advertencias = [...datos.advertencias];
-  if (errorExtraccion) advertencias.unshift(`La extraccion automatica no funciono: ${errorExtraccion}`);
+  if (notaOcr) advertencias.unshift(notaOcr);
   if (!datos.cargo) advertencias.push("No se pudo leer el cargo -- se dejo un texto de relleno, complétalo.");
   if (!datos.fechaInicio) advertencias.push("No se pudo leer la fecha de inicio -- se uso la fecha de hoy, verificala.");
 

@@ -7,6 +7,7 @@ import ImportarContratoForm from "@/components/rrhh/ImportarContratoForm";
 
 export default async function ImportarContratoPage() {
   await requireImportarContrato();
+  const ocrActivo = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
 
   const [colaboradores, tiposContrato, tiposPagoLocador] = await Promise.all([
     listarDirectorio(null, null),
@@ -29,6 +30,13 @@ export default async function ImportarContratoPage() {
         <PasosImportacionContrato paso={1} />
       </div>
 
+      {!ocrActivo ? (
+        <p className="mt-4 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          La lectura automatica (OCR) todavia no esta activada -- vas a subir el escaneo igual (queda guardado como respaldo) y
+          vas a completar todos los datos a mano en el paso de revision.
+        </p>
+      ) : null}
+
       <div className="mt-4">
         <a
           href="/api/rrhh/contratos/solicitud"
@@ -40,7 +48,7 @@ export default async function ImportarContratoPage() {
         </a>
       </div>
 
-      <ImportarContratoForm colaboradores={colaboradores} tiposContrato={tiposContrato} tiposPagoLocador={tiposPagoLocador} />
+      <ImportarContratoForm colaboradores={colaboradores} tiposContrato={tiposContrato} tiposPagoLocador={tiposPagoLocador} ocrActivo={ocrActivo} />
     </div>
   );
 }
