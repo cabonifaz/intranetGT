@@ -65,3 +65,12 @@ export async function requireImportarContrato(): Promise<SesionUsuario> {
   }
   return sesion;
 }
+
+// Resumen gerencial en la ficha del directorio (prestamos/adelantos
+// activos, contratos, alerta de vencimiento) -- informacion sensible que
+// no todo el que tenga acceso al Directorio deberia ver, solo Gerencia
+// General, el Administrador (SUPER_ADMIN) o la Jefatura de Administracion.
+export async function puedeVerResumenGerencialFicha(idUsuario: number): Promise<boolean> {
+  const roles = await listarRolesActivosDeUsuario(idUsuario);
+  return roles.some((r) => r.ROL_CODIGO === "SUPER_ADMIN" || r.ROL_CODIGO === "GERENCIA_GENERAL" || r.ROL_CODIGO === "ADMINISTRACION_JEFATURA");
+}

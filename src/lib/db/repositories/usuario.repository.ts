@@ -66,3 +66,7 @@ export async function listarRolesActivosDeUsuario(idUsuario: number): Promise<Us
 export async function resetearClaveUsuario(idUsuario: number, claveHash: string): Promise<void> {
   await callProcedure("SP_USUARIO_RESETEAR_CLAVE", [idUsuario, claveHash]);
 }
+
+export async function actualizarDatosPersonalesUsuario(idUsuario: number, nombres: string, apellidos: string, correo: string): Promise<void> {
+  await callProcedure("SP_USUARIO_ACTUALIZAR_DATOS_PERSONALES", [idUsuario, nombres, apellidos, correo]);
+}

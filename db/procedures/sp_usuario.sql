@@ -15,6 +15,7 @@ DROP PROCEDURE IF EXISTS SP_USUARIO_ROL_REVOCAR;
 DROP PROCEDURE IF EXISTS SP_USUARIO_ROL_LISTAR_ACTIVOS;
 DROP PROCEDURE IF EXISTS SP_USUARIO_ROL_LISTAR_ACTIVOS_POR_USUARIO;
 DROP PROCEDURE IF EXISTS SP_USUARIO_RESETEAR_CLAVE;
+DROP PROCEDURE IF EXISTS SP_USUARIO_ACTUALIZAR_DATOS_PERSONALES;
 
 DELIMITER $$
 
@@ -238,6 +239,28 @@ BEGIN
            FECHA_BLOQUEO = NULL,
            ID_ESTADO_USUARIO = v_id_activo
      WHERE ID_USUARIO = p_id_usuario;
+END$$
+
+-- Corrige nombres/apellidos/correo cuando quedaron mal escritos (ej. al
+-- crear el usuario) -- RRHH_DIRECTORIO ESCRITURA, ver actualizarEmpleadoAction.
+-- Nombres/apellidos se actualizan siempre; el correo solo si no choca con
+-- el de otro usuario (UQ_USUARIO_CORREO) -- no-op silencioso solo para
+-- ese campo puntual en vez de descartar todo el cambio.
+CREATE PROCEDURE SP_USUARIO_ACTUALIZAR_DATOS_PERSONALES(
+    IN p_id_usuario INT UNSIGNED,
+    IN p_nombres VARCHAR(100),
+    IN p_apellidos VARCHAR(100),
+    IN p_correo VARCHAR(150)
+)
+BEGIN
+    UPDATE USUARIO
+       SET NOMBRES = p_nombres, APELLIDOS = p_apellidos
+     WHERE ID_USUARIO = p_id_usuario;
+
+    UPDATE USUARIO u
+       SET u.CORREO = p_correo
+     WHERE u.ID_USUARIO = p_id_usuario
+       AND NOT EXISTS (SELECT 1 FROM USUARIO u2 WHERE u2.CORREO = p_correo AND u2.ID_USUARIO != p_id_usuario);
 END$$
 
 DELIMITER ;

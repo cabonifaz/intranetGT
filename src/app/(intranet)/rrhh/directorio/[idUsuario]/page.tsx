@@ -1,17 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requirePermiso } from "@/lib/auth/require-permiso";
+import { requirePermiso, puedeVerResumenGerencialFicha } from "@/lib/auth/require-permiso";
 import { obtenerPermisosUsuario } from "@/lib/db/repositories/permiso.repository";
 import { tienePermiso } from "@/lib/rbac/permissions";
 import { obtenerEmpleado } from "@/lib/db/repositories/rrhh-empleado.repository";
 import { obtenerPerfilUsuario } from "@/lib/db/repositories/usuario.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { listarContratos } from "@/lib/db/repositories/contrato.repository";
+import { listarPrestamos } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { calcularVisibilidadFicha } from "@/lib/rrhh/visibilidad-directorio";
 import { actualizarEmpleadoAction } from "@/lib/actions/rrhh";
 import { SelectorPaisCiudad } from "@/components/rrhh/SelectorPaisCiudad";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
 import SubmitButton from "@/components/ui/SubmitButton";
+import IconoAlertaVencimiento, { diasHastaVencimiento } from "@/components/ui/IconoAlertaVencimiento";
+import IconoPrestamosActivos from "@/components/ui/IconoPrestamosActivos";
+
+const DIAS_ALERTA_VENCIMIENTO_FICHA = 30;
 
 function formatearFecha(fecha: string | null): string {
   if (!fecha) return "-";
@@ -51,15 +56,47 @@ export default async function FichaEmpleadoPage({
   });
 
   const puedeGestionarContratos = tienePermiso(permisos, "RRHH_CONTRATOS", "ESCRITURA");
-  const contratosDePersona = puedeGestionarContratos
-    ? (await listarContratos()).filter((c) => c.ID_USUARIO === idUsuarioObjetivo)
-    : [];
+  // Gerencia General, el Administrador (SUPER_ADMIN) y la Jefatura de
+  // Administracion ven los contratos de cualquiera aunque no tengan
+  // ESCRITURA sobre RRHH_CONTRATOS (de solo lectura -- "Crear
+  // contrato"/"Renovar" siguen requiriendo el permiso real), y ademas ven
+  // el resumen de prestamos/adelantos activos y la alerta de vencimiento.
+  const puedeVerResumenGerencial = await puedeVerResumenGerencialFicha(sesion.idUsuario);
+  const puedeVerContratos = puedeGestionarContratos || puedeVerResumenGerencial;
+  const [contratosDeTodos, prestamosDePersona] = await Promise.all([
+    puedeVerContratos ? listarContratos() : Promise.resolve([]),
+    puedeVerResumenGerencial ? listarPrestamos(idUsuarioObjetivo) : Promise.resolve([]),
+  ]);
+  const contratosDePersona = contratosDeTodos.filter((c) => c.ID_USUARIO === idUsuarioObjetivo);
+
+  const prestamosActivos = prestamosDePersona.filter((p) => p.ESTADO_PRESTAMO_CODIGO === "ACTIVO" && Number(p.MONTO_PENDIENTE) > 0);
+  const pendientePorMoneda = Object.values(
+    prestamosActivos.reduce<Record<string, { codigo: string; monto: number }>>((acc, p) => {
+      const codigo = p.MONEDA_CODIGO;
+      acc[codigo] = { codigo, monto: (acc[codigo]?.monto ?? 0) + Number(p.MONTO_PENDIENTE) };
+      return acc;
+    }, {}),
+  );
+
+  // Mismo criterio de ventana que /rrhh/contratos (30 dias) -- solo el
+  // contrato FIRMADO vigente importa aca, no todo el historial.
+  const contratoPorVencer = contratosDePersona.find(
+    (c) => c.ESTADO_CONTRATO_CODIGO === "FIRMADO" && c.FECHA_FIN && diasHastaVencimiento(c.FECHA_FIN) <= DIAS_ALERTA_VENCIMIENTO_FICHA,
+  );
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-white">
-        {empleado.NOMBRES} {empleado.APELLIDOS}
-      </h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-white">
+          {empleado.NOMBRES} {empleado.APELLIDOS}
+        </h1>
+        {puedeVerResumenGerencial && prestamosActivos.length > 0 ? (
+          <IconoPrestamosActivos cantidad={prestamosActivos.length} pendientePorMoneda={pendientePorMoneda} />
+        ) : null}
+        {puedeVerResumenGerencial && contratoPorVencer?.FECHA_FIN ? (
+          <IconoAlertaVencimiento dias={diasHastaVencimiento(contratoPorVencer.FECHA_FIN)} fecha={contratoPorVencer.FECHA_FIN} />
+        ) : null}
+      </div>
       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
         {empleado.AREA_NOMBRE ?? "Sin area"} {empleado.ROL_NOMBRE ? `- ${empleado.ROL_NOMBRE}` : ""}
       </p>
@@ -104,22 +141,24 @@ export default async function FichaEmpleadoPage({
         ) : null}
       </section>
 
-      {puedeGestionarContratos ? (
+      {puedeVerContratos ? (
         <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Contratos</h2>
-            <Link
-              href={`/rrhh/contratos/nuevo?usuario=${idUsuarioObjetivo}`}
-              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-            >
-              Crear contrato
-            </Link>
+            {puedeGestionarContratos ? (
+              <Link
+                href={`/rrhh/contratos/nuevo?usuario=${idUsuarioObjetivo}`}
+                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              >
+                Crear contrato
+              </Link>
+            ) : null}
           </div>
 
           {contratosDePersona.length > 0 ? (
             <ul className="mt-3 divide-y divide-slate-100 text-sm dark:divide-slate-800">
               {contratosDePersona.map((c) => {
-                const puedeRenovar = c.ESTADO_CONTRATO_CODIGO === "FIRMADO" || c.ESTADO_CONTRATO_CODIGO === "VENCIDO";
+                const puedeRenovar = puedeGestionarContratos && (c.ESTADO_CONTRATO_CODIGO === "FIRMADO" || c.ESTADO_CONTRATO_CODIGO === "VENCIDO");
                 return (
                   <li key={c.ID_CONTRATO} className="flex items-center justify-between py-2">
                     <div>
@@ -156,8 +195,16 @@ export default async function FichaEmpleadoPage({
       {puedeEditarCompleto ? (
         <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Editar ficha</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Corrige nombres, apellidos o correo si quedaron mal escritos al crear el usuario.
+          </p>
           <form action={actualizarEmpleadoAction} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input type="hidden" name="idUsuario" value={empleado.ID_USUARIO} />
+            <Campo name="nombres" label="Nombres" defaultValue={empleado.NOMBRES} />
+            <Campo name="apellidos" label="Apellidos" defaultValue={empleado.APELLIDOS} />
+            <div className="sm:col-span-2">
+              <Campo name="correo" label="Correo" type="email" defaultValue={empleado.CORREO} />
+            </div>
             <div>
               <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
                 Tipo de documento

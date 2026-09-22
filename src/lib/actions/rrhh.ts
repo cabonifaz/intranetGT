@@ -9,6 +9,7 @@ import { requirePermiso } from "@/lib/auth/require-permiso";
 import { obtenerPermisosUsuario } from "@/lib/db/repositories/permiso.repository";
 import { tienePermiso } from "@/lib/rbac/permissions";
 import { obtenerEmpleado, upsertEmpleado } from "@/lib/db/repositories/rrhh-empleado.repository";
+import { actualizarDatosPersonalesUsuario } from "@/lib/db/repositories/usuario.repository";
 import { tieneIdentidadCompleta } from "@/lib/rrhh/identidad";
 import {
   crearContrato,
@@ -70,6 +71,17 @@ export async function actualizarEmpleadoAction(formData: FormData): Promise<void
   const telefono = String(formData.get("telefono") ?? "").trim() || null;
   const direccion = String(formData.get("direccion") ?? "").trim() || null;
   const fotoUrl = String(formData.get("fotoUrl") ?? "").trim() || null;
+
+  // Nombres/apellidos/correo viven en USUARIO, no en RRHH_EMPLEADO -- se
+  // corrigen aca mismo (un solo "Guardar" para toda la ficha) solo si
+  // quien edita tiene ESCRITURA en RRHH_DIRECTORIO -- no es parte del
+  // autoservicio de "mis datos de contacto".
+  const nombres = String(formData.get("nombres") ?? "").trim();
+  const apellidos = String(formData.get("apellidos") ?? "").trim();
+  const correo = String(formData.get("correo") ?? "").trim();
+  if (tieneEscrituraRrhh && nombres && apellidos && correo) {
+    await actualizarDatosPersonalesUsuario(idUsuario, nombres, apellidos, correo);
+  }
 
   let extension: string | null;
   let idTipoDocumento: number | null;
