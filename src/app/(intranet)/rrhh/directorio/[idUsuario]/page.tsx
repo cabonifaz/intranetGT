@@ -31,6 +31,7 @@ export default async function FichaEmpleadoPage({
   const sesion = await requirePermiso("RRHH_DIRECTORIO", "LECTURA");
   const { idUsuario } = await params;
   const idUsuarioObjetivo = Number(idUsuario);
+  if (!Number.isInteger(idUsuarioObjetivo) || idUsuarioObjetivo <= 0) notFound();
 
   const [empleado, permisos, perfilVisor] = await Promise.all([
     obtenerEmpleado(idUsuarioObjetivo),

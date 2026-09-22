@@ -40,7 +40,7 @@ DELIMITER $$
 -- de sueldo fijo (ver SP_RRHH_CONTRATO_SUELDO_FIJO_VIGENTE), y el monto
 -- no puede superar el % de ese sueldo fijo que indique el maestro
 -- PARAMETRO_PRESTAMO/PORCENTAJE_MAXIMO_ADELANTO (ver
--- 045_parametro_prestamo.sql -- administrable sin tocar este SP) -- no-op
+-- 042_parametro_prestamo.sql -- administrable sin tocar este SP) -- no-op
 -- silencioso si no se cumple, mismo criterio que el resto de guards de
 -- este archivo.
 CREATE PROCEDURE SP_RRHH_PRESTAMO_CREAR(

@@ -253,14 +253,19 @@ CREATE PROCEDURE SP_USUARIO_ACTUALIZAR_DATOS_PERSONALES(
     IN p_correo VARCHAR(150)
 )
 BEGIN
-    UPDATE USUARIO
-       SET NOMBRES = p_nombres, APELLIDOS = p_apellidos
-     WHERE ID_USUARIO = p_id_usuario;
+    -- No se puede filtrar "NOT EXISTS (SELECT ... FROM USUARIO ...)"
+    -- dentro del UPDATE que edita esa misma tabla -- MySQL lo rechaza en
+    -- tiempo de ejecucion (error 1093, "You can't specify target table
+    -- 'USUARIO' for update in FROM clause"), por eso se resuelve antes en
+    -- una variable (una unica UPDATE, atomica para los tres campos).
+    DECLARE v_correo_libre TINYINT;
+    SET v_correo_libre = NOT EXISTS (SELECT 1 FROM USUARIO WHERE CORREO = p_correo AND ID_USUARIO != p_id_usuario);
 
-    UPDATE USUARIO u
-       SET u.CORREO = p_correo
-     WHERE u.ID_USUARIO = p_id_usuario
-       AND NOT EXISTS (SELECT 1 FROM USUARIO u2 WHERE u2.CORREO = p_correo AND u2.ID_USUARIO != p_id_usuario);
+    UPDATE USUARIO
+       SET NOMBRES = p_nombres,
+           APELLIDOS = p_apellidos,
+           CORREO = IF(v_correo_libre, p_correo, CORREO)
+     WHERE ID_USUARIO = p_id_usuario;
 END$$
 
 DELIMITER ;
