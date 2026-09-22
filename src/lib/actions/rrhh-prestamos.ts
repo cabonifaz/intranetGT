@@ -1,0 +1,215 @@
+"use server";
+
+import { revalidatePath, refresh } from "next/cache";
+import { redirect } from "next/navigation";
+import { requirePermiso } from "@/lib/auth/require-permiso";
+import {
+  crearPrestamo,
+  obtenerPrestamo,
+  asignarMovimientoDesembolso,
+  registrarFirmaPrestamo,
+  anularPrestamo,
+  agregarCuotaPrestamo,
+  listarCuotasPrestamo,
+  actualizarCuotaPrestamo,
+  eliminarCuotaPrestamo,
+} from "@/lib/db/repositories/rrhh-prestamo.repository";
+import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
+import { listarCuentas, registrarMovimientoCuenta, obtenerIdTipoMovimientoEgreso } from "@/lib/db/repositories/cuenta.repository";
+import { generarCuotasIguales } from "@/lib/rrhh/planilla/cronograma-prestamo";
+import { guardarArchivo } from "@/lib/storage/local-storage";
+
+// Los prestamos viven bajo el permiso de Planilla: RRHH_PLANILLA
+// (Jefatura/Asistente de RRHH), igual que parametros y boletas.
+const PLANILLA_APP_CODIGO = "RRHH_PLANILLA";
+
+const TAMANO_MAX_COMPROMISO_BYTES = 15 * 1024 * 1024;
+const TIPOS_COMPROMISO_FIRMADO: Record<string, string> = {
+  "application/pdf": "pdf",
+  "image/png": "png",
+  "image/jpeg": "jpg",
+};
+
+function hoyIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Crea el prestamo o adelanto de sueldo (nace PENDIENTE_FIRMA) con su cronograma de N cuotas
+// iguales, una por mes desde el periodo inicial -- despues se pueden
+// editar, agregar o quitar cuotas desde el detalle. Si se elige una
+// cuenta de desembolso se registra el EGRESO por el monto total; la
+// cuenta debe estar en la misma moneda del prestamo.
+export async function crearPrestamoAction(formData: FormData): Promise<void> {
+  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idUsuario = Number(formData.get("idUsuario"));
+  const idTipoPrestamo = Number(formData.get("idTipoPrestamo"));
+  const montoTotal = Number(formData.get("montoTotal"));
+  const idMoneda = Number(formData.get("idMoneda"));
+  const tipoCambioRaw = String(formData.get("tipoCambio") ?? "").trim();
+  const descripcion = String(formData.get("descripcion") ?? "").trim() || null;
+  const fechaOrigen = String(formData.get("fechaOrigen") ?? "").trim() || hoyIso();
+  const nroCuotas = Math.trunc(Number(formData.get("nroCuotas")));
+  const anioInicio = Math.trunc(Number(formData.get("anioInicio")));
+  const mesInicio = Math.trunc(Number(formData.get("mesInicio")));
+  const idCuentaRaw = Number(formData.get("idCuentaDesembolso") || 0);
+  const idCuentaDesembolso = idCuentaRaw || null;
+
+  if (!idUsuario || !idTipoPrestamo || !(montoTotal > 0) || !idMoneda) return;
+  if (!(nroCuotas >= 1 && nroCuotas <= 120)) return;
+  if (!(mesInicio >= 1 && mesInicio <= 12) || anioInicio < 2000) return;
+
+  const tipos = await listarMaestros("TIPO_PRESTAMO");
+  if (!tipos.some((t) => t.ID_MAESTRO === idTipoPrestamo)) return;
+
+  const monedas = await listarMaestros("MONEDA");
+  const monedaSel = monedas.find((m) => m.ID_MAESTRO === idMoneda);
+  if (!monedaSel) return;
+
+  // Si no es soles, el TC pactado es obligatorio: la planilla descuenta en
+  // soles y ese TC queda escrito en el compromiso firmado.
+  const tipoCambio = monedaSel.CODIGO === "PEN" ? null : Number(tipoCambioRaw);
+  if (monedaSel.CODIGO !== "PEN" && !(tipoCambio && tipoCambio > 0)) return;
+
+  if (idCuentaDesembolso) {
+    const cuentas = await listarCuentas();
+    const cuenta = cuentas.find((c) => c.ID_CUENTA === idCuentaDesembolso);
+    if (!cuenta || cuenta.ID_MONEDA !== idMoneda) return;
+  }
+
+  const { id_prestamo: idPrestamo } = await crearPrestamo({
+    idUsuario,
+    idTipoPrestamo,
+    montoTotal,
+    idMoneda,
+    tipoCambio,
+    descripcion,
+    fechaOrigen,
+    idCuentaDesembolso,
+    idUsuarioCreacion: sesion.idUsuario,
+  });
+
+  for (const cuota of generarCuotasIguales(montoTotal, nroCuotas, anioInicio, mesInicio)) {
+    await agregarCuotaPrestamo({
+      idPrestamo,
+      nroCuota: cuota.nroCuota,
+      anio: cuota.anio,
+      mes: cuota.mes,
+      monto: cuota.monto,
+      calculoAutomatico: true,
+      idUsuarioCreacion: sesion.idUsuario,
+    });
+  }
+
+  if (idCuentaDesembolso) {
+    const prestamo = await obtenerPrestamo(idPrestamo);
+    const movimiento = await registrarMovimientoCuenta({
+      idCuenta: idCuentaDesembolso,
+      idTipoMovimiento: await obtenerIdTipoMovimientoEgreso(),
+      fechaMovimiento: fechaOrigen,
+      monto: montoTotal,
+      concepto: `${prestamo?.TIPO_PRESTAMO_CODIGO === "ADELANTO_SUELDO" ? "Adelanto de sueldo" : "Prestamo"} a ${prestamo ? `${prestamo.NOMBRES} ${prestamo.APELLIDOS}` : "colaborador"} (#${idPrestamo})`,
+      tipoReferencia: "RRHH_PRESTAMO",
+      idReferencia: idPrestamo,
+      idUsuarioCreacion: sesion.idUsuario,
+    });
+    if (movimiento.id_movimiento) await asignarMovimientoDesembolso(idPrestamo, movimiento.id_movimiento);
+  }
+
+  revalidatePath("/rrhh/planilla/prestamos");
+  redirect(`/rrhh/planilla/prestamos/${idPrestamo}`);
+}
+
+function revalidarPrestamo(idPrestamo: number): void {
+  revalidatePath(`/rrhh/planilla/prestamos/${idPrestamo}`);
+  revalidatePath("/rrhh/planilla/prestamos");
+  refresh();
+}
+
+// Cuota extra a mano en cualquier periodo -- el caso tipico es descontar
+// una cuota mayor con la gratificacion de julio o diciembre. No renumera
+// las demas: toma el siguiente correlativo.
+export async function agregarCuotaPrestamoAction(formData: FormData): Promise<void> {
+  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPrestamo = Number(formData.get("idPrestamo"));
+  const anio = Math.trunc(Number(formData.get("anio")));
+  const mes = Math.trunc(Number(formData.get("mes")));
+  const monto = Number(formData.get("monto"));
+  if (!idPrestamo || !(monto > 0) || !(mes >= 1 && mes <= 12) || anio < 2000) return;
+
+  const cuotas = await listarCuotasPrestamo(idPrestamo);
+  const siguiente = cuotas.length > 0 ? Math.max(...cuotas.map((c) => c.NRO_CUOTA)) + 1 : 1;
+
+  await agregarCuotaPrestamo({
+    idPrestamo,
+    nroCuota: siguiente,
+    anio,
+    mes,
+    monto,
+    calculoAutomatico: false,
+    idUsuarioCreacion: sesion.idUsuario,
+  });
+
+  revalidarPrestamo(idPrestamo);
+}
+
+export async function actualizarCuotaPrestamoAction(formData: FormData): Promise<void> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPrestamo = Number(formData.get("idPrestamo"));
+  const idCuota = Number(formData.get("idCuota"));
+  const anio = Math.trunc(Number(formData.get("anio")));
+  const mes = Math.trunc(Number(formData.get("mes")));
+  const monto = Number(formData.get("monto"));
+  if (!idPrestamo || !idCuota || !(monto > 0) || !(mes >= 1 && mes <= 12) || anio < 2000) return;
+
+  await actualizarCuotaPrestamo(idCuota, anio, mes, monto);
+  revalidarPrestamo(idPrestamo);
+}
+
+export async function eliminarCuotaPrestamoAction(formData: FormData): Promise<void> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPrestamo = Number(formData.get("idPrestamo"));
+  const idCuota = Number(formData.get("idCuota"));
+  if (!idPrestamo || !idCuota) return;
+
+  await eliminarCuotaPrestamo(idCuota);
+  revalidarPrestamo(idPrestamo);
+}
+
+export async function anularPrestamoAction(formData: FormData): Promise<void> {
+  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ADMIN");
+
+  const idPrestamo = Number(formData.get("idPrestamo"));
+  const motivo = String(formData.get("motivo") ?? "").trim();
+  if (!idPrestamo || !motivo) return;
+
+  await anularPrestamo(idPrestamo, motivo, sesion.idUsuario);
+  revalidarPrestamo(idPrestamo);
+}
+
+// Sube el compromiso firmado (PDF o foto/escaneo). Al registrarlo el
+// prestamo pasa a ACTIVO y sus cuotas empiezan a descontarse en planilla;
+// volver a subir reemplaza el archivo.
+export async function subirCompromisoFirmadoAction(formData: FormData): Promise<void> {
+  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPrestamo = Number(formData.get("idPrestamo"));
+  const archivo = formData.get("archivo");
+  if (!idPrestamo || !(archivo instanceof File) || archivo.size === 0) return;
+  if (archivo.size > TAMANO_MAX_COMPROMISO_BYTES) return;
+
+  const extension = TIPOS_COMPROMISO_FIRMADO[archivo.type];
+  if (!extension) return;
+
+  const prestamo = await obtenerPrestamo(idPrestamo);
+  if (!prestamo || prestamo.ESTADO_PRESTAMO_CODIGO === "ANULADO") return;
+
+  const rutaRelativa = `rrhh/prestamos/${idPrestamo}/compromiso-firmado.${extension}`;
+  await guardarArchivo(rutaRelativa, new Uint8Array(await archivo.arrayBuffer()));
+  await registrarFirmaPrestamo(idPrestamo, rutaRelativa, sesion.idUsuario);
+
+  revalidarPrestamo(idPrestamo);
+}

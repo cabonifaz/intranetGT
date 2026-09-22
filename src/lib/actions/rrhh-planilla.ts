@@ -33,6 +33,8 @@ import { generarPeriodosPendientes, etiquetaPeriodoMensual } from "@/lib/rrhh/pe
 import { generarBoletaPdf } from "@/lib/rrhh/planilla/generar-boleta-pdf";
 import { generarReciboHonorariosPdf } from "@/lib/rrhh/planilla/generar-recibo-honorarios-pdf";
 import { cargarLogoEmpresa } from "@/lib/rrhh/resolver-plantilla";
+import { cuotasADescontar, vincularCuotasADetalle, etiquetaCuotaPrestamo } from "@/lib/rrhh/planilla/prestamos-planilla";
+import { listarCuotasDelDetalle } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { guardarArchivo } from "@/lib/storage/local-storage";
 import type { PlanillaContratoElegibleRow, PlanillaDetalleRow } from "@/types/db";
 
@@ -100,6 +102,8 @@ async function procesarPeriodoRegular(
 
   const esPlanilla = contrato.TIPO_CONTRATO_CODIGO !== "LOCADOR";
 
+  const prestamos = await cuotasADescontar(contrato.ID_USUARIO, anio, mes);
+
   if (esPlanilla) {
     const acumulado = await obtenerAcumuladoAnio(contrato.ID_CONTRATO, anio, mes);
     const resultado = calcularBoletaPlanilla({
@@ -109,10 +113,11 @@ async function procesarPeriodoRegular(
       mesesRestantesIncluyendoActual: 13 - mes,
       brutoAcumuladoMesesAnterioresDelAnio: Number(acumulado.BRUTO_ACUMULADO),
       retencionesAcumuladasAnioActual: Number(acumulado.RETENCION_ACUMULADA),
+      descuentoPrestamo: prestamos.total,
       parametros,
     });
 
-    await agregarDetalle({
+    const { id_planilla_detalle: idDetalleNuevo } = await agregarDetalle({
       idPlanillaMensual,
       idContrato: contrato.ID_CONTRATO,
       tipoReferencia: "RRHH_CONTRATO_PERIODO_PAGO",
@@ -121,19 +126,21 @@ async function procesarPeriodoRegular(
       montoAportePension: resultado.aportePension,
       montoRetencionRenta: resultado.retencionRenta,
       montoEssalud: resultado.essalud,
+      montoDescuentoPrestamo: resultado.descuentoPrestamo,
       montoNeto: resultado.neto,
       idSistemaPensionAplicado: contrato.ID_SISTEMA_PENSION,
       idAfpFondoAplicado: contrato.ID_AFP_FONDO,
       idParametroAplicado: parametros.idParametro,
       idUsuarioCreacion: idUsuario,
     });
+    if (idDetalleNuevo) await vincularCuotasADetalle(prestamos.cuotas, idDetalleNuevo);
     return;
   }
 
   const tieneSuspension = Boolean(contrato.SUSPENSION_RETENCION_4TA_HASTA && contrato.SUSPENSION_RETENCION_4TA_HASTA >= hoyIso());
-  const resultado = calcularRxH({ montoRecibo: periodoInfo.monto, tieneSuspension, parametros });
+  const resultado = calcularRxH({ montoRecibo: periodoInfo.monto, tieneSuspension, descuentoPrestamo: prestamos.total, parametros });
 
-  await agregarDetalle({
+  const { id_planilla_detalle: idDetalleRxH } = await agregarDetalle({
     idPlanillaMensual,
     idContrato: contrato.ID_CONTRATO,
     tipoReferencia: "RRHH_CONTRATO_PERIODO_PAGO",
@@ -142,12 +149,14 @@ async function procesarPeriodoRegular(
     montoAportePension: null,
     montoRetencionRenta: resultado.retencionRenta,
     montoEssalud: null,
+    montoDescuentoPrestamo: resultado.descuentoPrestamo,
     montoNeto: resultado.neto,
     idSistemaPensionAplicado: null,
     idAfpFondoAplicado: null,
     idParametroAplicado: parametros.idParametro,
     idUsuarioCreacion: idUsuario,
   });
+  if (idDetalleRxH) await vincularCuotasADetalle(prestamos.cuotas, idDetalleRxH);
 }
 
 // LOCADOR POR_HORA: junta las horas del mes que compartan moneda. Si hay
@@ -157,6 +166,8 @@ async function procesarLocadorPorHora(
   idPlanillaMensual: number,
   contrato: PlanillaContratoElegibleRow,
   periodo: string,
+  anio: number,
+  mes: number,
   parametros: ParametrosPlanillaVigentes,
   idUsuario: number,
 ): Promise<void> {
@@ -170,7 +181,8 @@ async function procesarLocadorPorHora(
   if (!bruto) return;
 
   const tieneSuspension = Boolean(contrato.SUSPENSION_RETENCION_4TA_HASTA && contrato.SUSPENSION_RETENCION_4TA_HASTA >= hoyIso());
-  const resultado = calcularRxH({ montoRecibo: bruto, tieneSuspension, parametros });
+  const prestamos = await cuotasADescontar(contrato.ID_USUARIO, anio, mes);
+  const resultado = calcularRxH({ montoRecibo: bruto, tieneSuspension, descuentoPrestamo: prestamos.total, parametros });
 
   const { id_planilla_detalle: idPlanillaDetalle } = await agregarDetalle({
     idPlanillaMensual,
@@ -181,6 +193,7 @@ async function procesarLocadorPorHora(
     montoAportePension: null,
     montoRetencionRenta: resultado.retencionRenta,
     montoEssalud: null,
+    montoDescuentoPrestamo: resultado.descuentoPrestamo,
     montoNeto: resultado.neto,
     idSistemaPensionAplicado: null,
     idAfpFondoAplicado: null,
@@ -189,6 +202,7 @@ async function procesarLocadorPorHora(
   });
 
   if (idPlanillaDetalle) {
+    await vincularCuotasADetalle(prestamos.cuotas, idPlanillaDetalle);
     for (const h of horas) {
       await vincularHoras(idPlanillaDetalle, h.ID_CONTRATO_HORAS);
     }
@@ -225,7 +239,7 @@ export async function generarPlanillaMensualAction(formData: FormData): Promise<
       if (!esVigenteEnMes(contrato, inicioMes, finMes)) continue;
 
       if (contrato.TIPO_CONTRATO_CODIGO === "LOCADOR" && contrato.TIPO_PAGO_LOCADOR_CODIGO === "POR_HORA") {
-        await procesarLocadorPorHora(idPlanillaMensual, contrato, periodo, parametros, sesion.idUsuario);
+        await procesarLocadorPorHora(idPlanillaMensual, contrato, periodo, anio, mes, parametros, sesion.idUsuario);
       } else {
         await procesarPeriodoRegular(idPlanillaMensual, contrato, periodo, anio, mes, parametros, sesion.idUsuario);
       }
@@ -253,6 +267,10 @@ export async function recalcularDetalleAction(formData: FormData): Promise<void>
 
   const bruto = Number(detalle.MONTO_BRUTO);
   const esPlanilla = detalle.TIPO_CONTRATO_CODIGO !== "LOCADOR";
+  // Las cuotas ya reservadas para este detalle -- recalcular no busca
+  // cuotas nuevas, solo rehace las cuentas con las que ya tiene.
+  const cuotasVinculadas = await listarCuotasDelDetalle(idPlanillaDetalle);
+  const descuentoPrestamo = Math.round(cuotasVinculadas.reduce((suma, c) => suma + Number(c.MONTO_DESCONTADO_SOLES ?? 0), 0) * 100) / 100;
 
   if (esPlanilla) {
     const acumulado = await obtenerAcumuladoAnio(detalle.ID_CONTRATO, detalle.ANIO, detalle.MES);
@@ -263,6 +281,7 @@ export async function recalcularDetalleAction(formData: FormData): Promise<void>
       mesesRestantesIncluyendoActual: 13 - detalle.MES,
       brutoAcumuladoMesesAnterioresDelAnio: Number(acumulado.BRUTO_ACUMULADO),
       retencionesAcumuladasAnioActual: Number(acumulado.RETENCION_ACUMULADA),
+      descuentoPrestamo,
       parametros,
     });
     await actualizarMontosDetalle({
@@ -271,18 +290,20 @@ export async function recalcularDetalleAction(formData: FormData): Promise<void>
       montoAportePension: resultado.aportePension,
       montoRetencionRenta: resultado.retencionRenta,
       montoEssalud: resultado.essalud,
+      montoDescuentoPrestamo: resultado.descuentoPrestamo,
       montoNeto: resultado.neto,
       calculoAutomatico: true,
     });
   } else {
     const tieneSuspension = Boolean(detalle.SUSPENSION_RETENCION_4TA_HASTA && detalle.SUSPENSION_RETENCION_4TA_HASTA >= hoyIso());
-    const resultado = calcularRxH({ montoRecibo: bruto, tieneSuspension, parametros });
+    const resultado = calcularRxH({ montoRecibo: bruto, tieneSuspension, descuentoPrestamo, parametros });
     await actualizarMontosDetalle({
       idPlanillaDetalle,
       montoBruto: resultado.bruto,
       montoAportePension: null,
       montoRetencionRenta: resultado.retencionRenta,
       montoEssalud: null,
+      montoDescuentoPrestamo: resultado.descuentoPrestamo,
       montoNeto: resultado.neto,
       calculoAutomatico: true,
     });
@@ -305,6 +326,7 @@ export async function actualizarMontosDetalleAction(formData: FormData): Promise
   const aportePensionRaw = String(formData.get("montoAportePension") ?? "").trim();
   const retencionRentaRaw = String(formData.get("montoRetencionRenta") ?? "").trim();
   const essaludRaw = String(formData.get("montoEssalud") ?? "").trim();
+  const descuentoPrestamo = Number(String(formData.get("montoDescuentoPrestamo") ?? "").trim() || 0);
   const aportePension = aportePensionRaw ? Number(aportePensionRaw) : null;
   const retencionRenta = retencionRentaRaw ? Number(retencionRentaRaw) : null;
   const essalud = essaludRaw ? Number(essaludRaw) : null;
@@ -314,7 +336,7 @@ export async function actualizarMontosDetalleAction(formData: FormData): Promise
   const detalle = await obtenerDetalle(idPlanillaDetalle);
   if (!detalle || detalle.ESTADO_EMISION_CODIGO === "EMITIDA") return;
 
-  const neto = bruto - (aportePension ?? 0) - (retencionRenta ?? 0);
+  const neto = bruto - (aportePension ?? 0) - (retencionRenta ?? 0) - descuentoPrestamo;
 
   await actualizarMontosDetalle({
     idPlanillaDetalle,
@@ -322,6 +344,7 @@ export async function actualizarMontosDetalleAction(formData: FormData): Promise
     montoAportePension: aportePension,
     montoRetencionRenta: retencionRenta,
     montoEssalud: essalud,
+    montoDescuentoPrestamo: descuentoPrestamo,
     montoNeto: neto,
     calculoAutomatico: false,
   });
@@ -369,6 +392,12 @@ export async function marcarPagadoMasivoAction(formData: FormData): Promise<void
 async function generarYGuardarDocumentoDetalle(detalle: PlanillaDetalleRow): Promise<string> {
   const esPlanilla = detalle.TIPO_CONTRATO_CODIGO !== "LOCADOR";
   const logo = await cargarLogoEmpresa();
+  const cuotasPrestamo = await listarCuotasDelDetalle(detalle.ID_PLANILLA_DETALLE);
+  const descuentosPrestamo = cuotasPrestamo.map((c) => ({
+    descripcion: etiquetaCuotaPrestamo(c, { anio: detalle.ANIO, mes: detalle.MES }),
+    monto: Number(c.MONTO_DESCONTADO_SOLES ?? 0),
+  }));
+  const descuentoPrestamo = Number(detalle.MONTO_DESCUENTO_PRESTAMO ?? 0);
 
   let bytes: Uint8Array;
   let carpeta: string;
@@ -394,6 +423,8 @@ async function generarYGuardarDocumentoDetalle(detalle: PlanillaDetalleRow): Pro
       aportePension: Number(detalle.MONTO_APORTE_PENSION ?? 0),
       retencionRenta: Number(detalle.MONTO_RETENCION_RENTA ?? 0),
       essalud: Number(detalle.MONTO_ESSALUD ?? 0),
+      descuentoPrestamo,
+      descuentosPrestamo,
       neto: Number(detalle.MONTO_NETO),
       logoBytes: logo.logoBytes,
       logoFormato: logo.logoFormato,
@@ -417,6 +448,8 @@ async function generarYGuardarDocumentoDetalle(detalle: PlanillaDetalleRow): Pro
       suspensionHasta: detalle.SUSPENSION_RETENCION_4TA_HASTA,
       bruto: Number(detalle.MONTO_BRUTO),
       retencionRenta: Number(detalle.MONTO_RETENCION_RENTA ?? 0),
+      descuentoPrestamo,
+      descuentosPrestamo,
       neto: Number(detalle.MONTO_NETO),
       logoBytes: logo.logoBytes,
       logoFormato: logo.logoFormato,

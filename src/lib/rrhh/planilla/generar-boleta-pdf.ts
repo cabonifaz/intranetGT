@@ -43,6 +43,11 @@ export interface DatosBoletaPdf {
   aportePension: number;
   retencionRenta: number;
   essalud: number;
+  // Cuotas de prestamo descontadas este mes (ya en soles) -- una fila por
+  // cuota en Descuentos; descuentoPrestamo es el total persistido en el
+  // detalle (si se edito a mano puede no calzar con la suma de las cuotas).
+  descuentoPrestamo: number;
+  descuentosPrestamo: { descripcion: string; monto: number }[];
   neto: number;
   logoBytes: Uint8Array | null;
   logoFormato: "png" | "jpg" | null;
@@ -80,7 +85,14 @@ function dibujarFilaConcepto(
   negrita = false,
 ): void {
   const fuente = negrita ? fonts.negrita : fonts.normal;
-  dibujarTexto(pagina, etiqueta, x + 8, y, fuente, 9.5);
+  // Una descripcion larga (ej. un prestamo con motivo extenso) no debe
+  // pisar el monto -- se recorta con "..." para que entre.
+  const anchoMaxEtiqueta = ancho - 16 - fuente.widthOfTextAtSize(monto, 9.5) - 12;
+  let textoEtiqueta = etiqueta;
+  while (textoEtiqueta.length > 4 && fuente.widthOfTextAtSize(textoEtiqueta, 9.5) > anchoMaxEtiqueta) {
+    textoEtiqueta = `${textoEtiqueta.slice(0, -4)}...`;
+  }
+  dibujarTexto(pagina, textoEtiqueta, x + 8, y, fuente, 9.5);
   dibujarTextoDerecha(pagina, monto, x + ancho - 8, y, fuente, 9.5);
 }
 
@@ -170,6 +182,10 @@ export async function generarBoletaPdf(datos: DatosBoletaPdf): Promise<Uint8Arra
     [datos.sistemaPensionDescripcion === "ONP" ? "ONP (13%)" : `AFP${datos.afpFondoDescripcion ? ` - ${datos.afpFondoDescripcion}` : ""}`, datos.aportePension],
     ["Retencion Renta de 5ta categoria", datos.retencionRenta],
   ];
+  for (const cuota of datos.descuentosPrestamo) filasDescuentos.push([cuota.descripcion, cuota.monto]);
+  const ajusteDescuentoPrestamo =
+    Math.round((datos.descuentoPrestamo - datos.descuentosPrestamo.reduce((s, c) => s + c.monto, 0)) * 100) / 100;
+  if (Math.abs(ajusteDescuentoPrestamo) >= 0.01) filasDescuentos.push(["Ajuste descuento de prestamo", ajusteDescuentoPrestamo]);
   const filasCuerpo = Math.max(filasIngresos.length, filasDescuentos.length, 3);
   const altoCuerpoTabla = altoEncabezadoTabla + filasCuerpo * altoFila + altoFila; // + fila de total
 

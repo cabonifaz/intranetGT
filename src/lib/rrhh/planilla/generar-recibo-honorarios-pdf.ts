@@ -19,6 +19,8 @@ export interface DatosReciboHonorariosPdf {
   suspensionHasta: string | null;
   bruto: number;
   retencionRenta: number;
+  descuentoPrestamo: number;
+  descuentosPrestamo: { descripcion: string; monto: number }[];
   neto: number;
   logoBytes: Uint8Array | null;
   logoFormato: "png" | "jpg" | null;
@@ -59,10 +61,17 @@ export async function generarReciboHonorariosPdf(datos: DatosReciboHonorariosPdf
   const filaRetencion = datos.tieneSuspension
     ? `| Retencion Renta de 4ta categoria | Suspendida (vigente hasta ${datos.suspensionHasta ? formatearFechaCorta(datos.suspensionHasta) : "-"}) |`
     : `| (-) Retencion Renta de 4ta categoria | ${formatearMoneda(datos.retencionRenta)} |`;
+  const filasPrestamo = datos.descuentosPrestamo.map((c) => `| (-) ${c.descripcion} | ${formatearMoneda(c.monto)} |`);
+  const ajustePrestamo = Math.round((datos.descuentoPrestamo - datos.descuentosPrestamo.reduce((s, c) => s + c.monto, 0)) * 100) / 100;
+  if (Math.abs(ajustePrestamo) >= 0.01) filasPrestamo.push(`| (-) Ajuste descuento de prestamo | ${formatearMoneda(ajustePrestamo)} |`);
   writer.parrafo(
-    ["| Concepto | Monto |", `| Monto bruto del recibo | ${formatearMoneda(datos.bruto)} |`, filaRetencion, `| NETO A PAGAR | ${formatearMoneda(datos.neto)} |`].join(
-      "\n",
-    ),
+    [
+      "| Concepto | Monto |",
+      `| Monto bruto del recibo | ${formatearMoneda(datos.bruto)} |`,
+      filaRetencion,
+      ...filasPrestamo,
+      `| NETO A PAGAR | ${formatearMoneda(datos.neto)} |`,
+    ].join("\n"),
     { justificar: false },
   );
 

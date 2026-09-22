@@ -144,12 +144,14 @@ export interface ResultadoBoletaPlanilla {
   aportePension: number;
   retencionRenta: number;
   essalud: number;
+  descuentoPrestamo: number;
   neto: number;
 }
 
 // Boleta de pago (PLANILLA, 5ta categoria). EsSalud se calcula e informa
 // pero NO resta el neto -- es un costo del empleador, no un descuento
-// del trabajador.
+// del trabajador. La cuota de prestamo SI resta el neto (descuento
+// autorizado en el compromiso de pago firmado).
 export function calcularBoletaPlanilla(input: {
   remuneracionBruta: number;
   sistemaPension: "AFP" | "ONP" | null;
@@ -157,6 +159,9 @@ export function calcularBoletaPlanilla(input: {
   mesesRestantesIncluyendoActual: number;
   brutoAcumuladoMesesAnterioresDelAnio: number;
   retencionesAcumuladasAnioActual: number;
+  // Cuotas de prestamo del mes, ya convertidas a soles -- las arma la capa
+  // de acciones desde RRHH_PRESTAMO_CUOTA, no depende de tasas.
+  descuentoPrestamo: number;
   parametros: ParametrosPlanillaVigentes;
 }): ResultadoBoletaPlanilla {
   const aportePension = input.sistemaPension
@@ -176,22 +181,30 @@ export function calcularBoletaPlanilla(input: {
     aportePension,
     retencionRenta: retencionMes,
     essalud,
-    neto: redondear(input.remuneracionBruta - aportePension - retencionMes),
+    descuentoPrestamo: redondear(input.descuentoPrestamo),
+    neto: redondear(input.remuneracionBruta - aportePension - retencionMes - input.descuentoPrestamo),
   };
 }
 
 export interface ResultadoRxH {
   bruto: number;
   retencionRenta: number;
+  descuentoPrestamo: number;
   neto: number;
 }
 
 // Recibo por honorarios (LOCADOR, 4ta categoria).
-export function calcularRxH(input: { montoRecibo: number; tieneSuspension: boolean; parametros: ParametrosPlanillaVigentes }): ResultadoRxH {
+export function calcularRxH(input: {
+  montoRecibo: number;
+  tieneSuspension: boolean;
+  descuentoPrestamo: number;
+  parametros: ParametrosPlanillaVigentes;
+}): ResultadoRxH {
   const retencionRenta = calcularRetencionRenta4ta(input.montoRecibo, input.tieneSuspension, input.parametros);
   return {
     bruto: redondear(input.montoRecibo),
     retencionRenta,
-    neto: redondear(input.montoRecibo - retencionRenta),
+    descuentoPrestamo: redondear(input.descuentoPrestamo),
+    neto: redondear(input.montoRecibo - retencionRenta - input.descuentoPrestamo),
   };
 }

@@ -162,6 +162,7 @@ CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_AGREGAR(
     IN p_monto_aporte_pension DECIMAL(12,2),
     IN p_monto_retencion_renta DECIMAL(12,2),
     IN p_monto_essalud DECIMAL(12,2),
+    IN p_monto_descuento_prestamo DECIMAL(12,2),
     IN p_monto_neto DECIMAL(12,2),
     IN p_id_sistema_pension_aplicado INT UNSIGNED,
     IN p_id_afp_fondo_aplicado INT UNSIGNED,
@@ -178,12 +179,12 @@ BEGIN
     ) THEN
         INSERT INTO RRHH_PLANILLA_DETALLE (
             ID_PLANILLA_MENSUAL, ID_CONTRATO, TIPO_REFERENCIA, ID_REFERENCIA,
-            MONTO_BRUTO, MONTO_APORTE_PENSION, MONTO_RETENCION_RENTA, MONTO_ESSALUD, MONTO_NETO,
+            MONTO_BRUTO, MONTO_APORTE_PENSION, MONTO_RETENCION_RENTA, MONTO_ESSALUD, MONTO_DESCUENTO_PRESTAMO, MONTO_NETO,
             ID_SISTEMA_PENSION_APLICADO, ID_AFP_FONDO_APLICADO, ID_PARAMETRO_APLICADO,
             CALCULO_AUTOMATICO, ID_ESTADO_EMISION, USUARIO_CREACION
         ) VALUES (
             p_id_planilla_mensual, p_id_contrato, p_tipo_referencia, p_id_referencia,
-            p_monto_bruto, p_monto_aporte_pension, p_monto_retencion_renta, p_monto_essalud, p_monto_neto,
+            p_monto_bruto, p_monto_aporte_pension, p_monto_retencion_renta, p_monto_essalud, p_monto_descuento_prestamo, p_monto_neto,
             p_id_sistema_pension_aplicado, p_id_afp_fondo_aplicado, p_id_parametro_aplicado,
             1, v_id_pendiente, p_id_usuario_creacion
         );
@@ -229,7 +230,7 @@ BEGIN
            u.ID_USUARIO, u.NOMBRES, u.APELLIDOS, c.CARGO,
            c.ID_TIPO_CONTRATO, tc.CODIGO AS TIPO_CONTRATO_CODIGO, tc.DESCRIPCION AS TIPO_CONTRATO_DESCRIPCION,
            c.ID_TIPO_PAGO_LOCADOR, tpl.CODIGO AS TIPO_PAGO_LOCADOR_CODIGO, tpl.DESCRIPCION AS TIPO_PAGO_LOCADOR_DESCRIPCION,
-           d.MONTO_BRUTO, d.MONTO_APORTE_PENSION, d.MONTO_RETENCION_RENTA, d.MONTO_ESSALUD, d.MONTO_NETO,
+           d.MONTO_BRUTO, d.MONTO_APORTE_PENSION, d.MONTO_RETENCION_RENTA, d.MONTO_ESSALUD, d.MONTO_DESCUENTO_PRESTAMO, d.MONTO_NETO,
            d.CALCULO_AUTOMATICO, d.AFP_ESSALUD_PAGADO,
            d.ID_ESTADO_EMISION, ee.CODIGO AS ESTADO_EMISION_CODIGO, ee.DESCRIPCION AS ESTADO_EMISION_DESCRIPCION,
            d.DOCUMENTO_PATH, d.FECHA_EMISION
@@ -260,7 +261,7 @@ BEGIN
            e.ID_AFP_FONDO, af.CODIGO AS AFP_FONDO_CODIGO, af.DESCRIPCION AS AFP_FONDO_DESCRIPCION,
            e.SUSPENSION_RETENCION_4TA_HASTA,
            d.TIPO_REFERENCIA, d.ID_REFERENCIA,
-           d.MONTO_BRUTO, d.MONTO_APORTE_PENSION, d.MONTO_RETENCION_RENTA, d.MONTO_ESSALUD, d.MONTO_NETO,
+           d.MONTO_BRUTO, d.MONTO_APORTE_PENSION, d.MONTO_RETENCION_RENTA, d.MONTO_ESSALUD, d.MONTO_DESCUENTO_PRESTAMO, d.MONTO_NETO,
            d.CALCULO_AUTOMATICO, d.AFP_ESSALUD_PAGADO, d.FECHA_MARCADO_PAGADO,
            d.ID_ESTADO_EMISION, ee.CODIGO AS ESTADO_EMISION_CODIGO, ee.DESCRIPCION AS ESTADO_EMISION_DESCRIPCION,
            d.DOCUMENTO_PATH, d.FECHA_EMISION
@@ -287,6 +288,7 @@ CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_ACTUALIZAR_MONTOS(
     IN p_monto_aporte_pension DECIMAL(12,2),
     IN p_monto_retencion_renta DECIMAL(12,2),
     IN p_monto_essalud DECIMAL(12,2),
+    IN p_monto_descuento_prestamo DECIMAL(12,2),
     IN p_monto_neto DECIMAL(12,2),
     IN p_calculo_automatico TINYINT
 )
@@ -297,6 +299,7 @@ BEGIN
            d.MONTO_APORTE_PENSION = p_monto_aporte_pension,
            d.MONTO_RETENCION_RENTA = p_monto_retencion_renta,
            d.MONTO_ESSALUD = p_monto_essalud,
+           d.MONTO_DESCUENTO_PRESTAMO = p_monto_descuento_prestamo,
            d.MONTO_NETO = p_monto_neto,
            d.CALCULO_AUTOMATICO = p_calculo_automatico
      WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle AND ee.CODIGO != 'EMITIDA';
@@ -337,13 +340,30 @@ CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_EMITIR(
 )
 BEGIN
     DECLARE v_id_emitida INT UNSIGNED;
+    DECLARE v_id_cuota_descontada INT UNSIGNED;
+    DECLARE v_estaba_pendiente INT;
+
     SET v_id_emitida = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_EMISION_PLANILLA_DETALLE' AND CODIGO = 'EMITIDA' LIMIT 1);
+    SET v_id_cuota_descontada = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_CUOTA_PRESTAMO' AND CODIGO = 'DESCONTADA' LIMIT 1);
+
+    SELECT COUNT(*) INTO v_estaba_pendiente
+      FROM RRHH_PLANILLA_DETALLE d
+      JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+     WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle AND ee.CODIGO != 'EMITIDA';
 
     UPDATE RRHH_PLANILLA_DETALLE d
       JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
        SET d.ID_ESTADO_EMISION = v_id_emitida, d.DOCUMENTO_PATH = p_documento_path,
            d.FECHA_EMISION = NOW(), d.USUARIO_EMISION = p_id_usuario_emision
      WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle AND ee.CODIGO != 'EMITIDA';
+
+    -- Al emitir se congela el detalle: las cuotas de prestamo reservadas
+    -- para el pasan de PENDIENTE a DESCONTADA (solo la primera vez).
+    IF v_estaba_pendiente = 1 THEN
+        UPDATE RRHH_PRESTAMO_CUOTA
+           SET ID_ESTADO_CUOTA = v_id_cuota_descontada, FECHA_DESCUENTO = NOW()
+         WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
+    END IF;
 END$$
 
 -- Vuelve a generar el PDF de un detalle YA EMITIDA (ej. cambio el
@@ -403,6 +423,11 @@ BEGIN
      WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle AND ee.CODIGO != 'EMITIDA';
 
     IF v_puede_eliminar = 1 THEN
+        -- Las cuotas de prestamo reservadas para este detalle vuelven a
+        -- quedar disponibles para la proxima generacion de planilla.
+        UPDATE RRHH_PRESTAMO_CUOTA
+           SET ID_PLANILLA_DETALLE = NULL, MONTO_DESCONTADO_SOLES = NULL
+         WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
         DELETE FROM RRHH_PLANILLA_DETALLE_HORAS WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
         DELETE FROM RRHH_PLANILLA_DETALLE WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
     END IF;

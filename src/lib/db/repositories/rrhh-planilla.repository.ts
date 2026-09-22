@@ -54,6 +54,7 @@ interface AgregarDetalleParams {
   montoAportePension: number | null;
   montoRetencionRenta: number | null;
   montoEssalud: number | null;
+  montoDescuentoPrestamo: number;
   montoNeto: number;
   idSistemaPensionAplicado: number | null;
   idAfpFondoAplicado: number | null;
@@ -73,6 +74,7 @@ export async function agregarDetalle(params: AgregarDetalleParams): Promise<{ id
       params.montoAportePension,
       params.montoRetencionRenta,
       params.montoEssalud,
+      params.montoDescuentoPrestamo,
       params.montoNeto,
       params.idSistemaPensionAplicado,
       params.idAfpFondoAplicado,
@@ -106,6 +108,7 @@ interface ActualizarMontosParams {
   montoAportePension: number | null;
   montoRetencionRenta: number | null;
   montoEssalud: number | null;
+  montoDescuentoPrestamo: number;
   montoNeto: number;
   calculoAutomatico: boolean;
 }
@@ -117,6 +120,7 @@ export async function actualizarMontosDetalle(params: ActualizarMontosParams): P
     params.montoAportePension,
     params.montoRetencionRenta,
     params.montoEssalud,
+    params.montoDescuentoPrestamo,
     params.montoNeto,
     params.calculoAutomatico ? 1 : 0,
   ]);

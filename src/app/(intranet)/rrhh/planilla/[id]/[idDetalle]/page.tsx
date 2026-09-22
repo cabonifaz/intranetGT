@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermiso } from "@/lib/auth/require-permiso";
 import { obtenerDetalle } from "@/lib/db/repositories/rrhh-planilla.repository";
+import { listarCuotasDelDetalle } from "@/lib/db/repositories/rrhh-prestamo.repository";
+import { etiquetaCuotaPrestamo } from "@/lib/rrhh/planilla/prestamos-planilla";
 import {
   actualizarMontosDetalleAction,
   recalcularDetalleAction,
@@ -35,6 +37,8 @@ export default async function PlanillaDetalleColaboradorPage({
   const detalle = await obtenerDetalle(idPlanillaDetalle);
   if (!detalle || detalle.ID_PLANILLA_MENSUAL !== idPlanillaMensual) notFound();
 
+  const cuotasPrestamo = await listarCuotasDelDetalle(idPlanillaDetalle);
+  const netoNegativo = Number(detalle.MONTO_NETO) < 0;
   const esPlanilla = detalle.TIPO_CONTRATO_CODIGO !== "LOCADOR";
   const emitida = detalle.ESTADO_EMISION_CODIGO === "EMITIDA";
   const faltaPension = esPlanilla && !detalle.ID_SISTEMA_PENSION;
@@ -136,12 +140,13 @@ export default async function PlanillaDetalleColaboradorPage({
               defaultValue={detalle.MONTO_RETENCION_RENTA ?? "0"}
             />
             {esPlanilla ? <Campo name="montoEssalud" label="EsSalud (informativo)" defaultValue={detalle.MONTO_ESSALUD ?? "0"} /> : null}
+            <Campo name="montoDescuentoPrestamo" label="Descuento por prestamo" defaultValue={detalle.MONTO_DESCUENTO_PRESTAMO ?? "0"} />
             <div className="flex items-end gap-2 sm:col-span-2">
               <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
                 Guardar montos
               </SubmitButton>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Neto = Bruto - Aporte de pension - Retencion (se recalcula solo al guardar).
+                Neto = Bruto - Aporte de pension - Retencion - Descuento por prestamo (se recalcula solo al guardar).
               </p>
             </div>
           </form>
@@ -152,9 +157,33 @@ export default async function PlanillaDetalleColaboradorPage({
           {esPlanilla ? <Dato etiqueta="Aporte de pension" valor={formatearMonto(detalle.MONTO_APORTE_PENSION)} /> : null}
           <Dato etiqueta={esPlanilla ? "Retencion Renta 5ta" : "Retencion Renta 4ta"} valor={formatearMonto(detalle.MONTO_RETENCION_RENTA)} />
           {esPlanilla ? <Dato etiqueta="EsSalud (costo empleador, no afecta el neto)" valor={formatearMonto(detalle.MONTO_ESSALUD)} /> : null}
+          <Dato etiqueta="Descuento por prestamo" valor={formatearMonto(detalle.MONTO_DESCUENTO_PRESTAMO)} />
           <Dato etiqueta="NETO A PAGAR" valor={formatearMonto(detalle.MONTO_NETO)} />
           <Dato etiqueta="Calculo" valor={detalle.CALCULO_AUTOMATICO ? "Automatico" : "Editado manualmente"} />
         </dl>
+
+        {netoNegativo ? (
+          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-400">
+            El neto a pagar es negativo: las cuotas de prestamo de este mes superan lo que le corresponde. Reprograma alguna cuota
+            desde el prestamo antes de emitir.
+          </p>
+        ) : null}
+
+        {cuotasPrestamo.length > 0 ? (
+          <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+            <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Cuotas de prestamo descontadas</p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {cuotasPrestamo.map((c) => (
+                <li key={c.ID_CUOTA} className="flex flex-wrap items-center justify-between gap-2">
+                  <Link href={`/rrhh/planilla/prestamos/${c.ID_PRESTAMO}`} className="text-blue-600 hover:underline dark:text-blue-400">
+                    {etiquetaCuotaPrestamo(c, { anio: detalle.ANIO, mes: detalle.MES })}
+                  </Link>
+                  <span className="text-slate-700 dark:text-slate-200">{formatearMonto(c.MONTO_DESCONTADO_SOLES ?? 0)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {!emitida ? (
           <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">

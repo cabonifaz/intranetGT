@@ -1054,6 +1054,7 @@ export interface PlanillaDetalleListadoRow extends RowDataPacket {
   MONTO_APORTE_PENSION: string | null;
   MONTO_RETENCION_RENTA: string | null;
   MONTO_ESSALUD: string | null;
+  MONTO_DESCUENTO_PRESTAMO: string | null;
   MONTO_NETO: string;
   CALCULO_AUTOMATICO: number;
   AFP_ESSALUD_PAGADO: number;
@@ -1102,6 +1103,7 @@ export interface PlanillaDetalleRow extends RowDataPacket {
   MONTO_APORTE_PENSION: string | null;
   MONTO_RETENCION_RENTA: string | null;
   MONTO_ESSALUD: string | null;
+  MONTO_DESCUENTO_PRESTAMO: string | null;
   MONTO_NETO: string;
   CALCULO_AUTOMATICO: number;
   AFP_ESSALUD_PAGADO: number;
@@ -1154,4 +1156,101 @@ export interface PlanillaContratoHorasDelPeriodoRow extends RowDataPacket {
 export interface PlanillaAcumuladoAnioRow extends RowDataPacket {
   BRUTO_ACUMULADO: string;
   RETENCION_ACUMULADA: string;
+}
+
+// --- Prestamos a colaboradores (ver 041_rrhh_prestamo.sql) ---
+
+export type EstadoPrestamoCodigo = "PENDIENTE_FIRMA" | "ACTIVO" | "ANULADO";
+export type TipoPrestamoCodigo = "PRESTAMO" | "ADELANTO_SUELDO";
+export type EstadoCuotaPrestamoCodigo = "PENDIENTE" | "DESCONTADA" | "ANULADA";
+
+export interface PrestamoListadoRow extends RowDataPacket {
+  ID_PRESTAMO: number;
+  ID_USUARIO: number;
+  NOMBRES: string;
+  APELLIDOS: string;
+  MONTO_TOTAL: string;
+  ID_MONEDA: number;
+  MONEDA_CODIGO: MonedaCodigo;
+  TIPO_CAMBIO: string | null;
+  DESCRIPCION: string | null;
+  FECHA_ORIGEN: string;
+  ID_TIPO_PRESTAMO: number;
+  TIPO_PRESTAMO_CODIGO: TipoPrestamoCodigo;
+  TIPO_PRESTAMO_DESCRIPCION: string;
+  ID_ESTADO_PRESTAMO: number;
+  ESTADO_PRESTAMO_CODIGO: EstadoPrestamoCodigo;
+  ESTADO_PRESTAMO_DESCRIPCION: string;
+  FECHA_FIRMA_COMPROMISO: string | null;
+  TOTAL_CUOTAS: number;
+  MONTO_DESCONTADO: string;
+  MONTO_PENDIENTE: string;
+}
+
+export interface PrestamoRow extends RowDataPacket {
+  ID_PRESTAMO: number;
+  ID_USUARIO: number;
+  NOMBRES: string;
+  APELLIDOS: string;
+  CORREO: string;
+  PUESTO: string | null;
+  TIPO_DOCUMENTO_DESCRIPCION: string | null;
+  NRO_DOCUMENTO: string | null;
+  DIRECCION: string | null;
+  MONTO_TOTAL: string;
+  ID_MONEDA: number;
+  MONEDA_CODIGO: MonedaCodigo;
+  MONEDA_DESCRIPCION: string;
+  TIPO_CAMBIO: string | null;
+  DESCRIPCION: string | null;
+  FECHA_ORIGEN: string;
+  ID_TIPO_PRESTAMO: number;
+  TIPO_PRESTAMO_CODIGO: TipoPrestamoCodigo;
+  TIPO_PRESTAMO_DESCRIPCION: string;
+  ID_CUENTA_DESEMBOLSO: number | null;
+  CUENTA_DESEMBOLSO_NOMBRE: string | null;
+  ID_MOVIMIENTO_DESEMBOLSO: number | null;
+  ID_ESTADO_PRESTAMO: number;
+  ESTADO_PRESTAMO_CODIGO: EstadoPrestamoCodigo;
+  ESTADO_PRESTAMO_DESCRIPCION: string;
+  DOCUMENTO_FIRMADO_PATH: string | null;
+  FECHA_FIRMA_COMPROMISO: string | null;
+  MOTIVO_ANULACION: string | null;
+  FECHA_ANULACION: string | null;
+  FECHA_CREACION: string;
+}
+
+export interface PrestamoCuotaRow extends RowDataPacket {
+  ID_CUOTA: number;
+  ID_PRESTAMO: number;
+  NRO_CUOTA: number;
+  ANIO: number;
+  MES: number;
+  MONTO: string;
+  CALCULO_AUTOMATICO: number;
+  ID_ESTADO_CUOTA: number;
+  ESTADO_CUOTA_CODIGO: EstadoCuotaPrestamoCodigo;
+  ESTADO_CUOTA_DESCRIPCION: string;
+  ID_PLANILLA_DETALLE: number | null;
+  MONTO_DESCONTADO_SOLES: string | null;
+  FECHA_DESCUENTO: string | null;
+  FECHA_CREACION: string;
+  FECHA_MODIFICACION: string | null;
+}
+
+// Cuota que la planilla de un periodo debe descontar (pendientes del
+// periodo) o ya descontada/reservada en un detalle (listar del detalle).
+export interface PrestamoCuotaAplicableRow extends RowDataPacket {
+  ID_CUOTA: number;
+  ID_PRESTAMO: number;
+  NRO_CUOTA: number;
+  ANIO: number;
+  MES: number;
+  MONTO: string;
+  MONEDA_CODIGO: MonedaCodigo;
+  TIPO_CAMBIO: string | null;
+  DESCRIPCION: string | null;
+  TIPO_PRESTAMO_CODIGO: TipoPrestamoCodigo;
+  MONTO_DESCONTADO_SOLES?: string | null;
+  TOTAL_CUOTAS: number;
 }
