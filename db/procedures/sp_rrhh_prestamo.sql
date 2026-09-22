@@ -38,8 +38,11 @@ DELIMITER $$
 -- beneficiario debe ser un trabajador (nunca un contacto -- un adelanto
 -- es a cuenta de un sueldo, un contacto no tiene) con un contrato FIRMADO
 -- de sueldo fijo (ver SP_RRHH_CONTRATO_SUELDO_FIJO_VIGENTE), y el monto
--- no puede superar el 70% de ese sueldo fijo -- no-op silencioso si no se
--- cumple, mismo criterio que el resto de guards de este archivo.
+-- no puede superar el % de ese sueldo fijo que indique el maestro
+-- PARAMETRO_PRESTAMO/PORCENTAJE_MAXIMO_ADELANTO (ver
+-- 045_parametro_prestamo.sql -- administrable sin tocar este SP) -- no-op
+-- silencioso si no se cumple, mismo criterio que el resto de guards de
+-- este archivo.
 CREATE PROCEDURE SP_RRHH_PRESTAMO_CREAR(
     IN p_id_usuario INT UNSIGNED,
     IN p_id_contacto INT UNSIGNED,
@@ -58,8 +61,10 @@ BEGIN
     DECLARE v_es_adelanto TINYINT;
     DECLARE v_sueldo_fijo DECIMAL(12,2) DEFAULT NULL;
     DECLARE v_id_moneda_sueldo INT UNSIGNED DEFAULT NULL;
+    DECLARE v_porcentaje_maximo_adelanto DECIMAL(5,4);
     SET v_id_pendiente_firma = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PRESTAMO' AND CODIGO = 'PENDIENTE_FIRMA' LIMIT 1);
     SET v_es_adelanto = (SELECT tp.CODIGO = 'ADELANTO_SUELDO' FROM MAESTRO_MAESTRO tp WHERE tp.ID_MAESTRO = p_id_tipo_prestamo);
+    SET v_porcentaje_maximo_adelanto = (SELECT CAST(DESCRIPCION AS DECIMAL(5,2)) / 100 FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'PARAMETRO_PRESTAMO' AND CODIGO = 'PORCENTAJE_MAXIMO_ADELANTO' LIMIT 1);
 
     IF v_es_adelanto = 1 AND p_id_usuario IS NOT NULL THEN
         SELECT CASE WHEN tc.CODIGO = 'LOCADOR' THEN c.TARIFA
@@ -81,7 +86,7 @@ BEGIN
     IF (p_id_usuario IS NOT NULL) != (p_id_contacto IS NOT NULL)
        AND (v_es_adelanto = 0 OR (
                 p_id_contacto IS NULL AND v_sueldo_fijo IS NOT NULL AND p_id_moneda = v_id_moneda_sueldo
-                AND p_monto_total <= v_sueldo_fijo * 0.70
+                AND v_porcentaje_maximo_adelanto IS NOT NULL AND p_monto_total <= v_sueldo_fijo * v_porcentaje_maximo_adelanto
             ))
     THEN
         INSERT INTO RRHH_PRESTAMO (
@@ -107,7 +112,8 @@ END$$
 -- solicitante propone para un PRESTAMO (RRHH los usa como punto de
 -- partida al otorgar, pero puede ajustarlos) -- para un ADELANTO_SUELDO
 -- se guardan NULL (una sola cuota, cronograma lo define RRHH). Mismo tope
--- del 70% del sueldo fijo que SP_RRHH_PRESTAMO_CREAR para un adelanto.
+-- (administrado en el maestro PARAMETRO_PRESTAMO/PORCENTAJE_MAXIMO_
+-- ADELANTO) que SP_RRHH_PRESTAMO_CREAR para un adelanto.
 CREATE PROCEDURE SP_RRHH_PRESTAMO_SOLICITAR(
     IN p_id_usuario INT UNSIGNED,
     IN p_id_contacto INT UNSIGNED,
@@ -126,8 +132,10 @@ BEGIN
     DECLARE v_es_adelanto TINYINT;
     DECLARE v_sueldo_fijo DECIMAL(12,2) DEFAULT NULL;
     DECLARE v_id_moneda_sueldo INT UNSIGNED DEFAULT NULL;
+    DECLARE v_porcentaje_maximo_adelanto DECIMAL(5,4);
     SET v_id_solicitado = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PRESTAMO' AND CODIGO = 'SOLICITADO' LIMIT 1);
     SET v_es_adelanto = (SELECT tp.CODIGO = 'ADELANTO_SUELDO' FROM MAESTRO_MAESTRO tp WHERE tp.ID_MAESTRO = p_id_tipo_prestamo);
+    SET v_porcentaje_maximo_adelanto = (SELECT CAST(DESCRIPCION AS DECIMAL(5,2)) / 100 FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'PARAMETRO_PRESTAMO' AND CODIGO = 'PORCENTAJE_MAXIMO_ADELANTO' LIMIT 1);
 
     IF v_es_adelanto = 1 AND p_id_usuario IS NOT NULL THEN
         SELECT CASE WHEN tc.CODIGO = 'LOCADOR' THEN c.TARIFA
@@ -149,7 +157,7 @@ BEGIN
     IF (p_id_usuario IS NOT NULL) != (p_id_contacto IS NOT NULL)
        AND (v_es_adelanto = 0 OR (
                 p_id_contacto IS NULL AND v_sueldo_fijo IS NOT NULL AND p_id_moneda = v_id_moneda_sueldo
-                AND p_monto_total <= v_sueldo_fijo * 0.70
+                AND v_porcentaje_maximo_adelanto IS NOT NULL AND p_monto_total <= v_sueldo_fijo * v_porcentaje_maximo_adelanto
             ))
     THEN
         INSERT INTO RRHH_PRESTAMO (

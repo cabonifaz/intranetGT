@@ -39,3 +39,25 @@ export async function crearMaestro(params: CrearMaestroParams): Promise<{ id_mae
   if (!resultado.id_maestro) throw new Error(`Ya existe un valor "${params.codigo}" para ${params.tipoMaestro}.`);
   return resultado as { id_maestro: number };
 }
+
+interface ActualizarMaestroParams {
+  idMaestro: number;
+  codigo: string;
+  descripcion: string;
+  orden: number;
+  idUsuarioModificacion: number;
+}
+
+// METADATA no se usa hoy en ningun maestro -- se pisa a NULL siempre (ver
+// SP_MAESTRO_ACTUALIZAR). Si algun dia un maestro la necesita, esta
+// funcion tendria que leerla primero y reenviarla para no perderla.
+export async function actualizarMaestro(params: ActualizarMaestroParams): Promise<void> {
+  await callProcedure("SP_MAESTRO_ACTUALIZAR", [
+    params.idMaestro,
+    params.codigo,
+    params.descripcion,
+    params.orden,
+    null,
+    params.idUsuarioModificacion,
+  ]);
+}

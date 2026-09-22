@@ -19,6 +19,9 @@ interface NuevoPrestamoFormProps {
   monedas: MaestroRow[];
   cuentas: CuentaListadoRow[];
   tcSugerido: string | null;
+  // 0.70 = 70% -- valor administrado en los maestros, ver
+  // obtenerPorcentajeMaximoAdelanto.
+  porcentajeMaximoAdelanto: number;
   anioActual: number;
   mesActual: number;
   hoy: string;
@@ -28,7 +31,19 @@ function formatear(monto: number, codigo: string): string {
   return `${codigo === "USD" ? "US$" : "S/"} ${monto.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export default function NuevoPrestamoForm({ tipos, colaboradores, contactos, monedas, cuentas, tcSugerido, anioActual, mesActual, hoy }: NuevoPrestamoFormProps) {
+export default function NuevoPrestamoForm({
+  tipos,
+  colaboradores,
+  contactos,
+  monedas,
+  cuentas,
+  tcSugerido,
+  porcentajeMaximoAdelanto,
+  anioActual,
+  mesActual,
+  hoy,
+}: NuevoPrestamoFormProps) {
+  const porcentajeTexto = `${Math.round(porcentajeMaximoAdelanto * 100)}%`;
   const idTipoPrestamoNormal = tipos.find((t) => t.CODIGO === "PRESTAMO") ? String(tipos.find((t) => t.CODIGO === "PRESTAMO")!.ID_MAESTRO) : "";
   const [idMoneda, setIdMoneda] = useState<string>(monedas.find((m) => m.CODIGO === "PEN") ? String(monedas.find((m) => m.CODIGO === "PEN")!.ID_MAESTRO) : "");
   const [idTipo, setIdTipo] = useState<string>(idTipoPrestamoNormal);
@@ -77,7 +92,7 @@ export default function NuevoPrestamoForm({ tipos, colaboradores, contactos, mon
         <NotaAyuda>
           <strong>Préstamo</strong>: dinero que se le presta al colaborador y devuelve en cuotas. <strong>Adelanto de sueldo</strong>:
           adelanto a cuenta de su remuneración (o de sus honorarios) -- solo para un trabajador con sueldo fijo (planilla o locador
-          con tarifa fija, no por hora), hasta el 70% de ese sueldo, en una sola cuota.
+          con tarifa fija, no por hora), hasta el {porcentajeTexto} de ese sueldo, en una sola cuota.
         </NotaAyuda>
       </div>
 
@@ -93,8 +108,8 @@ export default function NuevoPrestamoForm({ tipos, colaboradores, contactos, mon
         />
         <NotaAyuda>
           Un trabajador recibe el dinero y se le descuentan las cuotas en su planilla; un contacto del directorio no tiene planilla,
-          su repago se marca a mano desde el detalle del préstamo. El tope del 70% en un adelanto se valida contra el sueldo fijo
-          vigente del trabajador que elijas.
+          su repago se marca a mano desde el detalle del préstamo. El tope del {porcentajeTexto} en un adelanto se valida contra el
+          sueldo fijo vigente del trabajador que elijas.
         </NotaAyuda>
       </div>
 

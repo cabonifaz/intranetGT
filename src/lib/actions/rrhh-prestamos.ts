@@ -25,7 +25,7 @@ import { obtenerSueldoFijoVigente } from "@/lib/db/repositories/contrato.reposit
 import { listarAplicaciones } from "@/lib/db/repositories/aplicacion.repository";
 import { crearNotificacion } from "@/lib/db/repositories/notificacion.repository";
 import { generarCuotasIguales } from "@/lib/rrhh/planilla/cronograma-prestamo";
-import { montoMaximoAdelanto } from "@/lib/rrhh/planilla/adelanto-sueldo";
+import { montoMaximoAdelanto, obtenerPorcentajeMaximoAdelanto } from "@/lib/rrhh/planilla/adelanto-sueldo";
 import { guardarArchivo } from "@/lib/storage/local-storage";
 import type { PrestamoRow } from "@/types/db";
 
@@ -54,9 +54,9 @@ function hoyIso(): string {
 // integridad si esto se saltara).
 async function excedeTopeAdelanto(idUsuario: number | null, idMoneda: number, montoTotal: number): Promise<boolean> {
   if (!idUsuario) return true;
-  const sueldo = await obtenerSueldoFijoVigente(idUsuario);
+  const [sueldo, porcentajeMaximo] = await Promise.all([obtenerSueldoFijoVigente(idUsuario), obtenerPorcentajeMaximoAdelanto()]);
   if (!sueldo || sueldo.ID_MONEDA !== idMoneda) return true;
-  return montoTotal > montoMaximoAdelanto(Number(sueldo.SUELDO_FIJO));
+  return montoTotal > montoMaximoAdelanto(Number(sueldo.SUELDO_FIJO), porcentajeMaximo);
 }
 
 // Crea el prestamo o adelanto de sueldo (nace PENDIENTE_FIRMA) con su cronograma de N cuotas

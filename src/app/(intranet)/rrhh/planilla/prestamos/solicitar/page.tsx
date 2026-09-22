@@ -5,7 +5,7 @@ import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { listarDirectorio } from "@/lib/db/repositories/rrhh-empleado.repository";
 import { listarTodosLosContactosExternos } from "@/lib/db/repositories/directorio-contacto.repository";
 import { obtenerSueldoFijoVigente } from "@/lib/db/repositories/contrato.repository";
-import { montoMaximoAdelanto } from "@/lib/rrhh/planilla/adelanto-sueldo";
+import { montoMaximoAdelanto, obtenerPorcentajeMaximoAdelanto } from "@/lib/rrhh/planilla/adelanto-sueldo";
 import SolicitarPrestamoForm from "@/components/rrhh/SolicitarPrestamoForm";
 
 // Autoservicio: cualquier colaborador con sesion puede solicitar (no
@@ -18,16 +18,21 @@ export default async function SolicitarPrestamoPage() {
   const puedeGestionar = await puedeGestionarPrestamos(sesion.idUsuario);
 
   const hoy = new Date();
-  const [tipos, monedas, colaboradores, contactos, sueldoFijo] = await Promise.all([
+  const [tipos, monedas, colaboradores, contactos, sueldoFijo, porcentajeMaximoAdelanto] = await Promise.all([
     listarMaestros("TIPO_PRESTAMO"),
     listarMaestros("MONEDA"),
     puedeGestionar ? listarDirectorio(null, null) : Promise.resolve([]),
     puedeGestionar ? listarTodosLosContactosExternos() : Promise.resolve([]),
     obtenerSueldoFijoVigente(sesion.idUsuario),
+    obtenerPorcentajeMaximoAdelanto(),
   ]);
 
   const sueldoFijoPropio = sueldoFijo
-    ? { montoMaximo: montoMaximoAdelanto(Number(sueldoFijo.SUELDO_FIJO)), monedaCodigo: sueldoFijo.MONEDA_CODIGO, idMoneda: sueldoFijo.ID_MONEDA }
+    ? {
+        montoMaximo: montoMaximoAdelanto(Number(sueldoFijo.SUELDO_FIJO), porcentajeMaximoAdelanto),
+        monedaCodigo: sueldoFijo.MONEDA_CODIGO,
+        idMoneda: sueldoFijo.ID_MONEDA,
+      }
     : null;
 
   return (
@@ -50,6 +55,7 @@ export default async function SolicitarPrestamoPage() {
         puedeGestionar={puedeGestionar}
         idUsuarioSesion={sesion.idUsuario}
         sueldoFijoPropio={sueldoFijoPropio}
+        porcentajeMaximoAdelanto={porcentajeMaximoAdelanto}
         anioActual={hoy.getFullYear()}
         mesActual={hoy.getMonth() + 1}
       />

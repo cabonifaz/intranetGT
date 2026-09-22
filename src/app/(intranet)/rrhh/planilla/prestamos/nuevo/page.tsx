@@ -5,18 +5,20 @@ import { listarTodosLosContactosExternos } from "@/lib/db/repositories/directori
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { listarCuentas } from "@/lib/db/repositories/cuenta.repository";
 import { obtenerTipoCambioVigente } from "@/lib/db/repositories/tipo-cambio.repository";
+import { obtenerPorcentajeMaximoAdelanto } from "@/lib/rrhh/planilla/adelanto-sueldo";
 import NuevoPrestamoForm from "@/components/rrhh/NuevoPrestamoForm";
 
 export default async function NuevoPrestamoPage() {
   await requireGestionarPrestamos();
 
-  const [tipos, colaboradores, contactos, monedas, cuentas, tcPrestamo] = await Promise.all([
+  const [tipos, colaboradores, contactos, monedas, cuentas, tcPrestamo, porcentajeMaximoAdelanto] = await Promise.all([
     listarMaestros("TIPO_PRESTAMO"),
     listarDirectorio(null, null),
     listarTodosLosContactosExternos(),
     listarMaestros("MONEDA"),
     listarCuentas(),
     obtenerTipoCambioVigente("PRESTAMO"),
+    obtenerPorcentajeMaximoAdelanto(),
   ]);
 
   const hoy = new Date();
@@ -38,6 +40,7 @@ export default async function NuevoPrestamoPage() {
         monedas={monedas}
         cuentas={cuentas}
         tcSugerido={tcPrestamo}
+        porcentajeMaximoAdelanto={porcentajeMaximoAdelanto}
         anioActual={hoy.getFullYear()}
         mesActual={hoy.getMonth() + 1}
         hoy={hoy.toISOString().slice(0, 10)}

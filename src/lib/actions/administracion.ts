@@ -12,7 +12,7 @@ import {
 import { crearArea } from "@/lib/db/repositories/area.repository";
 import { crearRol } from "@/lib/db/repositories/rol.repository";
 import { crearAplicacion } from "@/lib/db/repositories/aplicacion.repository";
-import { crearMaestro } from "@/lib/db/repositories/maestro.repository";
+import { crearMaestro, actualizarMaestro } from "@/lib/db/repositories/maestro.repository";
 import { asignarPermiso } from "@/lib/db/repositories/permiso.repository";
 import { crearNotificacion } from "@/lib/db/repositories/notificacion.repository";
 import { actualizarLogoEmpresa } from "@/lib/db/repositories/configuracion-empresa.repository";
@@ -265,6 +265,28 @@ export async function crearMaestroAction(_prevState: CrearMaestroState, formData
   revalidatePath("/administracion/maestros");
   refresh();
   return { ok: true, idMaestro: resultado.id_maestro };
+}
+
+// Edita un valor existente (codigo/descripcion/orden) -- pensado sobre
+// todo para maestros de tipo "parametro" (ej. PARAMETRO_PRESTAMO) donde
+// DESCRIPCION guarda el valor administrable, no un catalogo de opciones
+// fijas. Cambiar el CODIGO de un valor que ya usa un SP por su codigo
+// (como PORCENTAJE_MAXIMO_ADELANTO) lo rompe -- se deja editable porque
+// el resto del formulario lo necesita, pero conviene no tocarlo.
+export async function actualizarMaestroAction(formData: FormData): Promise<void> {
+  const sesion = await requirePermiso(ADMIN_APP_CODIGO, "ADMIN");
+
+  const idMaestro = Number(formData.get("idMaestro"));
+  const codigo = String(formData.get("codigo") ?? "").trim().toUpperCase();
+  const descripcion = String(formData.get("descripcion") ?? "").trim();
+  const orden = Number(formData.get("orden") ?? 0);
+
+  if (!idMaestro || !codigo || !descripcion) return;
+
+  await actualizarMaestro({ idMaestro, codigo, descripcion, orden, idUsuarioModificacion: sesion.idUsuario });
+
+  revalidatePath("/administracion/maestros");
+  refresh();
 }
 
 export async function asignarPermisoAction(formData: FormData): Promise<void> {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import CrearMaestroForm from "@/components/administracion/CrearMaestroForm";
+import EditarMaestroFila from "@/components/administracion/EditarMaestroFila";
 
 const TIPOS_CONOCIDOS = [
   "ESTADO_GENERAL",
@@ -14,6 +15,7 @@ const TIPOS_CONOCIDOS = [
   "PAIS",
   "CIUDAD",
   "BANCO",
+  "PARAMETRO_PRESTAMO",
 ];
 
 export default async function MaestrosPage({
@@ -59,6 +61,7 @@ export default async function MaestrosPage({
                 {esCiudad ? <th className="px-4 py-2">Pais</th> : null}
                 <th className="px-4 py-2">Orden</th>
                 <th className="px-4 py-2">Estado</th>
+                <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -76,6 +79,9 @@ export default async function MaestrosPage({
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                       {v.ESTADO_CODIGO}
                     </span>
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <EditarMaestroFila valor={v} />
                   </td>
                 </tr>
               ))}

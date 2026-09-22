@@ -30,6 +30,9 @@ interface SolicitarPrestamoFormProps {
   // Si quien gestiona cambia el beneficiario a otro trabajador o a un
   // contacto, este tope deja de aplicar y se valida recien al enviar.
   sueldoFijoPropio: SueldoFijoPropio | null;
+  // 0.70 = 70% -- valor administrado en los maestros (ver
+  // obtenerPorcentajeMaximoAdelanto), no un numero fijo en el codigo.
+  porcentajeMaximoAdelanto: number;
   anioActual: number;
   mesActual: number;
 }
@@ -42,8 +45,9 @@ function formatearMonto(monto: number, codigo: string): string {
 // a quien, eso lo fija la sesion en el server action). Un PRESTAMO pide
 // de una vez moneda, monto, N de cuotas y mes/anio de inicio del
 // cronograma (RRHH parte de eso al otorgar, pudiendo ajustarlo). Un
-// ADELANTO_SUELDO no pide cronograma (una sola cuota) y esta limitado al
-// 70% del sueldo fijo del beneficiario, en la misma moneda de su sueldo.
+// ADELANTO_SUELDO no pide cronograma (una sola cuota) y esta limitado a un
+// % (administrado en los maestros) del sueldo fijo del beneficiario, en
+// la misma moneda de su sueldo.
 // Quien puede gestionar prestamos ve ademas el selector de beneficiario
 // (preseleccionado en si mismo), para solicitar en nombre de un
 // trabajador o un contacto -- un adelanto nunca es para un contacto.
@@ -55,9 +59,11 @@ export default function SolicitarPrestamoForm({
   puedeGestionar,
   idUsuarioSesion,
   sueldoFijoPropio,
+  porcentajeMaximoAdelanto,
   anioActual,
   mesActual,
 }: SolicitarPrestamoFormProps) {
+  const porcentajeTexto = `${Math.round(porcentajeMaximoAdelanto * 100)}%`;
   const idTipoPrestamoNormal = tipos.find((t) => t.CODIGO === "PRESTAMO") ? String(tipos.find((t) => t.CODIGO === "PRESTAMO")!.ID_MAESTRO) : "";
   const [idTipo, setIdTipo] = useState<string>(idTipoPrestamoNormal);
   const [idMoneda, setIdMoneda] = useState<string>("");
@@ -117,11 +123,11 @@ export default function SolicitarPrestamoForm({
         {esAdelanto ? (
           mostrarTopePropio && sueldoFijoPropio ? (
             <NotaAyuda>
-              Puedes solicitar hasta {formatearMonto(sueldoFijoPropio.montoMaximo, sueldoFijoPropio.monedaCodigo)} (70% de tu sueldo fijo),
-              en la misma moneda de tu sueldo.
+              Puedes solicitar hasta {formatearMonto(sueldoFijoPropio.montoMaximo, sueldoFijoPropio.monedaCodigo)} ({porcentajeTexto} de tu
+              sueldo fijo), en la misma moneda de tu sueldo.
             </NotaAyuda>
           ) : (
-            <NotaAyuda>El tope del 70% se valida contra el sueldo fijo vigente del trabajador que elijas.</NotaAyuda>
+            <NotaAyuda>El tope del {porcentajeTexto} se valida contra el sueldo fijo vigente del trabajador que elijas.</NotaAyuda>
           )
         ) : null}
       </div>
@@ -144,7 +150,7 @@ export default function SolicitarPrestamoForm({
             className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
           />
           {mostrarTopePropio && sueldoFijoPropio && montoNum > sueldoFijoPropio.montoMaximo ? (
-            <p className="mt-1 text-xs text-red-600 dark:text-red-400">Supera el tope del 70% de tu sueldo fijo.</p>
+            <p className="mt-1 text-xs text-red-600 dark:text-red-400">Supera el tope del {porcentajeTexto} de tu sueldo fijo.</p>
           ) : null}
         </div>
         <div>
