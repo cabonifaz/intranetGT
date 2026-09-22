@@ -218,7 +218,7 @@ export interface NotificacionRow extends RowDataPacket {
 
 export type TipoContratoCodigo = "PLANILLA_FULLTIME" | "PLANILLA_PARTTIME" | "LOCADOR";
 export type TipoPagoLocadorCodigo = "POR_HORA" | "POR_PROYECTO" | "MENSUAL" | "POR_JORNADA";
-export type EstadoContratoCodigo = "BORRADOR" | "PENDIENTE_FIRMA" | "FIRMADO" | "VENCIDO" | "RENOVADO" | "ANULADO";
+export type EstadoContratoCodigo = "BORRADOR" | "PENDIENTE_FIRMA" | "FIRMADO" | "VENCIDO" | "RENOVADO" | "ANULADO" | "IMPORTADO_EN_REVISION";
 
 export interface ContratoListadoRow extends RowDataPacket {
   ID_CONTRATO: number;
@@ -1253,4 +1253,55 @@ export interface PrestamoCuotaAplicableRow extends RowDataPacket {
   TIPO_PRESTAMO_CODIGO: TipoPrestamoCodigo;
   MONTO_DESCONTADO_SOLES?: string | null;
   TOTAL_CUOTAS: number;
+}
+
+// --- Importacion de contratos ya firmados (ver 042_rrhh_contrato_importacion.sql) ---
+
+export interface ContratoImportacionRow extends RowDataPacket {
+  ID_CONTRATO: number;
+  ID_USUARIO: number;
+  NOMBRES: string;
+  APELLIDOS: string;
+  CORREO: string;
+  ID_TIPO_CONTRATO: number;
+  TIPO_CONTRATO_CODIGO: string;
+  TIPO_CONTRATO_DESCRIPCION: string;
+  ID_TIPO_PAGO_LOCADOR: number | null;
+  TIPO_PAGO_LOCADOR_CODIGO: string | null;
+  TIPO_PAGO_LOCADOR_DESCRIPCION: string | null;
+  CARGO: string;
+  FECHA_INICIO: string;
+  FECHA_FIN: string | null;
+  DIAS_LABORALES: string | null;
+  HORA_INICIO: string | null;
+  HORA_FIN: string | null;
+  TARIFA: string | null;
+  ID_MONEDA: number | null;
+  MONEDA_CODIGO: MonedaCodigo | null;
+  TIPO_CAMBIO: string | null;
+  PERIODO_PAGO: string | null;
+  NRO_CUENTA: string | null;
+  CCI: string | null;
+  BANCO: string | null;
+  ID_ESTADO_CONTRATO: number;
+  ESTADO_CONTRATO_CODIGO: EstadoContratoCodigo;
+  ESTADO_CONTRATO_DESCRIPCION: string;
+  DOCUMENTO_PATH: string | null;
+  ID_IMPORTACION: number;
+  DOCUMENTO_ESCANEADO_PATH: string;
+  DATOS_EXTRAIDOS_JSON: string | null;
+  ADVERTENCIAS_EXTRACCION: string | null;
+  USUARIO_CARGA: number;
+  FECHA_CARGA: string;
+  USUARIO_CONFIRMACION: number | null;
+  FECHA_CONFIRMACION: string | null;
+}
+
+export interface ContratoImportacionPendienteRow extends RowDataPacket {
+  ID_CONTRATO: number;
+  NOMBRES: string;
+  APELLIDOS: string;
+  CARGO: string;
+  FECHA_CARGA: string;
+  CARGADO_POR: string;
 }

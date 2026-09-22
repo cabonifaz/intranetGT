@@ -47,3 +47,21 @@ export async function requireCierreProyecto(): Promise<SesionUsuario> {
   }
   return sesion;
 }
+
+// Importar un contrato ya firmado (subir la solicitud escaneada, saltando
+// generacion+firma digital) es una puerta de atras al flujo normal -- solo
+// para SUPER_ADMIN ("el Administrador"), GERENCIA_GENERAL ("el Gerente") o
+// RRHH_JEFATURA ("Gerente/Jefatura de RRHH"), nunca solo por tener ADMIN
+// sobre RRHH_CONTRATOS.
+export async function puedeImportarContrato(idUsuario: number): Promise<boolean> {
+  const roles = await listarRolesActivosDeUsuario(idUsuario);
+  return roles.some((r) => r.ROL_CODIGO === "SUPER_ADMIN" || r.ROL_CODIGO === "GERENCIA_GENERAL" || r.ROL_CODIGO === "RRHH_JEFATURA");
+}
+
+export async function requireImportarContrato(): Promise<SesionUsuario> {
+  const sesion = await requireSession();
+  if (!(await puedeImportarContrato(sesion.idUsuario))) {
+    redirect("/");
+  }
+  return sesion;
+}

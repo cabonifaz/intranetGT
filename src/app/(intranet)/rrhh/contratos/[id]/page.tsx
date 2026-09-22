@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requirePermiso } from "@/lib/auth/require-permiso";
 import {
   obtenerContrato,
@@ -65,6 +65,13 @@ export default async function DetalleContratoPage({
 
   const contrato = await obtenerContrato(idContrato);
   if (!contrato) notFound();
+
+  // Todavia esperando revision del flujo de importacion (ver
+  // /rrhh/contratos/importar) -- esa pantalla, no esta, es donde se
+  // termina de completar/confirmar.
+  if (contrato.ESTADO_CONTRATO_CODIGO === "IMPORTADO_EN_REVISION") {
+    redirect(`/rrhh/contratos/importar/${idContrato}`);
+  }
 
   const esLocador = contrato.TIPO_CONTRATO_CODIGO === "LOCADOR";
   const esPlanilla = !esLocador;

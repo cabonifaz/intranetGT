@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requirePermiso } from "@/lib/auth/require-permiso";
+import { requirePermiso, puedeImportarContrato } from "@/lib/auth/require-permiso";
 import { listarContratos } from "@/lib/db/repositories/contrato.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { eliminarContratoAction } from "@/lib/actions/rrhh";
@@ -23,13 +23,14 @@ export default async function ContratosPage({
 }: {
   searchParams: Promise<{ estado?: string }>;
 }) {
-  await requirePermiso("RRHH_CONTRATOS", "LECTURA");
+  const sesion = await requirePermiso("RRHH_CONTRATOS", "LECTURA");
   const { estado: estadoFiltro } = await searchParams;
 
-  const [contratos, porVencer, estadosContrato] = await Promise.all([
+  const [contratos, porVencer, estadosContrato, puedeImportar] = await Promise.all([
     listarContratos(),
     listarContratos(null, DIAS_ALERTA_VENCIMIENTO),
     listarMaestros("ESTADO_CONTRATO"),
+    puedeImportarContrato(sesion.idUsuario),
   ]);
 
   const contratosFiltrados = estadoFiltro
@@ -61,6 +62,11 @@ export default async function ContratosPage({
     (c) => c.ESTADO_CONTRATO_CODIGO === "BORRADOR" || c.ESTADO_CONTRATO_CODIGO === "PENDIENTE_FIRMA",
   );
 
+  // Contratos importados (ver /rrhh/contratos/importar) que todavia
+  // esperan que alguien revise y confirme los datos que se leyeron del
+  // escaneo -- distinto de "sin cerrar" (esos nunca se subieron firmados).
+  const pendientesDeRevisar = contratos.filter((c) => c.ESTADO_CONTRATO_CODIGO === "IMPORTADO_EN_REVISION");
+
   // Mismo `porVencer` (30 dias) reusado para el icono de alerta en cada
   // fila de la tabla, en vez de un fetch aparte -- un solo Map de
   // ID_CONTRATO -> dias restantes, con los mismos 3 niveles de urgencia
@@ -83,6 +89,14 @@ export default async function ContratosPage({
           >
             Plantillas de contrato
           </Link>
+          {puedeImportar ? (
+            <Link
+              href="/rrhh/contratos/importar"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              Importar contrato firmado
+            </Link>
+          ) : null}
           <Link href="/rrhh/contratos/nuevo" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
             Nuevo contrato
           </Link>
@@ -122,6 +136,17 @@ export default async function ContratosPage({
           coloresEnlace="text-purple-700 hover:underline dark:text-purple-400"
           detalle={(c) => c.ESTADO_CONTRATO_DESCRIPCION}
         />
+        {puedeImportar ? (
+          <AlertaContratos
+            titulo="Importados -- pendientes de revisar"
+            contratos={pendientesDeRevisar}
+            colores="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
+            coloresTexto="text-amber-800 dark:text-amber-300"
+            coloresEnlace="text-amber-700 hover:underline dark:text-amber-400"
+            detalle={() => "revisar y confirmar"}
+            hrefBase="/rrhh/contratos/importar"
+          />
+        ) : null}
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
@@ -183,6 +208,10 @@ export default async function ContratosPage({
                     >
                       Descargar
                     </a>
+                  ) : c.ESTADO_CONTRATO_CODIGO === "IMPORTADO_EN_REVISION" ? (
+                    <Link href={`/rrhh/contratos/importar/${c.ID_CONTRATO}`} className="font-medium text-amber-700 hover:underline dark:text-amber-400">
+                      Revisar y confirmar
+                    </Link>
                   ) : c.ESTADO_CONTRATO_CODIGO === "BORRADOR" || c.ESTADO_CONTRATO_CODIGO === "PENDIENTE_FIRMA" ? (
                     <form action={eliminarContratoAction}>
                       <input type="hidden" name="idContrato" value={c.ID_CONTRATO} />
@@ -235,6 +264,7 @@ function AlertaContratos({
   coloresTexto,
   coloresEnlace,
   detalle,
+  hrefBase = "/rrhh/contratos",
 }: {
   titulo: string;
   contratos: ContratoListadoRow[];
@@ -242,6 +272,7 @@ function AlertaContratos({
   coloresTexto: string;
   coloresEnlace: string;
   detalle: (contrato: ContratoListadoRow) => string;
+  hrefBase?: string;
 }) {
   if (contratos.length === 0) return null;
 
@@ -253,7 +284,7 @@ function AlertaContratos({
       <ul className="mt-2 space-y-1 text-sm">
         {contratos.map((c) => (
           <li key={c.ID_CONTRATO}>
-            <Link href={`/rrhh/contratos/${c.ID_CONTRATO}`} className={coloresEnlace}>
+            <Link href={`${hrefBase}/${c.ID_CONTRATO}`} className={coloresEnlace}>
               {c.NOMBRES} {c.APELLIDOS} - {c.CARGO} ({detalle(c)})
             </Link>
           </li>
