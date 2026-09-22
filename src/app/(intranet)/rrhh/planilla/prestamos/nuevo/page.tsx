@@ -1,17 +1,19 @@
 import Link from "next/link";
-import { requirePermiso } from "@/lib/auth/require-permiso";
+import { requireGestionarPrestamos } from "@/lib/auth/require-permiso";
 import { listarDirectorio } from "@/lib/db/repositories/rrhh-empleado.repository";
+import { listarTodosLosContactosExternos } from "@/lib/db/repositories/directorio-contacto.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { listarCuentas } from "@/lib/db/repositories/cuenta.repository";
 import { obtenerTipoCambioVigente } from "@/lib/db/repositories/tipo-cambio.repository";
 import NuevoPrestamoForm from "@/components/rrhh/NuevoPrestamoForm";
 
 export default async function NuevoPrestamoPage() {
-  await requirePermiso("RRHH_PLANILLA", "ESCRITURA");
+  await requireGestionarPrestamos();
 
-  const [tipos, colaboradores, monedas, cuentas, tcPrestamo] = await Promise.all([
+  const [tipos, colaboradores, contactos, monedas, cuentas, tcPrestamo] = await Promise.all([
     listarMaestros("TIPO_PRESTAMO"),
     listarDirectorio(null, null),
+    listarTodosLosContactosExternos(),
     listarMaestros("MONEDA"),
     listarCuentas(),
     obtenerTipoCambioVigente("PRESTAMO"),
@@ -32,6 +34,7 @@ export default async function NuevoPrestamoPage() {
       <NuevoPrestamoForm
         tipos={tipos}
         colaboradores={colaboradores}
+        contactos={contactos}
         monedas={monedas}
         cuentas={cuentas}
         tcSugerido={tcPrestamo}

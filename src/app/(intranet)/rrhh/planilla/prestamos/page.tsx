@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requirePermiso } from "@/lib/auth/require-permiso";
+import { requirePermiso, puedeGestionarPrestamos } from "@/lib/auth/require-permiso";
 import { listarPrestamos } from "@/lib/db/repositories/rrhh-prestamo.repository";
 
 function formatearMonto(monto: string | number, codigo: string): string {
@@ -12,7 +12,8 @@ function formatearFecha(fecha: string | null): string {
 }
 
 export default async function PrestamosPage() {
-  await requirePermiso("RRHH_PLANILLA", "LECTURA");
+  const sesion = await requirePermiso("RRHH_PLANILLA", "LECTURA");
+  const puedeGestionar = await puedeGestionarPrestamos(sesion.idUsuario);
 
   const prestamos = await listarPrestamos(null);
   const solicitudes = prestamos.filter((p) => p.ESTADO_PRESTAMO_CODIGO === "SOLICITADO");
@@ -30,12 +31,14 @@ export default async function PrestamosPage() {
             Préstamos y adelantos de sueldo con cronograma de cuotas que se descuentan en la Planilla Mensual, previa firma del compromiso.
           </p>
         </div>
-        <Link
-          href="/rrhh/planilla/prestamos/nuevo"
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Nuevo préstamo / adelanto
-        </Link>
+        {puedeGestionar ? (
+          <Link
+            href="/rrhh/planilla/prestamos/nuevo"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Nuevo préstamo / adelanto
+          </Link>
+        ) : null}
       </div>
 
       {solicitudes.length > 0 ? (
@@ -66,7 +69,7 @@ export default async function PrestamosPage() {
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 text-xs uppercase text-slate-500 dark:border-slate-800 dark:text-slate-400">
             <tr>
-              <th className="px-4 py-2">Colaborador</th>
+              <th className="px-4 py-2">Beneficiario</th>
               <th className="px-4 py-2">Tipo</th>
               <th className="px-4 py-2">Fecha</th>
               <th className="px-4 py-2 text-right">Monto</th>
@@ -83,6 +86,11 @@ export default async function PrestamosPage() {
                   <Link href={`/rrhh/planilla/prestamos/${p.ID_PRESTAMO}`} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
                     {p.NOMBRES} {p.APELLIDOS}
                   </Link>
+                  {p.ES_CONTACTO ? (
+                    <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                      Contacto
+                    </span>
+                  ) : null}
                   {p.DESCRIPCION ? <p className="text-xs text-slate-500 dark:text-slate-400">{p.DESCRIPCION}</p> : null}
                 </td>
                 <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{p.TIPO_PRESTAMO_DESCRIPCION}</td>

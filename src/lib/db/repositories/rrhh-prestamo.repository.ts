@@ -10,8 +10,11 @@ export async function obtenerPrestamo(idPrestamo: number): Promise<PrestamoRow |
   return rows[0] ?? null;
 }
 
+// Beneficiario: exactamente uno de idUsuario/idContacto (nunca ambos ni
+// ninguno) -- lo valida el SP, ver SP_RRHH_PRESTAMO_CREAR.
 interface CrearPrestamoParams {
-  idUsuario: number;
+  idUsuario: number | null;
+  idContacto: number | null;
   idTipoPrestamo: number;
   montoTotal: number;
   idMoneda: number;
@@ -27,6 +30,7 @@ export async function crearPrestamo(params: CrearPrestamoParams): Promise<{ id_p
     "SP_RRHH_PRESTAMO_CREAR",
     [
       params.idUsuario,
+      params.idContacto,
       params.idTipoPrestamo,
       params.montoTotal,
       params.idMoneda,
@@ -47,17 +51,27 @@ export async function asignarMovimientoDesembolso(idPrestamo: number, idMovimien
 }
 
 export interface SolicitarPrestamoParams {
-  idUsuario: number;
+  idUsuario: number | null;
+  idContacto: number | null;
   idTipoPrestamo: number;
   montoTotal: number;
   idMoneda: number;
   descripcion: string | null;
+  idUsuarioCreacion: number;
 }
 
 export async function solicitarPrestamo(params: SolicitarPrestamoParams): Promise<{ id_prestamo: number }> {
   const resultado = await callProcedureWithOut<{ id_prestamo: number | null }>(
     "SP_RRHH_PRESTAMO_SOLICITAR",
-    [params.idUsuario, params.idTipoPrestamo, params.montoTotal, params.idMoneda, params.descripcion],
+    [
+      params.idUsuario,
+      params.idContacto,
+      params.idTipoPrestamo,
+      params.montoTotal,
+      params.idMoneda,
+      params.descripcion,
+      params.idUsuarioCreacion,
+    ],
     ["id_prestamo"],
   );
   if (!resultado.id_prestamo) throw new Error("No se pudo registrar la solicitud.");
@@ -127,4 +141,10 @@ export async function vincularCuotaADetalle(idCuota: number, idPlanillaDetalle: 
 
 export async function listarCuotasDelDetalle(idPlanillaDetalle: number): Promise<PrestamoCuotaAplicableRow[]> {
   return callProcedure<PrestamoCuotaAplicableRow>("SP_RRHH_PRESTAMO_CUOTA_LISTAR_DEL_DETALLE", [idPlanillaDetalle]);
+}
+
+// Solo aplica a prestamos con beneficiario CONTACTO (sin planilla de
+// donde descontar) -- ver SP_RRHH_PRESTAMO_CUOTA_MARCAR_PAGADA_MANUAL.
+export async function marcarCuotaPagadaManual(idCuota: number): Promise<void> {
+  await callProcedure("SP_RRHH_PRESTAMO_CUOTA_MARCAR_PAGADA_MANUAL", [idCuota]);
 }

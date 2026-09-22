@@ -24,13 +24,20 @@ DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_ELIMINAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_PENDIENTES_DEL_PERIODO_LISTAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_VINCULAR_DETALLE;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_LISTAR_DEL_DETALLE;
+DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_MARCAR_PAGADA_MANUAL;
 
 DELIMITER $$
 
 -- Nace PENDIENTE_FIRMA: el compromiso todavia no esta firmado, asi que la
--- planilla no descuenta nada hasta SP_RRHH_PRESTAMO_REGISTRAR_FIRMA.
+-- planilla no descuenta nada hasta SP_RRHH_PRESTAMO_REGISTRAR_FIRMA. El
+-- beneficiario es exactamente uno de los dos -- p_id_usuario (trabajador,
+-- con descuento en planilla) o p_id_contacto (contacto externo del
+-- directorio, sin planilla) -- no-op silencioso (p_id_prestamo queda
+-- NULL) si viene mas de uno o ninguno, mismo criterio que el acreedor de
+-- PASIVO en SP_PASIVO_CREAR.
 CREATE PROCEDURE SP_RRHH_PRESTAMO_CREAR(
     IN p_id_usuario INT UNSIGNED,
+    IN p_id_contacto INT UNSIGNED,
     IN p_id_tipo_prestamo INT UNSIGNED,
     IN p_monto_total DECIMAL(12,2),
     IN p_id_moneda INT UNSIGNED,
@@ -45,44 +52,52 @@ BEGIN
     DECLARE v_id_pendiente_firma INT UNSIGNED;
     SET v_id_pendiente_firma = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PRESTAMO' AND CODIGO = 'PENDIENTE_FIRMA' LIMIT 1);
 
-    INSERT INTO RRHH_PRESTAMO (
-        ID_USUARIO, ID_TIPO_PRESTAMO, MONTO_TOTAL, ID_MONEDA, TIPO_CAMBIO, DESCRIPCION, FECHA_ORIGEN,
-        ID_CUENTA_DESEMBOLSO, ID_ESTADO_PRESTAMO, USUARIO_CREACION
-    ) VALUES (
-        p_id_usuario, p_id_tipo_prestamo, p_monto_total, p_id_moneda, p_tipo_cambio, p_descripcion, p_fecha_origen,
-        p_id_cuenta_desembolso, v_id_pendiente_firma, p_id_usuario_creacion
-    );
+    IF (p_id_usuario IS NOT NULL) != (p_id_contacto IS NOT NULL) THEN
+        INSERT INTO RRHH_PRESTAMO (
+            ID_USUARIO, ID_CONTACTO, ID_TIPO_PRESTAMO, MONTO_TOTAL, ID_MONEDA, TIPO_CAMBIO, DESCRIPCION, FECHA_ORIGEN,
+            ID_CUENTA_DESEMBOLSO, ID_ESTADO_PRESTAMO, USUARIO_CREACION
+        ) VALUES (
+            p_id_usuario, p_id_contacto, p_id_tipo_prestamo, p_monto_total, p_id_moneda, p_tipo_cambio, p_descripcion, p_fecha_origen,
+            p_id_cuenta_desembolso, v_id_pendiente_firma, p_id_usuario_creacion
+        );
 
-    SET p_id_prestamo = LAST_INSERT_ID();
+        SET p_id_prestamo = LAST_INSERT_ID();
+    END IF;
 END$$
 
--- Autoservicio: cualquier colaborador solicita un prestamo/adelanto para
--- si mismo (p_id_usuario es siempre la propia sesion, lo valida la app).
--- Nace SOLICITADO -- sin cronograma, sin cuenta de desembolso, sin TC --
--- eso lo completa RRHH al otorgarlo (SP_RRHH_PRESTAMO_OTORGAR).
--- p_fecha_solicitud es informativa (se pisa con la fecha real de
--- desembolso al otorgar).
+-- Solicitud: nace SOLICITADO -- sin cronograma, sin cuenta de desembolso,
+-- sin TC -- eso lo completa RRHH al otorgarlo (SP_RRHH_PRESTAMO_OTORGAR).
+-- El colaborador solicita para si mismo (p_id_usuario = su propia sesion,
+-- p_id_contacto NULL); Gerencia/Administracion/RRHH pueden solicitar en
+-- nombre de un trabajador o un contacto -- misma regla de "exactamente
+-- uno" que SP_RRHH_PRESTAMO_CREAR. p_fecha_origen queda como fecha de
+-- solicitud (informativa, se pisa con la fecha real de desembolso al
+-- otorgar).
 CREATE PROCEDURE SP_RRHH_PRESTAMO_SOLICITAR(
     IN p_id_usuario INT UNSIGNED,
+    IN p_id_contacto INT UNSIGNED,
     IN p_id_tipo_prestamo INT UNSIGNED,
     IN p_monto_total DECIMAL(12,2),
     IN p_id_moneda INT UNSIGNED,
     IN p_descripcion VARCHAR(300),
+    IN p_id_usuario_creacion INT UNSIGNED,
     OUT p_id_prestamo INT UNSIGNED
 )
 BEGIN
     DECLARE v_id_solicitado INT UNSIGNED;
     SET v_id_solicitado = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PRESTAMO' AND CODIGO = 'SOLICITADO' LIMIT 1);
 
-    INSERT INTO RRHH_PRESTAMO (
-        ID_USUARIO, ID_TIPO_PRESTAMO, MONTO_TOTAL, ID_MONEDA, DESCRIPCION, FECHA_ORIGEN,
-        ID_ESTADO_PRESTAMO, USUARIO_CREACION
-    ) VALUES (
-        p_id_usuario, p_id_tipo_prestamo, p_monto_total, p_id_moneda, p_descripcion, CURDATE(),
-        v_id_solicitado, p_id_usuario
-    );
+    IF (p_id_usuario IS NOT NULL) != (p_id_contacto IS NOT NULL) THEN
+        INSERT INTO RRHH_PRESTAMO (
+            ID_USUARIO, ID_CONTACTO, ID_TIPO_PRESTAMO, MONTO_TOTAL, ID_MONEDA, DESCRIPCION, FECHA_ORIGEN,
+            ID_ESTADO_PRESTAMO, USUARIO_CREACION
+        ) VALUES (
+            p_id_usuario, p_id_contacto, p_id_tipo_prestamo, p_monto_total, p_id_moneda, p_descripcion, CURDATE(),
+            v_id_solicitado, p_id_usuario_creacion
+        );
 
-    SET p_id_prestamo = LAST_INSERT_ID();
+        SET p_id_prestamo = LAST_INSERT_ID();
+    END IF;
 END$$
 
 -- RRHH revisa una solicitud y la otorga: fija la fecha real de
@@ -125,12 +140,18 @@ END$$
 
 -- Un prestamo por fila con su avance: cuotas vigentes (sin las ANULADAS),
 -- lo ya descontado y lo que falta, en la moneda del prestamo. p_id_usuario
--- NULL = todos los colaboradores.
+-- NULL = todos (trabajadores y contactos); si viene informado, solo trae
+-- los del trabajador (un contacto no tiene ID_USUARIO, nunca calza con
+-- este filtro -- correcto, se usa solo desde la ficha de un trabajador).
+-- NOMBRES/APELLIDOS/ES_CONTACTO combinan el que corresponda segun el
+-- beneficiario.
 CREATE PROCEDURE SP_RRHH_PRESTAMO_LISTAR(
     IN p_id_usuario INT UNSIGNED
 )
 BEGIN
-    SELECT p.ID_PRESTAMO, p.ID_USUARIO, u.NOMBRES, u.APELLIDOS,
+    SELECT p.ID_PRESTAMO, p.ID_USUARIO, p.ID_CONTACTO,
+           COALESCE(u.NOMBRES, dc.NOMBRES) AS NOMBRES, COALESCE(u.APELLIDOS, dc.APELLIDOS) AS APELLIDOS,
+           (p.ID_CONTACTO IS NOT NULL) AS ES_CONTACTO,
            p.MONTO_TOTAL, p.ID_MONEDA, mo.CODIGO AS MONEDA_CODIGO, p.TIPO_CAMBIO,
            p.DESCRIPCION, p.FECHA_ORIGEN,
            p.ID_TIPO_PRESTAMO, tp.CODIGO AS TIPO_PRESTAMO_CODIGO, tp.DESCRIPCION AS TIPO_PRESTAMO_DESCRIPCION,
@@ -146,7 +167,8 @@ BEGIN
               JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = c.ID_ESTADO_CUOTA
              WHERE c.ID_PRESTAMO = p.ID_PRESTAMO AND ec.CODIGO = 'PENDIENTE') AS MONTO_PENDIENTE
       FROM RRHH_PRESTAMO p
-      JOIN USUARIO u ON u.ID_USUARIO = p.ID_USUARIO
+      LEFT JOIN USUARIO u ON u.ID_USUARIO = p.ID_USUARIO
+      LEFT JOIN DIRECTORIO_CONTACTO_EXTERNO dc ON dc.ID_CONTACTO = p.ID_CONTACTO
       JOIN MAESTRO_MAESTRO mo ON mo.ID_MAESTRO = p.ID_MONEDA
       JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = p.ID_ESTADO_PRESTAMO
       JOIN MAESTRO_MAESTRO tp ON tp.ID_MAESTRO = p.ID_TIPO_PRESTAMO
@@ -154,15 +176,21 @@ BEGIN
      ORDER BY p.FECHA_CREACION DESC, p.ID_PRESTAMO DESC;
 END$$
 
--- Detalle completo para la pantalla y para el compromiso en PDF: datos
--- de identidad del colaborador (RRHH_EMPLEADO) y la cuenta de
--- desembolso si la hubo.
+-- Detalle completo para la pantalla y para el compromiso en PDF. Si el
+-- beneficiario es un trabajador, trae su identidad de RRHH_EMPLEADO
+-- (documento, direccion, puesto); si es un contacto externo, esos campos
+-- quedan NULL (DIRECTORIO_CONTACTO_EXTERNO no guarda documento de
+-- identidad) -- el PDF y las pantallas ya toleran valores nulos ahi.
 CREATE PROCEDURE SP_RRHH_PRESTAMO_OBTENER(
     IN p_id_prestamo INT UNSIGNED
 )
 BEGIN
-    SELECT p.ID_PRESTAMO, p.ID_USUARIO, u.NOMBRES, u.APELLIDOS, u.CORREO,
-           e.PUESTO, td.DESCRIPCION AS TIPO_DOCUMENTO_DESCRIPCION, e.NRO_DOCUMENTO, e.DIRECCION,
+    SELECT p.ID_PRESTAMO, p.ID_USUARIO, p.ID_CONTACTO,
+           COALESCE(u.NOMBRES, dc.NOMBRES) AS NOMBRES, COALESCE(u.APELLIDOS, dc.APELLIDOS) AS APELLIDOS,
+           (p.ID_CONTACTO IS NOT NULL) AS ES_CONTACTO,
+           u.CORREO,
+           COALESCE(e.PUESTO, dc.CARGO) AS PUESTO,
+           td.DESCRIPCION AS TIPO_DOCUMENTO_DESCRIPCION, e.NRO_DOCUMENTO, e.DIRECCION,
            p.MONTO_TOTAL, p.ID_MONEDA, mo.CODIGO AS MONEDA_CODIGO, mo.DESCRIPCION AS MONEDA_DESCRIPCION, p.TIPO_CAMBIO,
            p.DESCRIPCION, p.FECHA_ORIGEN,
            p.ID_TIPO_PRESTAMO, tp.CODIGO AS TIPO_PRESTAMO_CODIGO, tp.DESCRIPCION AS TIPO_PRESTAMO_DESCRIPCION,
@@ -172,9 +200,10 @@ BEGIN
            p.MOTIVO_ANULACION, p.FECHA_ANULACION,
            p.FECHA_CREACION
       FROM RRHH_PRESTAMO p
-      JOIN USUARIO u ON u.ID_USUARIO = p.ID_USUARIO
+      LEFT JOIN USUARIO u ON u.ID_USUARIO = p.ID_USUARIO
       LEFT JOIN RRHH_EMPLEADO e ON e.ID_USUARIO = u.ID_USUARIO
       LEFT JOIN MAESTRO_MAESTRO td ON td.ID_MAESTRO = e.ID_TIPO_DOCUMENTO
+      LEFT JOIN DIRECTORIO_CONTACTO_EXTERNO dc ON dc.ID_CONTACTO = p.ID_CONTACTO
       JOIN MAESTRO_MAESTRO mo ON mo.ID_MAESTRO = p.ID_MONEDA
       JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = p.ID_ESTADO_PRESTAMO
       JOIN MAESTRO_MAESTRO tp ON tp.ID_MAESTRO = p.ID_TIPO_PRESTAMO
@@ -373,6 +402,33 @@ BEGIN
       JOIN MAESTRO_MAESTRO tp ON tp.ID_MAESTRO = p.ID_TIPO_PRESTAMO
      WHERE c.ID_PLANILLA_DETALLE = p_id_planilla_detalle
      ORDER BY c.ANIO, c.MES, c.ID_PRESTAMO, c.NRO_CUOTA;
+END$$
+
+-- Para un prestamo con beneficiario CONTACTO (sin planilla de donde
+-- descontar) -- marca a mano una cuota PENDIENTE como pagada. Restringido
+-- a prestamos de contacto (p.ID_CONTACTO IS NOT NULL): un prestamo de
+-- trabajador se descuenta solo via SP_RRHH_PRESTAMO_CUOTA_VINCULAR_DETALLE
+-- + la emision de planilla, nunca a mano, para no duplicar/saltarse ese
+-- flujo. No-op silencioso si la cuota no esta PENDIENTE, ya fue tomada
+-- por una planilla (no deberia pasar para un contacto, pero por las
+-- dudas) o el prestamo no es ACTIVO.
+CREATE PROCEDURE SP_RRHH_PRESTAMO_CUOTA_MARCAR_PAGADA_MANUAL(
+    IN p_id_cuota INT UNSIGNED
+)
+BEGIN
+    DECLARE v_id_descontada INT UNSIGNED;
+    SET v_id_descontada = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_CUOTA_PRESTAMO' AND CODIGO = 'DESCONTADA' LIMIT 1);
+
+    UPDATE RRHH_PRESTAMO_CUOTA c
+      JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = c.ID_ESTADO_CUOTA
+      JOIN RRHH_PRESTAMO p ON p.ID_PRESTAMO = c.ID_PRESTAMO
+      JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = p.ID_ESTADO_PRESTAMO
+       SET c.ID_ESTADO_CUOTA = v_id_descontada, c.FECHA_DESCUENTO = NOW()
+     WHERE c.ID_CUOTA = p_id_cuota
+       AND ec.CODIGO = 'PENDIENTE'
+       AND c.ID_PLANILLA_DETALLE IS NULL
+       AND p.ID_CONTACTO IS NOT NULL
+       AND ep.CODIGO = 'ACTIVO';
 END$$
 
 DELIMITER ;

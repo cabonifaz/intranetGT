@@ -3,7 +3,7 @@
 import { revalidatePath, refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/get-current-user";
-import { requirePermiso } from "@/lib/auth/require-permiso";
+import { requireGestionarPrestamos, puedeGestionarPrestamos } from "@/lib/auth/require-permiso";
 import {
   crearPrestamo,
   obtenerPrestamo,
@@ -16,15 +16,17 @@ import {
   eliminarCuotaPrestamo,
   solicitarPrestamo,
   otorgarPrestamo,
+  marcarCuotaPagadaManual,
 } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { listarCuentas, registrarMovimientoCuenta, obtenerIdTipoMovimientoEgreso } from "@/lib/db/repositories/cuenta.repository";
+import { obtenerContactoExterno } from "@/lib/db/repositories/directorio-contacto.repository";
 import { generarCuotasIguales } from "@/lib/rrhh/planilla/cronograma-prestamo";
 import { guardarArchivo } from "@/lib/storage/local-storage";
 
-// Los prestamos viven bajo el permiso de Planilla: RRHH_PLANILLA
-// (Jefatura/Asistente de RRHH), igual que parametros y boletas.
-const PLANILLA_APP_CODIGO = "RRHH_PLANILLA";
+// La lectura (listados/detalle) vive bajo RRHH_PLANILLA; gestionar
+// (crear, otorgar, editar cronograma, anular, solicitar en nombre de
+// otro) es un alcance mas chico -- ver requireGestionarPrestamos.
 
 const TAMANO_MAX_COMPROMISO_BYTES = 15 * 1024 * 1024;
 const TIPOS_COMPROMISO_FIRMADO: Record<string, string> = {
@@ -41,11 +43,14 @@ function hoyIso(): string {
 // iguales, una por mes desde el periodo inicial -- despues se pueden
 // editar, agregar o quitar cuotas desde el detalle. Si se elige una
 // cuenta de desembolso se registra el EGRESO por el monto total; la
-// cuenta debe estar en la misma moneda del prestamo.
+// cuenta debe estar en la misma moneda del prestamo. El beneficiario es
+// un trabajador (idUsuario) o un contacto del directorio (idContacto),
+// exactamente uno de los dos -- ver SelectorBeneficiarioPrestamo.
 export async function crearPrestamoAction(formData: FormData): Promise<void> {
-  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+  const sesion = await requireGestionarPrestamos();
 
-  const idUsuario = Number(formData.get("idUsuario"));
+  const idUsuario = Number(formData.get("idUsuario") || 0) || null;
+  const idContacto = Number(formData.get("idContacto") || 0) || null;
   const idTipoPrestamo = Number(formData.get("idTipoPrestamo"));
   const montoTotal = Number(formData.get("montoTotal"));
   const idMoneda = Number(formData.get("idMoneda"));
@@ -58,9 +63,12 @@ export async function crearPrestamoAction(formData: FormData): Promise<void> {
   const idCuentaRaw = Number(formData.get("idCuentaDesembolso") || 0);
   const idCuentaDesembolso = idCuentaRaw || null;
 
-  if (!idUsuario || !idTipoPrestamo || !(montoTotal > 0) || !idMoneda) return;
+  if ((idUsuario === null) === (idContacto === null)) return;
+  if (!idTipoPrestamo || !(montoTotal > 0) || !idMoneda) return;
   if (!(nroCuotas >= 1 && nroCuotas <= 120)) return;
   if (!(mesInicio >= 1 && mesInicio <= 12) || anioInicio < 2000) return;
+
+  if (idContacto && !(await obtenerContactoExterno(idContacto))) return;
 
   const tipos = await listarMaestros("TIPO_PRESTAMO");
   if (!tipos.some((t) => t.ID_MAESTRO === idTipoPrestamo)) return;
@@ -82,6 +90,7 @@ export async function crearPrestamoAction(formData: FormData): Promise<void> {
 
   const { id_prestamo: idPrestamo } = await crearPrestamo({
     idUsuario,
+    idContacto,
     idTipoPrestamo,
     montoTotal,
     idMoneda,
@@ -123,18 +132,31 @@ export async function crearPrestamoAction(formData: FormData): Promise<void> {
   redirect(`/rrhh/planilla/prestamos/${idPrestamo}`);
 }
 
-// Autoservicio: cualquier colaborador solicita un prestamo/adelanto para
-// si mismo -- idUsuario siempre es la propia sesion (nunca viene del
-// formulario), para que nadie pueda solicitar a nombre de otro. Nace
-// SOLICITADO, sin cronograma ni cuenta de desembolso -- eso lo define
-// RRHH al otorgarlo (ver otorgarPrestamoAction).
+// Autoservicio por defecto: cualquier colaborador solicita un
+// prestamo/adelanto para si mismo. Quien puede gestionar prestamos
+// (SUPER_ADMIN, GERENCIA_GENERAL, RRHH_JEFATURA, ADMINISTRACION_JEFATURA)
+// puede ademas solicitar en nombre de un trabajador o de un contacto del
+// directorio -- para cualquier otro, idUsuario/idContacto del formulario
+// se ignoran y se fuerza la propia sesion, para que nadie solicite a
+// nombre de otro sin permiso. Nace SOLICITADO, sin cronograma ni cuenta
+// de desembolso -- eso lo define RRHH al otorgarlo (otorgarPrestamoAction).
 export async function solicitarPrestamoAction(formData: FormData): Promise<void> {
   const sesion = await requireSession();
+  const puedeGestionar = await puedeGestionarPrestamos(sesion.idUsuario);
 
   const idTipoPrestamo = Number(formData.get("idTipoPrestamo"));
   const montoTotal = Number(formData.get("montoTotal"));
   const idMoneda = Number(formData.get("idMoneda"));
   const descripcion = String(formData.get("descripcion") ?? "").trim() || null;
+
+  let idUsuario: number | null = sesion.idUsuario;
+  let idContacto: number | null = null;
+  if (puedeGestionar) {
+    idUsuario = Number(formData.get("idUsuario") || 0) || null;
+    idContacto = Number(formData.get("idContacto") || 0) || null;
+    if ((idUsuario === null) === (idContacto === null)) return;
+    if (idContacto && !(await obtenerContactoExterno(idContacto))) return;
+  }
 
   if (!idTipoPrestamo || !(montoTotal > 0) || !idMoneda) return;
 
@@ -143,10 +165,11 @@ export async function solicitarPrestamoAction(formData: FormData): Promise<void>
   const monedas = await listarMaestros("MONEDA");
   if (!monedas.some((m) => m.ID_MAESTRO === idMoneda)) return;
 
-  await solicitarPrestamo({ idUsuario: sesion.idUsuario, idTipoPrestamo, montoTotal, idMoneda, descripcion });
+  await solicitarPrestamo({ idUsuario, idContacto, idTipoPrestamo, montoTotal, idMoneda, descripcion, idUsuarioCreacion: sesion.idUsuario });
 
-  revalidatePath(`/rrhh/directorio/${sesion.idUsuario}`);
-  redirect(`/rrhh/directorio/${sesion.idUsuario}`);
+  const destino = idContacto ? "/rrhh/planilla/prestamos" : `/rrhh/directorio/${idUsuario}`;
+  revalidatePath(destino);
+  redirect(destino);
 }
 
 // RRHH revisa una solicitud y la otorga: define fecha real de
@@ -154,7 +177,7 @@ export async function solicitarPrestamoAction(formData: FormData): Promise<void>
 // cronograma de cuotas -- desde aca sigue identico a un prestamo creado
 // directo (compromiso de pago, firma, descuento en planilla).
 export async function otorgarPrestamoAction(formData: FormData): Promise<void> {
-  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+  const sesion = await requireGestionarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   const fechaOrigen = String(formData.get("fechaOrigen") ?? "").trim() || hoyIso();
@@ -224,7 +247,7 @@ function revalidarPrestamo(idPrestamo: number): void {
 // una cuota mayor con la gratificacion de julio o diciembre. No renumera
 // las demas: toma el siguiente correlativo.
 export async function agregarCuotaPrestamoAction(formData: FormData): Promise<void> {
-  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+  const sesion = await requireGestionarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   const anio = Math.trunc(Number(formData.get("anio")));
@@ -249,7 +272,7 @@ export async function agregarCuotaPrestamoAction(formData: FormData): Promise<vo
 }
 
 export async function actualizarCuotaPrestamoAction(formData: FormData): Promise<void> {
-  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+  await requireGestionarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   const idCuota = Number(formData.get("idCuota"));
@@ -263,7 +286,7 @@ export async function actualizarCuotaPrestamoAction(formData: FormData): Promise
 }
 
 export async function eliminarCuotaPrestamoAction(formData: FormData): Promise<void> {
-  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+  await requireGestionarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   const idCuota = Number(formData.get("idCuota"));
@@ -274,7 +297,7 @@ export async function eliminarCuotaPrestamoAction(formData: FormData): Promise<v
 }
 
 export async function anularPrestamoAction(formData: FormData): Promise<void> {
-  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ADMIN");
+  const sesion = await requireGestionarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   const motivo = String(formData.get("motivo") ?? "").trim();
@@ -288,7 +311,7 @@ export async function anularPrestamoAction(formData: FormData): Promise<void> {
 // prestamo pasa a ACTIVO y sus cuotas empiezan a descontarse en planilla;
 // volver a subir reemplaza el archivo.
 export async function subirCompromisoFirmadoAction(formData: FormData): Promise<void> {
-  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+  const sesion = await requireGestionarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   const archivo = formData.get("archivo");
@@ -305,5 +328,20 @@ export async function subirCompromisoFirmadoAction(formData: FormData): Promise<
   await guardarArchivo(rutaRelativa, new Uint8Array(await archivo.arrayBuffer()));
   await registrarFirmaPrestamo(idPrestamo, rutaRelativa, sesion.idUsuario);
 
+  revalidarPrestamo(idPrestamo);
+}
+
+// Para un prestamo con beneficiario CONTACTO (sin planilla de donde
+// descontar): marca a mano una cuota pendiente como pagada -- el SP
+// mismo restringe esto a prestamos de contacto, ver
+// SP_RRHH_PRESTAMO_CUOTA_MARCAR_PAGADA_MANUAL.
+export async function marcarCuotaPagadaManualAction(formData: FormData): Promise<void> {
+  await requireGestionarPrestamos();
+
+  const idPrestamo = Number(formData.get("idPrestamo"));
+  const idCuota = Number(formData.get("idCuota"));
+  if (!idPrestamo || !idCuota) return;
+
+  await marcarCuotaPagadaManual(idCuota);
   revalidarPrestamo(idPrestamo);
 }

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requirePermiso } from "@/lib/auth/require-permiso";
+import { requirePermiso, puedeGestionarPrestamos } from "@/lib/auth/require-permiso";
 import { obtenerPrestamo, listarCuotasPrestamo } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { listarCuentas } from "@/lib/db/repositories/cuenta.repository";
 import { obtenerTipoCambioVigente } from "@/lib/db/repositories/tipo-cambio.repository";
-import { agregarCuotaPrestamoAction, subirCompromisoFirmadoAction } from "@/lib/actions/rrhh-prestamos";
+import { agregarCuotaPrestamoAction, subirCompromisoFirmadoAction, marcarCuotaPagadaManualAction } from "@/lib/actions/rrhh-prestamos";
 import { etiquetaPeriodoMensual } from "@/lib/rrhh/periodos-pago";
 import { formatearNroPrestamo } from "@/lib/rrhh/planilla/generar-compromiso-prestamo-pdf";
 import AnularPrestamoBoton from "@/components/rrhh/AnularPrestamoBoton";
@@ -12,6 +12,7 @@ import PrestamoCuotaAcciones from "@/components/rrhh/PrestamoCuotaAcciones";
 import OtorgarPrestamoForm from "@/components/rrhh/OtorgarPrestamoForm";
 import NotaAyuda from "@/components/ui/NotaAyuda";
 import SubmitButton from "@/components/ui/SubmitButton";
+import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"];
 
@@ -25,7 +26,8 @@ function formatearFecha(fecha: string | null): string {
 }
 
 export default async function DetallePrestamoPage({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermiso("RRHH_PLANILLA", "LECTURA");
+  const sesion = await requirePermiso("RRHH_PLANILLA", "LECTURA");
+  const puedeGestionar = await puedeGestionarPrestamos(sesion.idUsuario);
   const { id } = await params;
   const idPrestamo = Number(id);
 
@@ -43,7 +45,8 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
   const tc = prestamo.TIPO_CAMBIO ? Number(prestamo.TIPO_CAMBIO) : null;
   const anulado = prestamo.ESTADO_PRESTAMO_CODIGO === "ANULADO";
   const firmado = prestamo.ESTADO_PRESTAMO_CODIGO === "ACTIVO";
-  const puedeEscribir = !anulado && !solicitado;
+  const puedeEscribir = !anulado && !solicitado && puedeGestionar;
+  const esContacto = prestamo.ID_CONTACTO !== null;
 
   const vigentes = cuotas.filter((c) => c.ESTADO_CUOTA_CODIGO !== "ANULADA");
   const totalCuotas = vigentes.reduce((suma, c) => suma + Number(c.MONTO), 0);
@@ -81,7 +84,7 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
             {nroPrestamo} -- {prestamo.ESTADO_PRESTAMO_DESCRIPCION}
           </p>
         </div>
-        {!anulado ? <AnularPrestamoBoton idPrestamo={prestamo.ID_PRESTAMO} /> : null}
+        {!anulado && puedeGestionar ? <AnularPrestamoBoton idPrestamo={prestamo.ID_PRESTAMO} /> : null}
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
@@ -96,7 +99,8 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
           )}
           {prestamo.DESCRIPCION ? <Dato etiqueta="Motivo" valor={prestamo.DESCRIPCION} /> : null}
           {!solicitado ? <Dato etiqueta="Ya descontado" valor={formatearMonto(descontado, cod)} /> : null}
-          <Dato etiqueta="Documento" valor={`${prestamo.TIPO_DOCUMENTO_DESCRIPCION ?? "Documento"} ${prestamo.NRO_DOCUMENTO ?? "-"}`} />
+          <Dato etiqueta="Beneficiario" valor={esContacto ? "Contacto del directorio (sin planilla)" : "Trabajador"} />
+          {!esContacto ? <Dato etiqueta="Documento" valor={`${prestamo.TIPO_DOCUMENTO_DESCRIPCION ?? "Documento"} ${prestamo.NRO_DOCUMENTO ?? "-"}`} /> : null}
           {!solicitado ? (
             <Dato
               etiqueta="Cuenta de desembolso"
@@ -112,7 +116,7 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
         </dl>
       </section>
 
-      {solicitado ? (
+      {solicitado && puedeGestionar ? (
         <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Otorgar solicitud</h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -120,6 +124,12 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
             {formatearFecha(prestamo.FECHA_ORIGEN)}. Define la fecha real de desembolso y el cronograma de descuentos para activarlo.
           </p>
           <OtorgarPrestamoForm prestamo={prestamo} cuentas={cuentas} tcSugerido={tcPrestamo} hoy={hoy.toISOString().slice(0, 10)} />
+        </section>
+      ) : solicitado ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Solicitud pendiente de que RRHH, Administración o Gerencia la revise y la otorgue.
+          </p>
         </section>
       ) : null}
 
@@ -171,26 +181,30 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
             ) : null}
           </div>
 
-          <form action={subirCompromisoFirmadoAction} className="mt-4 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-            <input type="hidden" name="idPrestamo" value={prestamo.ID_PRESTAMO} />
-            <div>
-              <label htmlFor="archivo" className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
-                {firmado ? "Reemplazar compromiso firmado" : "Compromiso firmado"}
-              </label>
-              <input
-                id="archivo"
-                name="archivo"
-                type="file"
-                required
-                accept="application/pdf,image/png,image/jpeg"
-                className="block text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-300 dark:file:bg-slate-800 dark:file:text-slate-200"
-              />
-            </div>
-            <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Subiendo...">
-              Subir compromiso firmado
-            </SubmitButton>
-          </form>
-          <NotaAyuda>PDF, PNG o JPG de hasta 15 MB.</NotaAyuda>
+          {puedeGestionar ? (
+            <>
+              <form action={subirCompromisoFirmadoAction} className="mt-4 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+                <input type="hidden" name="idPrestamo" value={prestamo.ID_PRESTAMO} />
+                <div>
+                  <label htmlFor="archivo" className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
+                    {firmado ? "Reemplazar compromiso firmado" : "Compromiso firmado"}
+                  </label>
+                  <input
+                    id="archivo"
+                    name="archivo"
+                    type="file"
+                    required
+                    accept="application/pdf,image/png,image/jpeg"
+                    className="block text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-300 dark:file:bg-slate-800 dark:file:text-slate-200"
+                  />
+                </div>
+                <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Subiendo...">
+                  Subir compromiso firmado
+                </SubmitButton>
+              </form>
+              <NotaAyuda>PDF, PNG o JPG de hasta 15 MB.</NotaAyuda>
+            </>
+          ) : null}
         </section>
       ) : null}
 
@@ -248,7 +262,24 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
                         {c.ESTADO_CUOTA_CODIGO === "PENDIENTE" && c.ID_PLANILLA_DETALLE !== null ? "En planilla (sin emitir)" : c.ESTADO_CUOTA_DESCRIPCION}
                       </span>
                     </td>
-                    <td className="px-2 py-2">{editable ? <PrestamoCuotaAcciones cuota={c} idPrestamo={prestamo.ID_PRESTAMO} /> : null}</td>
+                    <td className="px-2 py-2">
+                      <div className="flex items-center justify-end gap-1">
+                        {esContacto && puedeGestionar && firmado && c.ESTADO_CUOTA_CODIGO === "PENDIENTE" && c.ID_PLANILLA_DETALLE === null ? (
+                          <form action={marcarCuotaPagadaManualAction}>
+                            <input type="hidden" name="idPrestamo" value={prestamo.ID_PRESTAMO} />
+                            <input type="hidden" name="idCuota" value={c.ID_CUOTA} />
+                            <ConfirmSubmitButton
+                              mensaje="¿Marcar esta cuota como pagada? El contacto no tiene planilla, así que esto se registra a mano."
+                              pendingText="Marcando..."
+                              className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-950/70"
+                            >
+                              Marcar pagada
+                            </ConfirmSubmitButton>
+                          </form>
+                        ) : null}
+                        {editable ? <PrestamoCuotaAcciones cuota={c} idPrestamo={prestamo.ID_PRESTAMO} /> : null}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}

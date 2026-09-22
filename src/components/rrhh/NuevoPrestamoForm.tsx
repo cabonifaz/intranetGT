@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { crearPrestamoAction } from "@/lib/actions/rrhh-prestamos";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
-import type { CuentaListadoRow, EmpleadoDirectorioRow } from "@/types/db";
+import type { CuentaListadoRow, EmpleadoDirectorioRow, DirectorioContactoConTipoRow } from "@/types/db";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
 import NotaAyuda from "@/components/ui/NotaAyuda";
 import SubmitButton from "@/components/ui/SubmitButton";
+import SelectorBeneficiarioPrestamo from "@/components/rrhh/SelectorBeneficiarioPrestamo";
 import { avanzarMes, generarCuotasIguales } from "@/lib/rrhh/planilla/cronograma-prestamo";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -14,6 +15,7 @@ const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "
 interface NuevoPrestamoFormProps {
   tipos: MaestroRow[];
   colaboradores: EmpleadoDirectorioRow[];
+  contactos: DirectorioContactoConTipoRow[];
   monedas: MaestroRow[];
   cuentas: CuentaListadoRow[];
   tcSugerido: string | null;
@@ -26,7 +28,7 @@ function formatear(monto: number, codigo: string): string {
   return `${codigo === "USD" ? "US$" : "S/"} ${monto.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export default function NuevoPrestamoForm({ tipos, colaboradores, monedas, cuentas, tcSugerido, anioActual, mesActual, hoy }: NuevoPrestamoFormProps) {
+export default function NuevoPrestamoForm({ tipos, colaboradores, contactos, monedas, cuentas, tcSugerido, anioActual, mesActual, hoy }: NuevoPrestamoFormProps) {
   const [idMoneda, setIdMoneda] = useState<string>(monedas.find((m) => m.CODIGO === "PEN") ? String(monedas.find((m) => m.CODIGO === "PEN")!.ID_MAESTRO) : "");
   const [idTipo, setIdTipo] = useState<string>(tipos.find((t) => t.CODIGO === "PRESTAMO") ? String(tipos.find((t) => t.CODIGO === "PRESTAMO")!.ID_MAESTRO) : "");
   const [monto, setMonto] = useState("");
@@ -72,13 +74,12 @@ export default function NuevoPrestamoForm({ tipos, colaboradores, monedas, cuent
       </div>
 
       <div>
-        <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Colaborador</label>
-        <ComboBusqueda
-          name="idUsuario"
-          placeholder="-- selecciona --"
-          opciones={colaboradores.map((u) => ({ value: String(u.ID_USUARIO), label: `${u.NOMBRES} ${u.APELLIDOS} (${u.CORREO})` }))}
-        />
-        <NotaAyuda>Quien recibe el dinero y a quien se le descontarán las cuotas en su planilla.</NotaAyuda>
+        <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Beneficiario</label>
+        <SelectorBeneficiarioPrestamo colaboradores={colaboradores} contactos={contactos} />
+        <NotaAyuda>
+          Un trabajador recibe el dinero y se le descuentan las cuotas en su planilla; un contacto del directorio no tiene planilla,
+          su repago se marca a mano desde el detalle del préstamo.
+        </NotaAyuda>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -226,7 +227,7 @@ export default function NuevoPrestamoForm({ tipos, colaboradores, monedas, cuent
       </div>
 
       <SubmitButton
-        disabled={colaboradores.length === 0}
+        disabled={colaboradores.length === 0 && contactos.length === 0}
         className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
         pendingText="Creando..."
       >

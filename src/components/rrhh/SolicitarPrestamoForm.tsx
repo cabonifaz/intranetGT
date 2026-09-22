@@ -3,20 +3,42 @@
 import { useState } from "react";
 import { solicitarPrestamoAction } from "@/lib/actions/rrhh-prestamos";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
+import type { EmpleadoDirectorioRow, DirectorioContactoConTipoRow } from "@/types/db";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
 import NotaAyuda from "@/components/ui/NotaAyuda";
 import SubmitButton from "@/components/ui/SubmitButton";
+import SelectorBeneficiarioPrestamo from "@/components/rrhh/SelectorBeneficiarioPrestamo";
+
+interface SolicitarPrestamoFormProps {
+  tipos: MaestroRow[];
+  monedas: MaestroRow[];
+  colaboradores: EmpleadoDirectorioRow[];
+  contactos: DirectorioContactoConTipoRow[];
+  puedeGestionar: boolean;
+  idUsuarioSesion: number;
+}
 
 // Autoservicio -- lo llena el propio colaborador para si mismo (no elige
 // a quien, eso lo fija la sesion en el server action). Sin cronograma ni
 // cuenta de desembolso: eso lo define RRHH al otorgar la solicitud.
-export default function SolicitarPrestamoForm({ tipos, monedas }: { tipos: MaestroRow[]; monedas: MaestroRow[] }) {
+// Quien puede gestionar prestamos ve ademas el selector de beneficiario
+// (preseleccionado en si mismo), para solicitar en nombre de un
+// trabajador o un contacto.
+export default function SolicitarPrestamoForm({ tipos, monedas, colaboradores, contactos, puedeGestionar, idUsuarioSesion }: SolicitarPrestamoFormProps) {
   const [idTipo, setIdTipo] = useState<string>(tipos.find((t) => t.CODIGO === "PRESTAMO") ? String(tipos.find((t) => t.CODIGO === "PRESTAMO")!.ID_MAESTRO) : "");
   const esAdelanto = tipos.find((t) => String(t.ID_MAESTRO) === idTipo)?.CODIGO === "ADELANTO_SUELDO";
   const nombreTipo = esAdelanto ? "adelanto" : "préstamo";
 
   return (
     <form action={solicitarPrestamoAction} className="mt-4 space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      {puedeGestionar ? (
+        <div>
+          <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Beneficiario</label>
+          <SelectorBeneficiarioPrestamo colaboradores={colaboradores} contactos={contactos} defaultIdUsuario={idUsuarioSesion} />
+          <NotaAyuda>Viene preseleccionado en ti mismo -- cámbialo si la solicitud es para un trabajador o un contacto del directorio.</NotaAyuda>
+        </div>
+      ) : null}
+
       <div>
         <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Tipo</label>
         <ComboBusqueda

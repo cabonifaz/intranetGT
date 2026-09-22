@@ -1166,9 +1166,11 @@ export type EstadoCuotaPrestamoCodigo = "PENDIENTE" | "DESCONTADA" | "ANULADA";
 
 export interface PrestamoListadoRow extends RowDataPacket {
   ID_PRESTAMO: number;
-  ID_USUARIO: number;
+  ID_USUARIO: number | null;
+  ID_CONTACTO: number | null;
   NOMBRES: string;
   APELLIDOS: string;
+  ES_CONTACTO: number;
   MONTO_TOTAL: string;
   ID_MONEDA: number;
   MONEDA_CODIGO: MonedaCodigo;
@@ -1189,10 +1191,12 @@ export interface PrestamoListadoRow extends RowDataPacket {
 
 export interface PrestamoRow extends RowDataPacket {
   ID_PRESTAMO: number;
-  ID_USUARIO: number;
+  ID_USUARIO: number | null;
+  ID_CONTACTO: number | null;
   NOMBRES: string;
   APELLIDOS: string;
-  CORREO: string;
+  ES_CONTACTO: number;
+  CORREO: string | null;
   PUESTO: string | null;
   TIPO_DOCUMENTO_DESCRIPCION: string | null;
   NRO_DOCUMENTO: string | null;

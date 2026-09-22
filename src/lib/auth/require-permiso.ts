@@ -66,6 +66,29 @@ export async function requireImportarContrato(): Promise<SesionUsuario> {
   return sesion;
 }
 
+// Gestionar prestamos/adelantos (crear directo, otorgar una solicitud,
+// solicitar en nombre de un trabajador o contacto, editar/anular) -- no
+// es el permiso generico ESCRITURA sobre RRHH_PLANILLA (eso tambien
+// cubriria generar la planilla mensual y sus parametros, que es otro
+// alcance), sino estos 4 roles puntuales. SUPER_ADMIN ya puede todo;
+// GERENCIA_GENERAL, RRHH_JEFATURA y ADMINISTRACION_JEFATURA pueden
+// gestionar prestamos aunque no tengan ESCRITURA sobre el resto de
+// Planilla.
+export async function puedeGestionarPrestamos(idUsuario: number): Promise<boolean> {
+  const roles = await listarRolesActivosDeUsuario(idUsuario);
+  return roles.some((r) =>
+    ["SUPER_ADMIN", "GERENCIA_GENERAL", "RRHH_JEFATURA", "ADMINISTRACION_JEFATURA"].includes(r.ROL_CODIGO),
+  );
+}
+
+export async function requireGestionarPrestamos(): Promise<SesionUsuario> {
+  const sesion = await requireSession();
+  if (!(await puedeGestionarPrestamos(sesion.idUsuario))) {
+    redirect("/");
+  }
+  return sesion;
+}
+
 // Resumen gerencial en la ficha del directorio (prestamos/adelantos
 // activos, contratos, alerta de vencimiento) -- informacion sensible que
 // no todo el que tenga acceso al Directorio deberia ver, solo Gerencia
