@@ -59,6 +59,27 @@ async function excedeTopeAdelanto(idUsuario: number | null, idMoneda: number, mo
   return montoTotal > montoMaximoAdelanto(Number(sueldo.SUELDO_FIJO), porcentajeMaximo);
 }
 
+// Number(algo) puede dar NaN (campo ausente, valor no numerico) -- las
+// comparaciones directas con NaN son siempre false, asi que un chequeo
+// como "anioInicio < 2000" NO detecta un NaN (deja pasar el valor
+// invalido en vez de rechazarlo). Number.isInteger(NaN) es false, asi que
+// este chequeo si lo atrapa -- evita que un NaN llegue como parametro a
+// un SP (mysql2 lo manda como el token sin comillas "NaN", que MySQL
+// interpreta como columna inexistente y tira un error de SQL sin
+// capturar, no un no-op silencioso).
+function cronogramaValido(nroCuotas: number, anioInicio: number, mesInicio: number): boolean {
+  return (
+    Number.isInteger(nroCuotas) &&
+    nroCuotas >= 1 &&
+    nroCuotas <= 120 &&
+    Number.isInteger(mesInicio) &&
+    mesInicio >= 1 &&
+    mesInicio <= 12 &&
+    Number.isInteger(anioInicio) &&
+    anioInicio >= 2000
+  );
+}
+
 // Crea el prestamo o adelanto de sueldo (nace PENDIENTE_FIRMA) con su cronograma de N cuotas
 // iguales, una por mes desde el periodo inicial -- despues se pueden
 // editar, agregar o quitar cuotas desde el detalle. Si se elige una
@@ -85,8 +106,7 @@ export async function crearPrestamoAction(formData: FormData): Promise<void> {
 
   if ((idUsuario === null) === (idContacto === null)) return;
   if (!idTipoPrestamo || !(montoTotal > 0) || !idMoneda) return;
-  if (!(nroCuotas >= 1 && nroCuotas <= 120)) return;
-  if (!(mesInicio >= 1 && mesInicio <= 12) || anioInicio < 2000) return;
+  if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) return;
 
   if (idContacto && !(await obtenerContactoExterno(idContacto))) return;
 
@@ -116,18 +136,28 @@ export async function crearPrestamoAction(formData: FormData): Promise<void> {
     if (!cuenta || cuenta.ID_MONEDA !== idMoneda) return;
   }
 
-  const { id_prestamo: idPrestamo } = await crearPrestamo({
-    idUsuario,
-    idContacto,
-    idTipoPrestamo,
-    montoTotal,
-    idMoneda,
-    tipoCambio,
-    descripcion,
-    fechaOrigen,
-    idCuentaDesembolso,
-    idUsuarioCreacion: sesion.idUsuario,
-  });
+  // Un no-op silencioso del guard en SQL (SP_RRHH_PRESTAMO_CREAR) hace que
+  // crearPrestamo() lance -- por ejemplo, si algun chequeo de la app y el
+  // del SP quedaran desalineados. No debe tumbar la pagina con un error
+  // generico: se trata igual que cualquier otra validacion fallida de
+  // este formulario.
+  let idPrestamo: number;
+  try {
+    ({ id_prestamo: idPrestamo } = await crearPrestamo({
+      idUsuario,
+      idContacto,
+      idTipoPrestamo,
+      montoTotal,
+      idMoneda,
+      tipoCambio,
+      descripcion,
+      fechaOrigen,
+      idCuentaDesembolso,
+      idUsuarioCreacion: sesion.idUsuario,
+    }));
+  } catch {
+    return;
+  }
 
   for (const cuota of generarCuotasIguales(montoTotal, nroCuotas, anioInicio, mesInicio)) {
     await agregarCuotaPrestamo({
@@ -210,22 +240,29 @@ export async function solicitarPrestamoAction(formData: FormData): Promise<void>
     nroCuotas = Math.trunc(Number(formData.get("nroCuotas")));
     anioInicio = Math.trunc(Number(formData.get("anioInicio")));
     mesInicio = Math.trunc(Number(formData.get("mesInicio")));
-    if (!(nroCuotas >= 1 && nroCuotas <= 120)) return;
-    if (!(mesInicio >= 1 && mesInicio <= 12) || anioInicio < 2000) return;
+    if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) return;
   }
 
-  await solicitarPrestamo({
-    idUsuario,
-    idContacto,
-    idTipoPrestamo,
-    montoTotal,
-    idMoneda,
-    descripcion,
-    nroCuotas,
-    anioInicio,
-    mesInicio,
-    idUsuarioCreacion: sesion.idUsuario,
-  });
+  // Mismo criterio que crearPrestamoAction: si el guard en SQL rechaza en
+  // silencio (SP_RRHH_PRESTAMO_SOLICITAR) y solicitarPrestamo() lanza, no
+  // debe tumbar la pagina -- se trata como cualquier otra validacion
+  // fallida de este formulario.
+  try {
+    await solicitarPrestamo({
+      idUsuario,
+      idContacto,
+      idTipoPrestamo,
+      montoTotal,
+      idMoneda,
+      descripcion,
+      nroCuotas,
+      anioInicio,
+      mesInicio,
+      idUsuarioCreacion: sesion.idUsuario,
+    });
+  } catch {
+    return;
+  }
 
   const destino = idContacto ? "/rrhh/planilla/prestamos" : `/rrhh/directorio/${idUsuario}`;
   revalidatePath(destino);
@@ -248,8 +285,7 @@ export async function otorgarPrestamoAction(formData: FormData): Promise<void> {
   const idCuentaDesembolso = idCuentaRaw || null;
 
   if (!idPrestamo) return;
-  if (!(nroCuotas >= 1 && nroCuotas <= 120)) return;
-  if (!(mesInicio >= 1 && mesInicio <= 12) || anioInicio < 2000) return;
+  if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) return;
 
   const prestamo = await obtenerPrestamo(idPrestamo);
   if (!prestamo || prestamo.ESTADO_PRESTAMO_CODIGO !== "SOLICITADO") return;
@@ -334,6 +370,11 @@ function revalidarPrestamo(idPrestamo: number): void {
   refresh();
 }
 
+// Mismo motivo que cronogramaValido: "anio < 2000" no atrapa un NaN.
+function anioMesValidos(anio: number, mes: number): boolean {
+  return Number.isInteger(anio) && anio >= 2000 && Number.isInteger(mes) && mes >= 1 && mes <= 12;
+}
+
 // Cuota extra a mano en cualquier periodo -- el caso tipico es descontar
 // una cuota mayor con la gratificacion de julio o diciembre. No renumera
 // las demas: toma el siguiente correlativo.
@@ -344,7 +385,7 @@ export async function agregarCuotaPrestamoAction(formData: FormData): Promise<vo
   const anio = Math.trunc(Number(formData.get("anio")));
   const mes = Math.trunc(Number(formData.get("mes")));
   const monto = Number(formData.get("monto"));
-  if (!idPrestamo || !(monto > 0) || !(mes >= 1 && mes <= 12) || anio < 2000) return;
+  if (!idPrestamo || !(monto > 0) || !anioMesValidos(anio, mes)) return;
 
   const cuotas = await listarCuotasPrestamo(idPrestamo);
   const siguiente = cuotas.length > 0 ? Math.max(...cuotas.map((c) => c.NRO_CUOTA)) + 1 : 1;
@@ -370,7 +411,7 @@ export async function actualizarCuotaPrestamoAction(formData: FormData): Promise
   const anio = Math.trunc(Number(formData.get("anio")));
   const mes = Math.trunc(Number(formData.get("mes")));
   const monto = Number(formData.get("monto"));
-  if (!idPrestamo || !idCuota || !(monto > 0) || !(mes >= 1 && mes <= 12) || anio < 2000) return;
+  if (!idPrestamo || !idCuota || !(monto > 0) || !anioMesValidos(anio, mes)) return;
 
   await actualizarCuotaPrestamo(idCuota, anio, mes, monto);
   revalidarPrestamo(idPrestamo);
