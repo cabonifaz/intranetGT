@@ -57,6 +57,12 @@ export function ComboBusqueda({ name, opciones, defaultValue, placeholder, disab
         value={texto}
         disabled={disabled}
         placeholder={placeholder}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        data-gramm="false"
+        data-gramm_editor="false"
+        data-enable-grammarly="false"
         onFocus={() => setAbierto(true)}
         onChange={(e) => {
           setTexto(e.target.value);

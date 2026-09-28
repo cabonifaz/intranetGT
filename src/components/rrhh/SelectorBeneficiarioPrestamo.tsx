@@ -59,6 +59,7 @@ export default function SelectorBeneficiarioPrestamo({
 
       {fuente === "trabajador" ? (
         <ComboBusqueda
+          key="trabajador"
           name="idUsuario"
           placeholder="-- selecciona un colaborador --"
           defaultValue={defaultIdUsuario ? String(defaultIdUsuario) : ""}
@@ -66,6 +67,7 @@ export default function SelectorBeneficiarioPrestamo({
         />
       ) : (
         <ComboBusqueda
+          key="contacto"
           name="idContacto"
           placeholder="-- selecciona un contacto --"
           defaultValue={defaultIdContacto ? String(defaultIdContacto) : ""}
