@@ -49,10 +49,14 @@ function hoyIso(): string {
 // concreto en vez de que el intento simplemente no haga nada -- silencioso
 // para la base de datos (no-op), pero nunca silencioso para quien lo
 // esta llenando: necesita saber que fallo y que corregir, o poder
-// reportarlo si el mensaje no le alcanza.
+// reportarlo si el mensaje no le alcanza. `codigo` identifica el punto
+// exacto del codigo que devolvio el error (PRES-<ACCION>-NN) -- con solo
+// un pantallazo del mensaje se ubica la causa exacta sin tener que pedir
+// que describan el problema con mas detalle.
 export interface GuardarPrestamoState {
   ok: boolean;
   error?: string;
+  codigo?: string;
 }
 
 // Un adelanto es a cuenta de un sueldo -- nunca para un contacto, siempre
@@ -119,30 +123,33 @@ export async function crearPrestamoAction(_prevState: GuardarPrestamoState, form
   const idCuentaDesembolso = idCuentaRaw || null;
 
   if ((idUsuario === null) === (idContacto === null)) {
-    return { ok: false, error: "Elige exactamente un beneficiario: un trabajador o un contacto del directorio." };
+    return { ok: false, codigo: "PRES-CREAR-01", error: "Elige exactamente un beneficiario: un trabajador o un contacto del directorio." };
   }
   if (!idTipoPrestamo || !(montoTotal > 0) || !idMoneda) {
-    return { ok: false, error: "Completa el tipo, el monto y la moneda." };
+    return { ok: false, codigo: "PRES-CREAR-02", error: "Completa el tipo, el monto y la moneda." };
   }
   if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) {
-    return { ok: false, error: "El cronograma no es válido: revisa el número de cuotas, el mes y el año de inicio." };
+    return { ok: false, codigo: "PRES-CREAR-03", error: "El cronograma no es válido: revisa el número de cuotas, el mes y el año de inicio." };
   }
 
   if (idContacto && !(await obtenerContactoExterno(idContacto))) {
-    return { ok: false, error: "El contacto seleccionado ya no existe. Vuelve a elegirlo." };
+    return { ok: false, codigo: "PRES-CREAR-04", error: "El contacto seleccionado ya no existe. Vuelve a elegirlo." };
   }
 
   const tipos = await listarMaestros("TIPO_PRESTAMO");
   const tipoSel = tipos.find((t) => t.ID_MAESTRO === idTipoPrestamo);
-  if (!tipoSel) return { ok: false, error: "El tipo de préstamo elegido no es válido." };
+  if (!tipoSel) return { ok: false, codigo: "PRES-CREAR-05", error: "El tipo de préstamo elegido no es válido." };
 
   // Un adelanto es a cuenta de un sueldo: nunca para un contacto, y nunca
   // por mas del tope de su sueldo fijo vigente.
   if (tipoSel.CODIGO === "ADELANTO_SUELDO") {
-    if (idContacto) return { ok: false, error: "Un adelanto de sueldo no puede ser para un contacto del directorio." };
+    if (idContacto) {
+      return { ok: false, codigo: "PRES-CREAR-06", error: "Un adelanto de sueldo no puede ser para un contacto del directorio." };
+    }
     if (await excedeTopeAdelanto(idUsuario, idMoneda, montoTotal)) {
       return {
         ok: false,
+        codigo: "PRES-CREAR-07",
         error: "El monto supera el tope de adelanto permitido, la moneda no coincide con el sueldo del beneficiario, o no tiene un sueldo fijo vigente.",
       };
     }
@@ -150,20 +157,20 @@ export async function crearPrestamoAction(_prevState: GuardarPrestamoState, form
 
   const monedas = await listarMaestros("MONEDA");
   const monedaSel = monedas.find((m) => m.ID_MAESTRO === idMoneda);
-  if (!monedaSel) return { ok: false, error: "La moneda elegida no es válida." };
+  if (!monedaSel) return { ok: false, codigo: "PRES-CREAR-08", error: "La moneda elegida no es válida." };
 
   // Si no es soles, el TC pactado es obligatorio: la planilla descuenta en
   // soles y ese TC queda escrito en el compromiso firmado.
   const tipoCambio = monedaSel.CODIGO === "PEN" ? null : Number(tipoCambioRaw);
   if (monedaSel.CODIGO !== "PEN" && !(tipoCambio && tipoCambio > 0)) {
-    return { ok: false, error: "Falta el tipo de cambio pactado (obligatorio si el préstamo no es en soles)." };
+    return { ok: false, codigo: "PRES-CREAR-09", error: "Falta el tipo de cambio pactado (obligatorio si el préstamo no es en soles)." };
   }
 
   if (idCuentaDesembolso) {
     const cuentas = await listarCuentas();
     const cuenta = cuentas.find((c) => c.ID_CUENTA === idCuentaDesembolso);
     if (!cuenta || cuenta.ID_MONEDA !== idMoneda) {
-      return { ok: false, error: "La cuenta de desembolso elegida no existe o no coincide con la moneda del préstamo." };
+      return { ok: false, codigo: "PRES-CREAR-10", error: "La cuenta de desembolso elegida no existe o no coincide con la moneda del préstamo." };
     }
   }
 
@@ -187,7 +194,7 @@ export async function crearPrestamoAction(_prevState: GuardarPrestamoState, form
       idUsuarioCreacion: sesion.idUsuario,
     }));
   } catch {
-    return { ok: false, error: "No se pudo crear el préstamo. Vuelve a intentar; si persiste, repórtalo." };
+    return { ok: false, codigo: "PRES-CREAR-99", error: "No se pudo crear el préstamo. Vuelve a intentar; si persiste, repórtalo." };
   }
 
   for (const cuota of generarCuotasIguales(montoTotal, nroCuotas, anioInicio, mesInicio)) {
@@ -249,22 +256,24 @@ export async function solicitarPrestamoAction(_prevState: GuardarPrestamoState, 
     idUsuario = Number(formData.get("idUsuario") || 0) || null;
     idContacto = Number(formData.get("idContacto") || 0) || null;
     if ((idUsuario === null) === (idContacto === null)) {
-      return { ok: false, error: "Elige exactamente un beneficiario: un trabajador o un contacto del directorio." };
+      return { ok: false, codigo: "PRES-SOL-01", error: "Elige exactamente un beneficiario: un trabajador o un contacto del directorio." };
     }
     if (idContacto && !(await obtenerContactoExterno(idContacto))) {
-      return { ok: false, error: "El contacto seleccionado ya no existe. Vuelve a elegirlo." };
+      return { ok: false, codigo: "PRES-SOL-02", error: "El contacto seleccionado ya no existe. Vuelve a elegirlo." };
     }
   }
 
   if (!idTipoPrestamo || !(montoTotal > 0) || !idMoneda) {
-    return { ok: false, error: "Completa el tipo, el monto y la moneda." };
+    return { ok: false, codigo: "PRES-SOL-03", error: "Completa el tipo, el monto y la moneda." };
   }
 
   const tipos = await listarMaestros("TIPO_PRESTAMO");
   const tipoSel = tipos.find((t) => t.ID_MAESTRO === idTipoPrestamo);
-  if (!tipoSel) return { ok: false, error: "El tipo de préstamo elegido no es válido." };
+  if (!tipoSel) return { ok: false, codigo: "PRES-SOL-04", error: "El tipo de préstamo elegido no es válido." };
   const monedas = await listarMaestros("MONEDA");
-  if (!monedas.some((m) => m.ID_MAESTRO === idMoneda)) return { ok: false, error: "La moneda elegida no es válida." };
+  if (!monedas.some((m) => m.ID_MAESTRO === idMoneda)) {
+    return { ok: false, codigo: "PRES-SOL-05", error: "La moneda elegida no es válida." };
+  }
 
   const esAdelanto = tipoSel.CODIGO === "ADELANTO_SUELDO";
 
@@ -272,10 +281,13 @@ export async function solicitarPrestamoAction(_prevState: GuardarPrestamoState, 
   let anioInicio: number | null = null;
   let mesInicio: number | null = null;
   if (esAdelanto) {
-    if (idContacto) return { ok: false, error: "Un adelanto de sueldo no puede ser para un contacto del directorio." };
+    if (idContacto) {
+      return { ok: false, codigo: "PRES-SOL-06", error: "Un adelanto de sueldo no puede ser para un contacto del directorio." };
+    }
     if (await excedeTopeAdelanto(idUsuario, idMoneda, montoTotal)) {
       return {
         ok: false,
+        codigo: "PRES-SOL-07",
         error: "El monto supera el tope de adelanto permitido, la moneda no coincide con tu sueldo, o no tienes un sueldo fijo vigente.",
       };
     }
@@ -284,7 +296,7 @@ export async function solicitarPrestamoAction(_prevState: GuardarPrestamoState, 
     anioInicio = Math.trunc(Number(formData.get("anioInicio")));
     mesInicio = Math.trunc(Number(formData.get("mesInicio")));
     if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) {
-      return { ok: false, error: "El cronograma no es válido: revisa el número de cuotas, el mes y el año de inicio." };
+      return { ok: false, codigo: "PRES-SOL-08", error: "El cronograma no es válido: revisa el número de cuotas, el mes y el año de inicio." };
     }
   }
 
@@ -305,7 +317,7 @@ export async function solicitarPrestamoAction(_prevState: GuardarPrestamoState, 
       idUsuarioCreacion: sesion.idUsuario,
     });
   } catch {
-    return { ok: false, error: "No se pudo registrar la solicitud. Vuelve a intentar; si persiste, repórtalo." };
+    return { ok: false, codigo: "PRES-SOL-99", error: "No se pudo registrar la solicitud. Vuelve a intentar; si persiste, repórtalo." };
   }
 
   const destino = idContacto ? "/rrhh/planilla/prestamos" : `/rrhh/directorio/${idUsuario}`;
@@ -329,34 +341,34 @@ export async function otorgarPrestamoAction(_prevState: GuardarPrestamoState, fo
   const idCuentaRaw = Number(formData.get("idCuentaDesembolso") || 0);
   const idCuentaDesembolso = idCuentaRaw || null;
 
-  if (!idPrestamo) return { ok: false, error: "No se encontró la solicitud." };
+  if (!idPrestamo) return { ok: false, codigo: "PRES-OTOR-01", error: "No se encontró la solicitud." };
   if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) {
-    return { ok: false, error: "El cronograma no es válido: revisa el número de cuotas, el mes y el año de inicio." };
+    return { ok: false, codigo: "PRES-OTOR-02", error: "El cronograma no es válido: revisa el número de cuotas, el mes y el año de inicio." };
   }
 
   const prestamo = await obtenerPrestamo(idPrestamo);
   if (!prestamo || prestamo.ESTADO_PRESTAMO_CODIGO !== "SOLICITADO") {
-    return { ok: false, error: "Esta solicitud ya no está pendiente de otorgar (puede que alguien ya la haya procesado)." };
+    return { ok: false, codigo: "PRES-OTOR-03", error: "Esta solicitud ya no está pendiente de otorgar (puede que alguien ya la haya procesado)." };
   }
 
   const tipoCambioRaw = String(formData.get("tipoCambio") ?? "").trim();
   const tipoCambio = prestamo.MONEDA_CODIGO === "PEN" ? null : Number(tipoCambioRaw);
   if (prestamo.MONEDA_CODIGO !== "PEN" && !(tipoCambio && tipoCambio > 0)) {
-    return { ok: false, error: "Falta el tipo de cambio pactado (obligatorio si el préstamo no es en soles)." };
+    return { ok: false, codigo: "PRES-OTOR-04", error: "Falta el tipo de cambio pactado (obligatorio si el préstamo no es en soles)." };
   }
 
   if (idCuentaDesembolso) {
     const cuentas = await listarCuentas();
     const cuenta = cuentas.find((c) => c.ID_CUENTA === idCuentaDesembolso);
     if (!cuenta || cuenta.ID_MONEDA !== prestamo.ID_MONEDA) {
-      return { ok: false, error: "La cuenta de desembolso elegida no existe o no coincide con la moneda del préstamo." };
+      return { ok: false, codigo: "PRES-OTOR-05", error: "La cuenta de desembolso elegida no existe o no coincide con la moneda del préstamo." };
     }
   }
 
   try {
     await otorgarPrestamo(idPrestamo, fechaOrigen, tipoCambio, idCuentaDesembolso);
   } catch {
-    return { ok: false, error: "No se pudo otorgar la solicitud. Vuelve a intentar; si persiste, repórtalo." };
+    return { ok: false, codigo: "PRES-OTOR-99", error: "No se pudo otorgar la solicitud. Vuelve a intentar; si persiste, repórtalo." };
   }
 
   for (const cuota of generarCuotasIguales(Number(prestamo.MONTO_TOTAL), nroCuotas, anioInicio, mesInicio)) {

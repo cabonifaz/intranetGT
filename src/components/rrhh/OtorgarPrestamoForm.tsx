@@ -40,7 +40,10 @@ export default function OtorgarPrestamoForm({ prestamo, cuentas, tcSugerido, hoy
   return (
     <form action={formAction} className="mt-4 space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
       {estado.error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">{estado.error}</p>
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
+          {estado.error}
+          {estado.codigo ? <span className="ml-1 font-mono text-xs text-red-500 dark:text-red-400">· Código: {estado.codigo}</span> : null}
+        </p>
       ) : null}
       <input type="hidden" name="idPrestamo" value={prestamo.ID_PRESTAMO} />
 
