@@ -197,31 +197,46 @@ export async function crearPrestamoAction(_prevState: GuardarPrestamoState, form
     return { ok: false, codigo: "PRES-CREAR-99", error: "No se pudo crear el préstamo. Vuelve a intentar; si persiste, repórtalo." };
   }
 
-  for (const cuota of generarCuotasIguales(montoTotal, nroCuotas, anioInicio, mesInicio)) {
-    await agregarCuotaPrestamo({
-      idPrestamo,
-      nroCuota: cuota.nroCuota,
-      anio: cuota.anio,
-      mes: cuota.mes,
-      monto: cuota.monto,
-      calculoAutomatico: true,
-      idUsuarioCreacion: sesion.idUsuario,
-    });
-  }
+  // El prestamo ya quedo creado (arriba) -- de aca en adelante son pasos
+  // extra (cuotas, movimiento de caja) sin una transaccion en comun que
+  // los una (MySQL no anida transacciones de verdad entre estos SPs, ver
+  // nota de sp_pasivo.sql). Si algo de esto falla no debe tumbar la
+  // pagina -- se avisa y se manda al detalle ya creado, donde se puede
+  // revisar/completar el cronograma a mano.
+  try {
+    for (const cuota of generarCuotasIguales(montoTotal, nroCuotas, anioInicio, mesInicio)) {
+      await agregarCuotaPrestamo({
+        idPrestamo,
+        nroCuota: cuota.nroCuota,
+        anio: cuota.anio,
+        mes: cuota.mes,
+        monto: cuota.monto,
+        calculoAutomatico: true,
+        idUsuarioCreacion: sesion.idUsuario,
+      });
+    }
 
-  if (idCuentaDesembolso) {
-    const prestamo = await obtenerPrestamo(idPrestamo);
-    const movimiento = await registrarMovimientoCuenta({
-      idCuenta: idCuentaDesembolso,
-      idTipoMovimiento: await obtenerIdTipoMovimientoEgreso(),
-      fechaMovimiento: fechaOrigen,
-      monto: montoTotal,
-      concepto: `${prestamo?.TIPO_PRESTAMO_CODIGO === "ADELANTO_SUELDO" ? "Adelanto de sueldo" : "Prestamo"} a ${prestamo ? `${prestamo.NOMBRES} ${prestamo.APELLIDOS}` : "colaborador"} (#${idPrestamo})`,
-      tipoReferencia: "RRHH_PRESTAMO",
-      idReferencia: idPrestamo,
-      idUsuarioCreacion: sesion.idUsuario,
-    });
-    if (movimiento.id_movimiento) await asignarMovimientoDesembolso(idPrestamo, movimiento.id_movimiento);
+    if (idCuentaDesembolso) {
+      const prestamo = await obtenerPrestamo(idPrestamo);
+      const movimiento = await registrarMovimientoCuenta({
+        idCuenta: idCuentaDesembolso,
+        idTipoMovimiento: await obtenerIdTipoMovimientoEgreso(),
+        fechaMovimiento: fechaOrigen,
+        monto: montoTotal,
+        concepto: `${prestamo?.TIPO_PRESTAMO_CODIGO === "ADELANTO_SUELDO" ? "Adelanto de sueldo" : "Prestamo"} a ${prestamo ? `${prestamo.NOMBRES} ${prestamo.APELLIDOS}` : "colaborador"} (#${idPrestamo})`,
+        tipoReferencia: "RRHH_PRESTAMO",
+        idReferencia: idPrestamo,
+        idUsuarioCreacion: sesion.idUsuario,
+      });
+      if (movimiento.id_movimiento) await asignarMovimientoDesembolso(idPrestamo, movimiento.id_movimiento);
+    }
+  } catch {
+    revalidatePath("/rrhh/planilla/prestamos");
+    return {
+      ok: false,
+      codigo: "PRES-CREAR-98",
+      error: `El préstamo #${idPrestamo} se creó, pero falló al generar el cronograma o el movimiento de caja. Revísalo desde el detalle y complétalo a mano; repórtalo si vuelve a pasar.`,
+    };
   }
 
   revalidatePath("/rrhh/planilla/prestamos");
@@ -371,30 +386,43 @@ export async function otorgarPrestamoAction(_prevState: GuardarPrestamoState, fo
     return { ok: false, codigo: "PRES-OTOR-99", error: "No se pudo otorgar la solicitud. Vuelve a intentar; si persiste, repórtalo." };
   }
 
-  for (const cuota of generarCuotasIguales(Number(prestamo.MONTO_TOTAL), nroCuotas, anioInicio, mesInicio)) {
-    await agregarCuotaPrestamo({
-      idPrestamo,
-      nroCuota: cuota.nroCuota,
-      anio: cuota.anio,
-      mes: cuota.mes,
-      monto: cuota.monto,
-      calculoAutomatico: true,
-      idUsuarioCreacion: sesion.idUsuario,
-    });
-  }
+  // Mismo criterio que crearPrestamoAction: la solicitud ya quedo
+  // otorgada (arriba) -- de aca en adelante (cuotas, movimiento) no debe
+  // tumbar la pagina si algo falla.
+  try {
+    for (const cuota of generarCuotasIguales(Number(prestamo.MONTO_TOTAL), nroCuotas, anioInicio, mesInicio)) {
+      await agregarCuotaPrestamo({
+        idPrestamo,
+        nroCuota: cuota.nroCuota,
+        anio: cuota.anio,
+        mes: cuota.mes,
+        monto: cuota.monto,
+        calculoAutomatico: true,
+        idUsuarioCreacion: sesion.idUsuario,
+      });
+    }
 
-  if (idCuentaDesembolso) {
-    const movimiento = await registrarMovimientoCuenta({
-      idCuenta: idCuentaDesembolso,
-      idTipoMovimiento: await obtenerIdTipoMovimientoEgreso(),
-      fechaMovimiento: fechaOrigen,
-      monto: Number(prestamo.MONTO_TOTAL),
-      concepto: `${prestamo.TIPO_PRESTAMO_CODIGO === "ADELANTO_SUELDO" ? "Adelanto de sueldo" : "Prestamo"} a ${prestamo.NOMBRES} ${prestamo.APELLIDOS} (#${idPrestamo})`,
-      tipoReferencia: "RRHH_PRESTAMO",
-      idReferencia: idPrestamo,
-      idUsuarioCreacion: sesion.idUsuario,
-    });
-    if (movimiento.id_movimiento) await asignarMovimientoDesembolso(idPrestamo, movimiento.id_movimiento);
+    if (idCuentaDesembolso) {
+      const movimiento = await registrarMovimientoCuenta({
+        idCuenta: idCuentaDesembolso,
+        idTipoMovimiento: await obtenerIdTipoMovimientoEgreso(),
+        fechaMovimiento: fechaOrigen,
+        monto: Number(prestamo.MONTO_TOTAL),
+        concepto: `${prestamo.TIPO_PRESTAMO_CODIGO === "ADELANTO_SUELDO" ? "Adelanto de sueldo" : "Prestamo"} a ${prestamo.NOMBRES} ${prestamo.APELLIDOS} (#${idPrestamo})`,
+        tipoReferencia: "RRHH_PRESTAMO",
+        idReferencia: idPrestamo,
+        idUsuarioCreacion: sesion.idUsuario,
+      });
+      if (movimiento.id_movimiento) await asignarMovimientoDesembolso(idPrestamo, movimiento.id_movimiento);
+    }
+  } catch {
+    revalidatePath(`/rrhh/planilla/prestamos/${idPrestamo}`);
+    revalidatePath("/rrhh/planilla/prestamos");
+    return {
+      ok: false,
+      codigo: "PRES-OTOR-98",
+      error: `La solicitud #${idPrestamo} se otorgó, pero falló al generar el cronograma o el movimiento de caja. Revísala desde el detalle y complétala a mano; repórtalo si vuelve a pasar.`,
+    };
   }
 
   await notificarSolicitudOtorgada(prestamo);
