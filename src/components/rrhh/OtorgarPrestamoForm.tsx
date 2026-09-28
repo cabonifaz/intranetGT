@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { otorgarPrestamoAction } from "@/lib/actions/rrhh-prestamos";
+import { useActionState, useState } from "react";
+import { otorgarPrestamoAction, type GuardarPrestamoState } from "@/lib/actions/rrhh-prestamos";
 import type { CuentaListadoRow, PrestamoRow } from "@/types/db";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
 import NotaAyuda from "@/components/ui/NotaAyuda";
@@ -14,10 +14,13 @@ function formatear(monto: number, codigo: string): string {
   return `${codigo === "USD" ? "US$" : "S/"} ${monto.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+const ESTADO_INICIAL: GuardarPrestamoState = { ok: false };
+
 // RRHH completa lo que la solicitud no trae: fecha real de desembolso,
 // TC (si no es soles), cuenta de desembolso, y el cronograma de cuotas
 // -- mismo generador de cronograma que "Nuevo prestamo".
 export default function OtorgarPrestamoForm({ prestamo, cuentas, tcSugerido, hoy }: { prestamo: PrestamoRow; cuentas: CuentaListadoRow[]; tcSugerido: string | null; hoy: string }) {
+  const [estado, formAction] = useActionState(otorgarPrestamoAction, ESTADO_INICIAL);
   const enSoles = prestamo.MONEDA_CODIGO === "PEN";
   const hoyDate = new Date(hoy);
   // Si el solicitante propuso un cronograma (siempre que pidio un
@@ -35,7 +38,10 @@ export default function OtorgarPrestamoForm({ prestamo, cuentas, tcSugerido, hoy
   const cuentasDeLaMoneda = cuentas.filter((c) => c.ID_MONEDA === prestamo.ID_MONEDA);
 
   return (
-    <form action={otorgarPrestamoAction} className="mt-4 space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+    <form action={formAction} className="mt-4 space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      {estado.error ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">{estado.error}</p>
+      ) : null}
       <input type="hidden" name="idPrestamo" value={prestamo.ID_PRESTAMO} />
 
       <div>

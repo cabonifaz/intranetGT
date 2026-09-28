@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { solicitarPrestamoAction } from "@/lib/actions/rrhh-prestamos";
+import { useActionState, useState } from "react";
+import { solicitarPrestamoAction, type GuardarPrestamoState } from "@/lib/actions/rrhh-prestamos";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
 import type { EmpleadoDirectorioRow, DirectorioContactoConTipoRow } from "@/types/db";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
@@ -41,6 +41,8 @@ function formatearMonto(monto: number, codigo: string): string {
   return `${codigo === "USD" ? "US$" : "S/"} ${monto.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+const ESTADO_INICIAL: GuardarPrestamoState = { ok: false };
+
 // Autoservicio -- lo llena el propio colaborador para si mismo (no elige
 // a quien, eso lo fija la sesion en el server action). Un PRESTAMO pide
 // de una vez moneda, monto, N de cuotas y mes/anio de inicio del
@@ -63,6 +65,7 @@ export default function SolicitarPrestamoForm({
   anioActual,
   mesActual,
 }: SolicitarPrestamoFormProps) {
+  const [estado, formAction] = useActionState(solicitarPrestamoAction, ESTADO_INICIAL);
   const porcentajeTexto = `${Math.round(porcentajeMaximoAdelanto * 100)}%`;
   const idTipoPrestamoNormal = tipos.find((t) => t.CODIGO === "PRESTAMO") ? String(tipos.find((t) => t.CODIGO === "PRESTAMO")!.ID_MAESTRO) : "";
   const [idTipo, setIdTipo] = useState<string>(idTipoPrestamoNormal);
@@ -94,7 +97,11 @@ export default function SolicitarPrestamoForm({
   const montoNum = Number(monto);
 
   return (
-    <form action={solicitarPrestamoAction} className="mt-4 space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+    <form action={formAction} className="mt-4 space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      {estado.error ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">{estado.error}</p>
+      ) : null}
+
       {puedeGestionar ? (
         <div>
           <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Beneficiario</label>

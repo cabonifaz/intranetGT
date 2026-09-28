@@ -44,6 +44,17 @@ function hoyIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Estado devuelto por las acciones de "guardar" (Nuevo prestamo,
+// Solicitar, Otorgar) para que el formulario pueda mostrar un mensaje
+// concreto en vez de que el intento simplemente no haga nada -- silencioso
+// para la base de datos (no-op), pero nunca silencioso para quien lo
+// esta llenando: necesita saber que fallo y que corregir, o poder
+// reportarlo si el mensaje no le alcanza.
+export interface GuardarPrestamoState {
+  ok: boolean;
+  error?: string;
+}
+
 // Un adelanto es a cuenta de un sueldo -- nunca para un contacto, siempre
 // en la misma moneda del sueldo (no tiene sentido adelantar en una
 // moneda distinta a la que se paga), y nunca por mas del tope (ver
@@ -87,7 +98,10 @@ function cronogramaValido(nroCuotas: number, anioInicio: number, mesInicio: numb
 // cuenta debe estar en la misma moneda del prestamo. El beneficiario es
 // un trabajador (idUsuario) o un contacto del directorio (idContacto),
 // exactamente uno de los dos -- ver SelectorBeneficiarioPrestamo.
-export async function crearPrestamoAction(formData: FormData): Promise<void> {
+// Devuelve {ok,error} en vez de solo no hacer nada -- toda validacion
+// fallida (y cualquier rechazo del guard en SQL) le dice a quien lo
+// llena que paso, para que lo corrija o lo reporte si no le queda claro.
+export async function crearPrestamoAction(_prevState: GuardarPrestamoState, formData: FormData): Promise<GuardarPrestamoState> {
   const sesion = await requireGestionarPrestamos();
 
   const idUsuario = Number(formData.get("idUsuario") || 0) || null;
@@ -104,43 +118,60 @@ export async function crearPrestamoAction(formData: FormData): Promise<void> {
   const idCuentaRaw = Number(formData.get("idCuentaDesembolso") || 0);
   const idCuentaDesembolso = idCuentaRaw || null;
 
-  if ((idUsuario === null) === (idContacto === null)) return;
-  if (!idTipoPrestamo || !(montoTotal > 0) || !idMoneda) return;
-  if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) return;
+  if ((idUsuario === null) === (idContacto === null)) {
+    return { ok: false, error: "Elige exactamente un beneficiario: un trabajador o un contacto del directorio." };
+  }
+  if (!idTipoPrestamo || !(montoTotal > 0) || !idMoneda) {
+    return { ok: false, error: "Completa el tipo, el monto y la moneda." };
+  }
+  if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) {
+    return { ok: false, error: "El cronograma no es válido: revisa el número de cuotas, el mes y el año de inicio." };
+  }
 
-  if (idContacto && !(await obtenerContactoExterno(idContacto))) return;
+  if (idContacto && !(await obtenerContactoExterno(idContacto))) {
+    return { ok: false, error: "El contacto seleccionado ya no existe. Vuelve a elegirlo." };
+  }
 
   const tipos = await listarMaestros("TIPO_PRESTAMO");
   const tipoSel = tipos.find((t) => t.ID_MAESTRO === idTipoPrestamo);
-  if (!tipoSel) return;
+  if (!tipoSel) return { ok: false, error: "El tipo de préstamo elegido no es válido." };
 
   // Un adelanto es a cuenta de un sueldo: nunca para un contacto, y nunca
   // por mas del tope de su sueldo fijo vigente.
   if (tipoSel.CODIGO === "ADELANTO_SUELDO") {
-    if (idContacto) return;
-    if (await excedeTopeAdelanto(idUsuario, idMoneda, montoTotal)) return;
+    if (idContacto) return { ok: false, error: "Un adelanto de sueldo no puede ser para un contacto del directorio." };
+    if (await excedeTopeAdelanto(idUsuario, idMoneda, montoTotal)) {
+      return {
+        ok: false,
+        error: "El monto supera el tope de adelanto permitido, la moneda no coincide con el sueldo del beneficiario, o no tiene un sueldo fijo vigente.",
+      };
+    }
   }
 
   const monedas = await listarMaestros("MONEDA");
   const monedaSel = monedas.find((m) => m.ID_MAESTRO === idMoneda);
-  if (!monedaSel) return;
+  if (!monedaSel) return { ok: false, error: "La moneda elegida no es válida." };
 
   // Si no es soles, el TC pactado es obligatorio: la planilla descuenta en
   // soles y ese TC queda escrito en el compromiso firmado.
   const tipoCambio = monedaSel.CODIGO === "PEN" ? null : Number(tipoCambioRaw);
-  if (monedaSel.CODIGO !== "PEN" && !(tipoCambio && tipoCambio > 0)) return;
+  if (monedaSel.CODIGO !== "PEN" && !(tipoCambio && tipoCambio > 0)) {
+    return { ok: false, error: "Falta el tipo de cambio pactado (obligatorio si el préstamo no es en soles)." };
+  }
 
   if (idCuentaDesembolso) {
     const cuentas = await listarCuentas();
     const cuenta = cuentas.find((c) => c.ID_CUENTA === idCuentaDesembolso);
-    if (!cuenta || cuenta.ID_MONEDA !== idMoneda) return;
+    if (!cuenta || cuenta.ID_MONEDA !== idMoneda) {
+      return { ok: false, error: "La cuenta de desembolso elegida no existe o no coincide con la moneda del préstamo." };
+    }
   }
 
   // Un no-op silencioso del guard en SQL (SP_RRHH_PRESTAMO_CREAR) hace que
   // crearPrestamo() lance -- por ejemplo, si algun chequeo de la app y el
   // del SP quedaran desalineados. No debe tumbar la pagina con un error
-  // generico: se trata igual que cualquier otra validacion fallida de
-  // este formulario.
+  // generico: se avisa igual que cualquier otra validacion fallida de
+  // este formulario, para que la persona lo reporte si no encuentra el motivo.
   let idPrestamo: number;
   try {
     ({ id_prestamo: idPrestamo } = await crearPrestamo({
@@ -156,7 +187,7 @@ export async function crearPrestamoAction(formData: FormData): Promise<void> {
       idUsuarioCreacion: sesion.idUsuario,
     }));
   } catch {
-    return;
+    return { ok: false, error: "No se pudo crear el préstamo. Vuelve a intentar; si persiste, repórtalo." };
   }
 
   for (const cuota of generarCuotasIguales(montoTotal, nroCuotas, anioInicio, mesInicio)) {
@@ -201,8 +232,9 @@ export async function crearPrestamoAction(formData: FormData): Promise<void> {
 // PRESTAMO si debe traer de una vez el cronograma que propone (N de
 // cuotas + mes/anio de inicio) -- RRHH parte de eso al otorgar, pudiendo
 // ajustarlo. Un ADELANTO_SUELDO no pide cronograma (una sola cuota) y en
-// cambio esta limitado a un % del sueldo fijo del beneficiario.
-export async function solicitarPrestamoAction(formData: FormData): Promise<void> {
+// cambio esta limitado a un % del sueldo fijo del beneficiario. Devuelve
+// {ok,error} -- ver comentario de crearPrestamoAction.
+export async function solicitarPrestamoAction(_prevState: GuardarPrestamoState, formData: FormData): Promise<GuardarPrestamoState> {
   const sesion = await requireSession();
   const puedeGestionar = await puedeGestionarPrestamos(sesion.idUsuario);
 
@@ -216,17 +248,23 @@ export async function solicitarPrestamoAction(formData: FormData): Promise<void>
   if (puedeGestionar) {
     idUsuario = Number(formData.get("idUsuario") || 0) || null;
     idContacto = Number(formData.get("idContacto") || 0) || null;
-    if ((idUsuario === null) === (idContacto === null)) return;
-    if (idContacto && !(await obtenerContactoExterno(idContacto))) return;
+    if ((idUsuario === null) === (idContacto === null)) {
+      return { ok: false, error: "Elige exactamente un beneficiario: un trabajador o un contacto del directorio." };
+    }
+    if (idContacto && !(await obtenerContactoExterno(idContacto))) {
+      return { ok: false, error: "El contacto seleccionado ya no existe. Vuelve a elegirlo." };
+    }
   }
 
-  if (!idTipoPrestamo || !(montoTotal > 0) || !idMoneda) return;
+  if (!idTipoPrestamo || !(montoTotal > 0) || !idMoneda) {
+    return { ok: false, error: "Completa el tipo, el monto y la moneda." };
+  }
 
   const tipos = await listarMaestros("TIPO_PRESTAMO");
   const tipoSel = tipos.find((t) => t.ID_MAESTRO === idTipoPrestamo);
-  if (!tipoSel) return;
+  if (!tipoSel) return { ok: false, error: "El tipo de préstamo elegido no es válido." };
   const monedas = await listarMaestros("MONEDA");
-  if (!monedas.some((m) => m.ID_MAESTRO === idMoneda)) return;
+  if (!monedas.some((m) => m.ID_MAESTRO === idMoneda)) return { ok: false, error: "La moneda elegida no es válida." };
 
   const esAdelanto = tipoSel.CODIGO === "ADELANTO_SUELDO";
 
@@ -234,19 +272,25 @@ export async function solicitarPrestamoAction(formData: FormData): Promise<void>
   let anioInicio: number | null = null;
   let mesInicio: number | null = null;
   if (esAdelanto) {
-    if (idContacto) return;
-    if (await excedeTopeAdelanto(idUsuario, idMoneda, montoTotal)) return;
+    if (idContacto) return { ok: false, error: "Un adelanto de sueldo no puede ser para un contacto del directorio." };
+    if (await excedeTopeAdelanto(idUsuario, idMoneda, montoTotal)) {
+      return {
+        ok: false,
+        error: "El monto supera el tope de adelanto permitido, la moneda no coincide con tu sueldo, o no tienes un sueldo fijo vigente.",
+      };
+    }
   } else {
     nroCuotas = Math.trunc(Number(formData.get("nroCuotas")));
     anioInicio = Math.trunc(Number(formData.get("anioInicio")));
     mesInicio = Math.trunc(Number(formData.get("mesInicio")));
-    if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) return;
+    if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) {
+      return { ok: false, error: "El cronograma no es válido: revisa el número de cuotas, el mes y el año de inicio." };
+    }
   }
 
   // Mismo criterio que crearPrestamoAction: si el guard en SQL rechaza en
-  // silencio (SP_RRHH_PRESTAMO_SOLICITAR) y solicitarPrestamo() lanza, no
-  // debe tumbar la pagina -- se trata como cualquier otra validacion
-  // fallida de este formulario.
+  // silencio (SP_RRHH_PRESTAMO_SOLICITAR) y solicitarPrestamo() lanza, se
+  // avisa en vez de tumbar la pagina.
   try {
     await solicitarPrestamo({
       idUsuario,
@@ -261,7 +305,7 @@ export async function solicitarPrestamoAction(formData: FormData): Promise<void>
       idUsuarioCreacion: sesion.idUsuario,
     });
   } catch {
-    return;
+    return { ok: false, error: "No se pudo registrar la solicitud. Vuelve a intentar; si persiste, repórtalo." };
   }
 
   const destino = idContacto ? "/rrhh/planilla/prestamos" : `/rrhh/directorio/${idUsuario}`;
@@ -272,8 +316,9 @@ export async function solicitarPrestamoAction(formData: FormData): Promise<void>
 // RRHH revisa una solicitud y la otorga: define fecha real de
 // desembolso, TC (si no es soles), cuenta de desembolso (opcional) y el
 // cronograma de cuotas -- desde aca sigue identico a un prestamo creado
-// directo (compromiso de pago, firma, descuento en planilla).
-export async function otorgarPrestamoAction(formData: FormData): Promise<void> {
+// directo (compromiso de pago, firma, descuento en planilla). Devuelve
+// {ok,error} -- ver comentario de crearPrestamoAction.
+export async function otorgarPrestamoAction(_prevState: GuardarPrestamoState, formData: FormData): Promise<GuardarPrestamoState> {
   const sesion = await requireGestionarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
@@ -284,23 +329,35 @@ export async function otorgarPrestamoAction(formData: FormData): Promise<void> {
   const idCuentaRaw = Number(formData.get("idCuentaDesembolso") || 0);
   const idCuentaDesembolso = idCuentaRaw || null;
 
-  if (!idPrestamo) return;
-  if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) return;
+  if (!idPrestamo) return { ok: false, error: "No se encontró la solicitud." };
+  if (!cronogramaValido(nroCuotas, anioInicio, mesInicio)) {
+    return { ok: false, error: "El cronograma no es válido: revisa el número de cuotas, el mes y el año de inicio." };
+  }
 
   const prestamo = await obtenerPrestamo(idPrestamo);
-  if (!prestamo || prestamo.ESTADO_PRESTAMO_CODIGO !== "SOLICITADO") return;
+  if (!prestamo || prestamo.ESTADO_PRESTAMO_CODIGO !== "SOLICITADO") {
+    return { ok: false, error: "Esta solicitud ya no está pendiente de otorgar (puede que alguien ya la haya procesado)." };
+  }
 
   const tipoCambioRaw = String(formData.get("tipoCambio") ?? "").trim();
   const tipoCambio = prestamo.MONEDA_CODIGO === "PEN" ? null : Number(tipoCambioRaw);
-  if (prestamo.MONEDA_CODIGO !== "PEN" && !(tipoCambio && tipoCambio > 0)) return;
+  if (prestamo.MONEDA_CODIGO !== "PEN" && !(tipoCambio && tipoCambio > 0)) {
+    return { ok: false, error: "Falta el tipo de cambio pactado (obligatorio si el préstamo no es en soles)." };
+  }
 
   if (idCuentaDesembolso) {
     const cuentas = await listarCuentas();
     const cuenta = cuentas.find((c) => c.ID_CUENTA === idCuentaDesembolso);
-    if (!cuenta || cuenta.ID_MONEDA !== prestamo.ID_MONEDA) return;
+    if (!cuenta || cuenta.ID_MONEDA !== prestamo.ID_MONEDA) {
+      return { ok: false, error: "La cuenta de desembolso elegida no existe o no coincide con la moneda del préstamo." };
+    }
   }
 
-  await otorgarPrestamo(idPrestamo, fechaOrigen, tipoCambio, idCuentaDesembolso);
+  try {
+    await otorgarPrestamo(idPrestamo, fechaOrigen, tipoCambio, idCuentaDesembolso);
+  } catch {
+    return { ok: false, error: "No se pudo otorgar la solicitud. Vuelve a intentar; si persiste, repórtalo." };
+  }
 
   for (const cuota of generarCuotasIguales(Number(prestamo.MONTO_TOTAL), nroCuotas, anioInicio, mesInicio)) {
     await agregarCuotaPrestamo({

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { crearPrestamoAction } from "@/lib/actions/rrhh-prestamos";
+import { useActionState, useState } from "react";
+import { crearPrestamoAction, type GuardarPrestamoState } from "@/lib/actions/rrhh-prestamos";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
 import type { CuentaListadoRow, EmpleadoDirectorioRow, DirectorioContactoConTipoRow } from "@/types/db";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
@@ -31,6 +31,8 @@ function formatear(monto: number, codigo: string): string {
   return `${codigo === "USD" ? "US$" : "S/"} ${monto.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+const ESTADO_INICIAL: GuardarPrestamoState = { ok: false };
+
 export default function NuevoPrestamoForm({
   tipos,
   colaboradores,
@@ -43,6 +45,7 @@ export default function NuevoPrestamoForm({
   mesActual,
   hoy,
 }: NuevoPrestamoFormProps) {
+  const [estado, formAction] = useActionState(crearPrestamoAction, ESTADO_INICIAL);
   const porcentajeTexto = `${Math.round(porcentajeMaximoAdelanto * 100)}%`;
   const idTipoPrestamoNormal = tipos.find((t) => t.CODIGO === "PRESTAMO") ? String(tipos.find((t) => t.CODIGO === "PRESTAMO")!.ID_MAESTRO) : "";
   const [idMoneda, setIdMoneda] = useState<string>(monedas.find((m) => m.CODIGO === "PEN") ? String(monedas.find((m) => m.CODIGO === "PEN")!.ID_MAESTRO) : "");
@@ -76,7 +79,11 @@ export default function NuevoPrestamoForm({
   const cuentasDeLaMoneda = cuentas.filter((c) => c.ID_MONEDA !== null && String(c.ID_MONEDA) === idMoneda);
 
   return (
-    <form action={crearPrestamoAction} className="mt-6 space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+    <form action={formAction} className="mt-6 space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      {estado.error ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">{estado.error}</p>
+      ) : null}
+
       <div>
         <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Tipo</label>
         <ComboBusqueda
