@@ -45,6 +45,10 @@ export async function emitirPlanillaMensual(idPlanillaMensual: number, idUsuario
   await callProcedure("SP_RRHH_PLANILLA_MENSUAL_EMITIR", [idPlanillaMensual, idUsuarioEmision]);
 }
 
+export async function reabrirPlanillaMensual(idPlanillaMensual: number): Promise<void> {
+  await callProcedure("SP_RRHH_PLANILLA_MENSUAL_REABRIR", [idPlanillaMensual]);
+}
+
 interface AgregarDetalleParams {
   idPlanillaMensual: number;
   idContrato: number;

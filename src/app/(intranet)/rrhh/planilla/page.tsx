@@ -95,7 +95,25 @@ export default async function PlanillaMensualPage() {
                 </td>
                 <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">{p.TOTAL_COLABORADORES ?? 0}</td>
                 <td className="px-4 py-2 text-right text-slate-600 dark:text-slate-300">
-                  {p.TOTAL_EMITIDOS ?? 0} / {p.TOTAL_COLABORADORES ?? 0}
+                  {p.ESTADO_PLANILLA_CODIGO === "EMITIDA" && (p.TOTAL_COLABORADORES ?? 0) === 0 ? (
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
+                      Emitida vacía -- reabrir
+                    </span>
+                  ) : (
+                    <div className="inline-flex w-24 flex-col items-end gap-1 align-middle">
+                      <span>
+                        {p.TOTAL_EMITIDOS ?? 0} / {p.TOTAL_COLABORADORES ?? 0}
+                      </span>
+                      <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                        <div
+                          className="h-full rounded-full bg-blue-500"
+                          style={{
+                            width: `${(p.TOTAL_COLABORADORES ?? 0) > 0 ? Math.round(((p.TOTAL_EMITIDOS ?? 0) / (p.TOTAL_COLABORADORES ?? 1)) * 100) : 0}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

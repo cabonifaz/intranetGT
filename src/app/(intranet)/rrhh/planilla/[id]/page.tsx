@@ -5,6 +5,8 @@ import { obtenerPlanillaMensual, listarDetalle } from "@/lib/db/repositories/rrh
 import { marcarPagadoDetalleAction, marcarPagadoMasivoAction, emitirPlanillaMensualAction } from "@/lib/actions/rrhh-planilla";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import SubmitButton from "@/components/ui/SubmitButton";
+import PasosPlanillaMensual from "@/components/rrhh/PasosPlanillaMensual";
+import ReabrirPlanillaBoton from "@/components/rrhh/ReabrirPlanillaBoton";
 
 function formatearMonto(monto: string | number): string {
   return `S/ ${Number(monto).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -25,6 +27,9 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
   const filas = await listarDetalle(idPlanillaMensual);
   const emitida = planilla.ESTADO_PLANILLA_CODIGO === "EMITIDA";
   const hayPendientes = filas.some((f) => f.ESTADO_EMISION_CODIGO !== "EMITIDA");
+  const totalEmitidos = filas.filter((f) => f.ESTADO_EMISION_CODIGO === "EMITIDA").length;
+  const totalPagados = filas.filter((f) => f.AFP_ESSALUD_PAGADO).length;
+  const planillaVaciaYaEmitida = emitida && filas.length === 0;
 
   return (
     <div>
@@ -54,7 +59,7 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
               Marcar todos como pagados
             </SubmitButton>
           </form>
-          {!emitida ? (
+          {!emitida && filas.length > 0 ? (
             <form action={emitirPlanillaMensualAction}>
               <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
               <ConfirmSubmitButton
@@ -65,10 +70,23 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
               </ConfirmSubmitButton>
             </form>
           ) : null}
+          {emitida ? <ReabrirPlanillaBoton idPlanillaMensual={idPlanillaMensual} /> : null}
         </div>
       </div>
 
-      {!hayPendientes && filas.length === 0 ? (
+      <div className="mt-6">
+        <PasosPlanillaMensual totalColaboradores={filas.length} totalEmitidos={totalEmitidos} totalPagados={totalPagados} />
+      </div>
+
+      {planillaVaciaYaEmitida ? (
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+          <p className="font-semibold">Esta planilla quedó marcada como emitida sin ningún colaborador dentro.</p>
+          <p className="mt-1">
+            Probablemente se emitió por error mientras estaba vacía. Usa el botón <span className="font-medium">&quot;Reabrir planilla&quot;</span> de
+            arriba para volverla a Borrador, y luego &quot;Generar planilla del mes&quot; para que agregue a los colaboradores.
+          </p>
+        </div>
+      ) : !hayPendientes && filas.length === 0 ? (
         <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
           Todavia no hay colaboradores en esta planilla -- vuelve a la lista y usa &quot;Generar/Actualizar planilla&quot;. Si el
           boton no agrega a nadie, revisa que exista una version de parametros vigente en{" "}

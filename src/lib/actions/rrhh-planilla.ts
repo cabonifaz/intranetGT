@@ -8,7 +8,9 @@ import {
   listarHorasDelPeriodo,
   obtenerAcumuladoAnio,
   obtenerOCrearPlanillaMensual,
+  obtenerPlanillaMensual,
   emitirPlanillaMensual as marcarPlanillaMensualEmitida,
+  reabrirPlanillaMensual,
   agregarDetalle,
   vincularHoras,
   listarDetalle,
@@ -529,6 +531,55 @@ export async function emitirPlanillaMensualAction(formData: FormData): Promise<v
   revalidatePath(`/rrhh/planilla/${idPlanillaMensual}`);
   revalidatePath("/rrhh/planilla");
   refresh();
+}
+
+// Estado devuelto por reabrirPlanillaMensualAction -- mismo patron de
+// {ok,error,codigo} que las acciones de prestamos (ver rrhh-prestamos.ts):
+// un codigo corto identifica el motivo del rechazo sin tener que
+// describirlo largo, util para un pantallazo de soporte.
+export interface ReabrirPlanillaState {
+  ok: boolean;
+  error?: string;
+  codigo?: string;
+}
+
+// Deshace una planilla EMITIDA por error (ej. el bug de emitir con la
+// planilla vacia, ya corregido en SP_RRHH_PLANILLA_MENSUAL_EMITIR) y la
+// vuelve a BORRADOR. Bloqueado si ya hay algun colaborador con sus
+// aportes AFP/EsSalud marcados pagados -- ahi ya hubo un pago real, y
+// reabrir todo el mes lo dejaria inconsistente.
+export async function reabrirPlanillaMensualAction(
+  _prevState: ReabrirPlanillaState,
+  formData: FormData,
+): Promise<ReabrirPlanillaState> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPlanillaMensual = Number(formData.get("idPlanillaMensual"));
+  if (!idPlanillaMensual) return { ok: false, error: "Planilla inválida.", codigo: "PLAN-REABRIR-01" };
+
+  const planilla = await obtenerPlanillaMensual(idPlanillaMensual);
+  if (!planilla) return { ok: false, error: "No se encontró la planilla.", codigo: "PLAN-REABRIR-02" };
+  if (planilla.ESTADO_PLANILLA_CODIGO !== "EMITIDA") {
+    return { ok: false, error: "Esta planilla no está emitida -- no hay nada que reabrir.", codigo: "PLAN-REABRIR-03" };
+  }
+
+  const filas = await listarDetalle(idPlanillaMensual);
+  if (filas.some((f) => f.AFP_ESSALUD_PAGADO)) {
+    return {
+      ok: false,
+      error:
+        "Ya hay colaboradores con sus aportes marcados como pagados -- no se puede reabrir todo el mes. Corrige el detalle puntual si hace falta.",
+      codigo: "PLAN-REABRIR-04",
+    };
+  }
+
+  await reabrirPlanillaMensual(idPlanillaMensual);
+
+  revalidatePath(`/rrhh/planilla/${idPlanillaMensual}`);
+  revalidatePath("/rrhh/planilla");
+  refresh();
+
+  return { ok: true };
 }
 
 export async function eliminarDetalleAction(formData: FormData): Promise<void> {

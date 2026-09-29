@@ -19,6 +19,7 @@ DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_MENSUAL_OBTENER_O_CREAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_MENSUAL_LISTAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_MENSUAL_OBTENER;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_MENSUAL_EMITIR;
+DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_MENSUAL_REABRIR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_AGREGAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_HORAS_VINCULAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_HORAS_LISTAR;
@@ -387,24 +388,62 @@ END$$
 -- Cierra el header solo si ya no queda ningun detalle PENDIENTE -- no-op
 -- silencioso en cualquier otro caso, mismo estilo que SP_PASIVO_CUOTA_MARCAR_PAGADA
 -- cerrando el pasivo cuando ya no quedan cuotas pendientes.
+-- No-op silencioso si no hay ningun detalle (planilla vacia -- nunca se
+-- generaron colaboradores, ej. porque no habia parametros vigentes) o si
+-- todavia queda alguno sin emitir. Antes esto se saltaba con 0 filas
+-- (COUNT(*) de pendientes entre cero filas es igualmente 0) y una
+-- planilla completamente vacia quedaba marcada EMITIDA -- bug real
+-- reportado 2026-09-29, ver SP_RRHH_PLANILLA_MENSUAL_REABRIR para
+-- deshacerlo si ya paso.
 CREATE PROCEDURE SP_RRHH_PLANILLA_MENSUAL_EMITIR(
     IN p_id_planilla_mensual INT UNSIGNED,
     IN p_id_usuario_emision INT UNSIGNED
 )
 BEGIN
     DECLARE v_id_emitida_planilla INT UNSIGNED;
+    DECLARE v_total_detalle INT;
     DECLARE v_quedan_pendientes INT;
+
+    SELECT COUNT(*) INTO v_total_detalle
+      FROM RRHH_PLANILLA_DETALLE d
+     WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
 
     SELECT COUNT(*) INTO v_quedan_pendientes
       FROM RRHH_PLANILLA_DETALLE d
       JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
      WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual AND ee.CODIGO != 'EMITIDA';
 
-    IF v_quedan_pendientes = 0 THEN
+    IF v_total_detalle > 0 AND v_quedan_pendientes = 0 THEN
         SET v_id_emitida_planilla = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PLANILLA_MENSUAL' AND CODIGO = 'EMITIDA' LIMIT 1);
         UPDATE RRHH_PLANILLA_MENSUAL
            SET ID_ESTADO_PLANILLA = v_id_emitida_planilla, FECHA_EMISION = NOW(), USUARIO_EMISION = p_id_usuario_emision
          WHERE ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
+    END IF;
+END$$
+
+-- Deshace una planilla EMITIDA por error, volviendola a BORRADOR (ej. el
+-- bug de arriba, o cualquier emision masiva prematura). No-op silencioso
+-- si algun colaborador ya quedo marcado con sus aportes AFP/EsSalud
+-- pagados -- ahi ya hubo un pago real de por medio y reabrir la
+-- corromperia; en ese caso hay que corregir a mano el detalle puntual,
+-- no reabrir todo el mes.
+CREATE PROCEDURE SP_RRHH_PLANILLA_MENSUAL_REABRIR(
+    IN p_id_planilla_mensual INT UNSIGNED
+)
+BEGIN
+    DECLARE v_id_borrador INT UNSIGNED;
+    DECLARE v_hay_pagos INT;
+
+    SELECT COUNT(*) INTO v_hay_pagos
+      FROM RRHH_PLANILLA_DETALLE d
+     WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual AND d.AFP_ESSALUD_PAGADO = 1;
+
+    IF v_hay_pagos = 0 THEN
+        SET v_id_borrador = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PLANILLA_MENSUAL' AND CODIGO = 'BORRADOR' LIMIT 1);
+        UPDATE RRHH_PLANILLA_MENSUAL pm
+          JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = pm.ID_ESTADO_PLANILLA
+           SET pm.ID_ESTADO_PLANILLA = v_id_borrador, pm.FECHA_EMISION = NULL, pm.USUARIO_EMISION = NULL
+         WHERE pm.ID_PLANILLA_MENSUAL = p_id_planilla_mensual AND ep.CODIGO = 'EMITIDA';
     END IF;
 END$$
 
