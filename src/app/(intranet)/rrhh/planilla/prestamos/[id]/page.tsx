@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/get-current-user";
-import { puedeGestionarPrestamos } from "@/lib/auth/require-permiso";
+import { puedeGestionarPrestamos, puedeOperarPrestamos } from "@/lib/auth/require-permiso";
 import { obtenerPermisosUsuario } from "@/lib/db/repositories/permiso.repository";
 import { tienePermiso } from "@/lib/rbac/permissions";
 import { obtenerPrestamo, listarCuotasPrestamo } from "@/lib/db/repositories/rrhh-prestamo.repository";
@@ -53,6 +53,7 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
   if (!tienePermisoPlanilla && !esBeneficiario) redirect("/");
 
   const puedeGestionar = await puedeGestionarPrestamos(sesion.idUsuario);
+  const puedeOperar = await puedeOperarPrestamos(sesion.idUsuario);
   const solicitado = prestamo.ESTADO_PRESTAMO_CODIGO === "SOLICITADO";
   const [cuotas, cuentas, tcPrestamo] = await Promise.all([
     listarCuotasPrestamo(idPrestamo),
@@ -65,7 +66,7 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
   const tc = prestamo.TIPO_CAMBIO ? Number(prestamo.TIPO_CAMBIO) : null;
   const anulado = prestamo.ESTADO_PRESTAMO_CODIGO === "ANULADO";
   const firmado = prestamo.ESTADO_PRESTAMO_CODIGO === "ACTIVO";
-  const puedeEscribir = !anulado && !solicitado && puedeGestionar;
+  const puedeEscribir = !anulado && !solicitado && puedeOperar;
   const esContacto = prestamo.ID_CONTACTO !== null;
 
   const vigentes = cuotas.filter((c) => c.ESTADO_CUOTA_CODIGO !== "ANULADA");
@@ -220,7 +221,7 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
             ) : null}
           </div>
 
-          {puedeGestionar ? (
+          {puedeOperar ? (
             <>
               <form action={subirCompromisoFirmadoAction} className="mt-4 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
                 <input type="hidden" name="idPrestamo" value={prestamo.ID_PRESTAMO} />
@@ -315,7 +316,7 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
                     </td>
                     <td className="px-2 py-2">
                       <div className="flex items-center justify-end gap-1">
-                        {esContacto && puedeGestionar && firmado && c.ESTADO_CUOTA_CODIGO === "PENDIENTE" && c.ID_PLANILLA_DETALLE === null ? (
+                        {esContacto && puedeOperar && firmado && c.ESTADO_CUOTA_CODIGO === "PENDIENTE" && c.ID_PLANILLA_DETALLE === null ? (
                           <form action={marcarCuotaPagadaManualAction}>
                             <input type="hidden" name="idPrestamo" value={prestamo.ID_PRESTAMO} />
                             <input type="hidden" name="idCuota" value={c.ID_CUOTA} />

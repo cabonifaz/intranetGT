@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { revalidatePath, refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/get-current-user";
-import { requireGestionarPrestamos, puedeGestionarPrestamos } from "@/lib/auth/require-permiso";
+import { requireGestionarPrestamos, puedeGestionarPrestamos, requireOperarPrestamos } from "@/lib/auth/require-permiso";
 import {
   crearPrestamo,
   obtenerPrestamo,
@@ -482,7 +482,7 @@ function anioMesValidos(anio: number, mes: number): boolean {
 // una cuota mayor con la gratificacion de julio o diciembre. No renumera
 // las demas: toma el siguiente correlativo.
 export async function agregarCuotaPrestamoAction(formData: FormData): Promise<void> {
-  const sesion = await requireGestionarPrestamos();
+  const sesion = await requireOperarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   const anio = Math.trunc(Number(formData.get("anio")));
@@ -507,7 +507,7 @@ export async function agregarCuotaPrestamoAction(formData: FormData): Promise<vo
 }
 
 export async function actualizarCuotaPrestamoAction(formData: FormData): Promise<void> {
-  await requireGestionarPrestamos();
+  await requireOperarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   const idCuota = Number(formData.get("idCuota"));
@@ -521,7 +521,7 @@ export async function actualizarCuotaPrestamoAction(formData: FormData): Promise
 }
 
 export async function eliminarCuotaPrestamoAction(formData: FormData): Promise<void> {
-  await requireGestionarPrestamos();
+  await requireOperarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   const idCuota = Number(formData.get("idCuota"));
@@ -546,7 +546,7 @@ export async function anularPrestamoAction(formData: FormData): Promise<void> {
 // prestamo pasa a ACTIVO y sus cuotas empiezan a descontarse en planilla;
 // volver a subir reemplaza el archivo.
 export async function subirCompromisoFirmadoAction(formData: FormData): Promise<void> {
-  const sesion = await requireGestionarPrestamos();
+  const sesion = await requireOperarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   const archivo = formData.get("archivo");
@@ -584,7 +584,7 @@ export async function generarLinkPrestamoAction(
   _prevState: GenerarLinkPrestamoState,
   formData: FormData,
 ): Promise<GenerarLinkPrestamoState> {
-  await requireGestionarPrestamos();
+  await requireOperarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   if (!idPrestamo) return { ok: false, error: "Préstamo inválido." };
@@ -613,7 +613,7 @@ export async function generarLinkPrestamoAction(
 // mismo restringe esto a prestamos de contacto, ver
 // SP_RRHH_PRESTAMO_CUOTA_MARCAR_PAGADA_MANUAL.
 export async function marcarCuotaPagadaManualAction(formData: FormData): Promise<void> {
-  await requireGestionarPrestamos();
+  await requireOperarPrestamos();
 
   const idPrestamo = Number(formData.get("idPrestamo"));
   const idCuota = Number(formData.get("idCuota"));

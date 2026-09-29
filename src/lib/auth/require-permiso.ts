@@ -89,6 +89,26 @@ export async function requireGestionarPrestamos(): Promise<SesionUsuario> {
   return sesion;
 }
 
+// Tareas operativas de un prestamo ya otorgado -- subir/enviar el link del
+// compromiso firmado, agregar o ajustar una cuota, marcar pagada una cuota
+// de un contacto -- no son la decision de aprobar/anular/eliminar el
+// prestamo, asi que ademas de los 4 roles de puedeGestionarPrestamos
+// tambien las puede hacer quien tenga ESCRITURA sobre RRHH_PLANILLA (ej.
+// RRHH_ASISTENTE, ADMINISTRACION_ASISTENTE).
+export async function puedeOperarPrestamos(idUsuario: number): Promise<boolean> {
+  if (await puedeGestionarPrestamos(idUsuario)) return true;
+  const permisos = await obtenerPermisosUsuario(idUsuario);
+  return tienePermiso(permisos, "RRHH_PLANILLA", "ESCRITURA");
+}
+
+export async function requireOperarPrestamos(): Promise<SesionUsuario> {
+  const sesion = await requireSession();
+  if (!(await puedeOperarPrestamos(sesion.idUsuario))) {
+    redirect("/");
+  }
+  return sesion;
+}
+
 // Resumen gerencial en la ficha del directorio (prestamos/adelantos
 // activos, contratos, alerta de vencimiento) -- informacion sensible que
 // no todo el que tenga acceso al Directorio deberia ver, solo Gerencia
