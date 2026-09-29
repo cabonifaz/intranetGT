@@ -25,6 +25,7 @@ DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_PENDIENTES_DEL_PERIODO_LISTAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_VINCULAR_DETALLE;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_LISTAR_DEL_DETALLE;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_MARCAR_PAGADA_MANUAL;
+DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_ELIMINAR;
 
 DELIMITER $$
 
@@ -263,7 +264,7 @@ BEGIN
            COALESCE(u.NOMBRES, dc.NOMBRES) AS NOMBRES, COALESCE(u.APELLIDOS, dc.APELLIDOS) AS APELLIDOS,
            (p.ID_CONTACTO IS NOT NULL) AS ES_CONTACTO,
            u.CORREO,
-           COALESCE(e.PUESTO, dc.CARGO) AS PUESTO,
+           COALESCE(r.NOMBRE, dc.CARGO) AS PUESTO,
            td.DESCRIPCION AS TIPO_DOCUMENTO_DESCRIPCION, e.NRO_DOCUMENTO, e.DIRECCION,
            p.MONTO_TOTAL, p.ID_MONEDA, mo.CODIGO AS MONEDA_CODIGO, mo.DESCRIPCION AS MONEDA_DESCRIPCION, p.TIPO_CAMBIO,
            p.DESCRIPCION, p.FECHA_ORIGEN,
@@ -278,6 +279,11 @@ BEGIN
       LEFT JOIN USUARIO u ON u.ID_USUARIO = p.ID_USUARIO
       LEFT JOIN RRHH_EMPLEADO e ON e.ID_USUARIO = u.ID_USUARIO
       LEFT JOIN MAESTRO_MAESTRO td ON td.ID_MAESTRO = e.ID_TIPO_DOCUMENTO
+      -- PUESTO ya no es columna propia de RRHH_EMPLEADO (ver
+      -- 028_empleado_calculado.sql) -- es el nombre del rol principal,
+      -- mismo criterio que SP_RRHH_EMPLEADO_OBTENER/LISTAR.
+      LEFT JOIN USUARIO_ROL ur ON ur.ID_USUARIO = u.ID_USUARIO AND ur.ES_PRINCIPAL = 1
+      LEFT JOIN ROL r ON r.ID_ROL = ur.ID_ROL
       LEFT JOIN DIRECTORIO_CONTACTO_EXTERNO dc ON dc.ID_CONTACTO = p.ID_CONTACTO
       JOIN MAESTRO_MAESTRO mo ON mo.ID_MAESTRO = p.ID_MONEDA
       JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = p.ID_ESTADO_PRESTAMO
@@ -504,6 +510,47 @@ BEGIN
        AND c.ID_PLANILLA_DETALLE IS NULL
        AND p.ID_CONTACTO IS NOT NULL
        AND ep.CODIGO = 'ACTIVO';
+END$$
+
+-- Borrado definitivo (no "anular") -- pensado para limpiar solicitudes/
+-- prestamos creados por error o por un reintento (ej. tras un fallo a
+-- medio guardar) antes de que se firme el compromiso. Solo mientras el
+-- prestamo NUNCA se firmo (ep.CODIGO != 'ACTIVO' -- SOLICITADO o
+-- PENDIENTE_FIRMA); uno ya ACTIVO se anula, no se borra, porque ya puede
+-- tener cuotas descontadas en planilla. Si ya se habia registrado el
+-- movimiento de desembolso (CUENTA_MOVIMIENTO), se revierte devolviendo
+-- el monto a la cuenta antes de borrar el movimiento -- no debe quedar
+-- un egreso fantasma en el estado de cuenta. No-op silencioso si el
+-- prestamo no existe o ya esta ACTIVO.
+CREATE PROCEDURE SP_RRHH_PRESTAMO_ELIMINAR(
+    IN p_id_prestamo INT UNSIGNED
+)
+BEGIN
+    DECLARE v_id_movimiento INT UNSIGNED;
+    DECLARE v_id_cuenta INT UNSIGNED;
+    DECLARE v_monto DECIMAL(14,2);
+
+    IF EXISTS (
+        SELECT 1 FROM RRHH_PRESTAMO p
+          JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = p.ID_ESTADO_PRESTAMO
+         WHERE p.ID_PRESTAMO = p_id_prestamo AND ep.CODIGO != 'ACTIVO'
+    ) THEN
+        SELECT ID_MOVIMIENTO_DESEMBOLSO, ID_CUENTA_DESEMBOLSO
+          INTO v_id_movimiento, v_id_cuenta
+          FROM RRHH_PRESTAMO
+         WHERE ID_PRESTAMO = p_id_prestamo;
+
+        IF v_id_movimiento IS NOT NULL THEN
+            SELECT MONTO INTO v_monto FROM CUENTA_MOVIMIENTO WHERE ID_MOVIMIENTO = v_id_movimiento;
+            -- El desembolso se registro como EGRESO -- revertirlo es
+            -- devolver ese monto a la cuenta.
+            UPDATE CUENTA_EMPRESA SET SALDO_ACTUAL = SALDO_ACTUAL + v_monto WHERE ID_CUENTA = v_id_cuenta;
+            DELETE FROM CUENTA_MOVIMIENTO WHERE ID_MOVIMIENTO = v_id_movimiento;
+        END IF;
+
+        DELETE FROM RRHH_PRESTAMO_CUOTA WHERE ID_PRESTAMO = p_id_prestamo;
+        DELETE FROM RRHH_PRESTAMO WHERE ID_PRESTAMO = p_id_prestamo;
+    END IF;
 END$$
 
 DELIMITER ;

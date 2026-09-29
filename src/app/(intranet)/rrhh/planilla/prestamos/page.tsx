@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requirePermiso, puedeGestionarPrestamos } from "@/lib/auth/require-permiso";
 import { listarPrestamos } from "@/lib/db/repositories/rrhh-prestamo.repository";
+import { eliminarPrestamoAction } from "@/lib/actions/rrhh-prestamos";
+import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 
 function formatearMonto(monto: string | number, codigo: string): string {
   return `${codigo === "USD" ? "US$" : "S/"} ${Number(monto).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -77,6 +79,7 @@ export default async function PrestamosPage() {
               <th className="px-4 py-2 text-right">Pendiente</th>
               <th className="px-4 py-2 text-right">Cuotas</th>
               <th className="px-4 py-2">Estado</th>
+              <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -112,11 +115,26 @@ export default async function PrestamosPage() {
                     {p.ESTADO_PRESTAMO_DESCRIPCION}
                   </span>
                 </td>
+                <td className="px-4 py-2 text-right">
+                  {puedeGestionar && p.ESTADO_PRESTAMO_CODIGO !== "ACTIVO" ? (
+                    <form action={eliminarPrestamoAction}>
+                      <input type="hidden" name="idPrestamo" value={p.ID_PRESTAMO} />
+                      <ConfirmSubmitButton
+                        mensaje={`¿Eliminar definitivamente este ${p.TIPO_PRESTAMO_DESCRIPCION.toLowerCase()} de ${p.NOMBRES} ${p.APELLIDOS}? No se puede deshacer.`}
+                        pendingText="Eliminando..."
+                        title="Eliminar (solo antes de firmar)"
+                        className="rounded-full px-2 py-0.5 text-xs text-slate-400 hover:bg-red-100 hover:text-red-700 dark:text-slate-500 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                      >
+                        Eliminar
+                      </ConfirmSubmitButton>
+                    </form>
+                  ) : null}
+                </td>
               </tr>
             ))}
             {prestamos.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-slate-400 dark:text-slate-500">
+                <td colSpan={9} className="px-4 py-6 text-center text-slate-400 dark:text-slate-500">
                   Aún no hay préstamos registrados.
                 </td>
               </tr>

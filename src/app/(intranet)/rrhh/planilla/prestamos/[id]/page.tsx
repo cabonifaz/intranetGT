@@ -7,7 +7,12 @@ import { tienePermiso } from "@/lib/rbac/permissions";
 import { obtenerPrestamo, listarCuotasPrestamo } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { listarCuentas } from "@/lib/db/repositories/cuenta.repository";
 import { obtenerTipoCambioVigente } from "@/lib/db/repositories/tipo-cambio.repository";
-import { agregarCuotaPrestamoAction, subirCompromisoFirmadoAction, marcarCuotaPagadaManualAction } from "@/lib/actions/rrhh-prestamos";
+import {
+  agregarCuotaPrestamoAction,
+  subirCompromisoFirmadoAction,
+  marcarCuotaPagadaManualAction,
+  eliminarPrestamoAction,
+} from "@/lib/actions/rrhh-prestamos";
 import { etiquetaPeriodoMensual } from "@/lib/rrhh/periodos-pago";
 import { formatearNroPrestamo } from "@/lib/rrhh/planilla/generar-compromiso-prestamo-pdf";
 import AnularPrestamoBoton from "@/components/rrhh/AnularPrestamoBoton";
@@ -101,7 +106,21 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
             {nroPrestamo} -- {prestamo.ESTADO_PRESTAMO_DESCRIPCION}
           </p>
         </div>
-        {!anulado && puedeGestionar ? <AnularPrestamoBoton idPrestamo={prestamo.ID_PRESTAMO} /> : null}
+        <div className="flex items-center gap-2">
+          {!firmado && puedeGestionar ? (
+            <form action={eliminarPrestamoAction}>
+              <input type="hidden" name="idPrestamo" value={prestamo.ID_PRESTAMO} />
+              <ConfirmSubmitButton
+                mensaje="¿Eliminar definitivamente esta solicitud/préstamo? No se puede deshacer."
+                pendingText="Eliminando..."
+                className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+              >
+                Eliminar
+              </ConfirmSubmitButton>
+            </form>
+          ) : null}
+          {!anulado && puedeGestionar ? <AnularPrestamoBoton idPrestamo={prestamo.ID_PRESTAMO} /> : null}
+        </div>
       </div>
 
       <PasosPrestamo paso={etapa.paso} finalizado={etapa.finalizado} anulado={etapa.anulado} esContacto={esContacto} />

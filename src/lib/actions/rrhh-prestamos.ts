@@ -17,6 +17,7 @@ import {
   solicitarPrestamo,
   otorgarPrestamo,
   marcarCuotaPagadaManual,
+  eliminarPrestamo,
 } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { listarCuentas, registrarMovimientoCuenta, obtenerIdTipoMovimientoEgreso } from "@/lib/db/repositories/cuenta.repository";
@@ -573,4 +574,25 @@ export async function marcarCuotaPagadaManualAction(formData: FormData): Promise
 
   await marcarCuotaPagadaManual(idCuota);
   revalidarPrestamo(idPrestamo);
+}
+
+// Borra definitivamente una solicitud/prestamo que nunca llego a
+// firmarse (SOLICITADO o PENDIENTE_FIRMA) -- pensado para limpiar
+// duplicados de un reintento o una solicitud creada por error. Uno ya
+// ACTIVO (firmado) no se borra, se anula (anularPrestamoAction), porque
+// ya puede tener cuotas descontadas en planilla -- el guard en SQL
+// (SP_RRHH_PRESTAMO_ELIMINAR) tambien lo protege por si esto se saltara.
+export async function eliminarPrestamoAction(formData: FormData): Promise<void> {
+  await requireGestionarPrestamos();
+
+  const idPrestamo = Number(formData.get("idPrestamo"));
+  if (!idPrestamo) return;
+
+  const prestamo = await obtenerPrestamo(idPrestamo);
+  if (!prestamo || prestamo.ESTADO_PRESTAMO_CODIGO === "ACTIVO") return;
+
+  await eliminarPrestamo(idPrestamo);
+
+  revalidatePath("/rrhh/planilla/prestamos");
+  redirect("/rrhh/planilla/prestamos");
 }

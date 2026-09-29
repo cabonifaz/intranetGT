@@ -156,3 +156,9 @@ export async function listarCuotasDelDetalle(idPlanillaDetalle: number): Promise
 export async function marcarCuotaPagadaManual(idCuota: number): Promise<void> {
   await callProcedure("SP_RRHH_PRESTAMO_CUOTA_MARCAR_PAGADA_MANUAL", [idCuota]);
 }
+
+// Borrado definitivo (no "anular") -- solo mientras el prestamo nunca se
+// firmo. Ver SP_RRHH_PRESTAMO_ELIMINAR.
+export async function eliminarPrestamo(idPrestamo: number): Promise<void> {
+  await callProcedure("SP_RRHH_PRESTAMO_ELIMINAR", [idPrestamo]);
+}
