@@ -50,12 +50,18 @@ export async function requireCierreProyecto(): Promise<SesionUsuario> {
 
 // Importar un contrato ya firmado (subir la solicitud escaneada, saltando
 // generacion+firma digital) es una puerta de atras al flujo normal -- solo
-// para SUPER_ADMIN ("el Administrador"), GERENCIA_GENERAL ("el Gerente") o
-// RRHH_JEFATURA ("Gerente/Jefatura de RRHH"), nunca solo por tener ADMIN
-// sobre RRHH_CONTRATOS.
+// para SUPER_ADMIN ("el Administrador"), GERENCIA_GENERAL ("el Gerente"),
+// RRHH_JEFATURA ("Gerente/Jefatura de RRHH") o ADMINISTRACION_JEFATURA
+// ("Jefatura de Administracion"), nunca solo por tener ADMIN sobre
+// RRHH_CONTRATOS. Un solo gate para todo el flujo (subir, confirmar y
+// aprobar automaticamente al confirmar, deshacer la carga) -- decision
+// de negocio del 2026-09-29, mismo criterio que las demas ampliaciones a
+// ADMINISTRACION_JEFATURA en Contratos/Planilla.
 export async function puedeImportarContrato(idUsuario: number): Promise<boolean> {
   const roles = await listarRolesActivosDeUsuario(idUsuario);
-  return roles.some((r) => r.ROL_CODIGO === "SUPER_ADMIN" || r.ROL_CODIGO === "GERENCIA_GENERAL" || r.ROL_CODIGO === "RRHH_JEFATURA");
+  return roles.some((r) =>
+    ["SUPER_ADMIN", "GERENCIA_GENERAL", "RRHH_JEFATURA", "ADMINISTRACION_JEFATURA"].includes(r.ROL_CODIGO),
+  );
 }
 
 export async function requireImportarContrato(): Promise<SesionUsuario> {
