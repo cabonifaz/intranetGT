@@ -16,6 +16,7 @@ import {
 import { etiquetaPeriodoMensual } from "@/lib/rrhh/periodos-pago";
 import { formatearNroPrestamo } from "@/lib/rrhh/planilla/generar-compromiso-prestamo-pdf";
 import AnularPrestamoBoton from "@/components/rrhh/AnularPrestamoBoton";
+import GenerarLinkPrestamoButton from "@/components/rrhh/GenerarLinkPrestamoButton";
 import PrestamoCuotaAcciones from "@/components/rrhh/PrestamoCuotaAcciones";
 import OtorgarPrestamoForm from "@/components/rrhh/OtorgarPrestamoForm";
 import PasosPrestamo, { etapaDesdeEstadoPrestamo } from "@/components/rrhh/PasosPrestamo";
@@ -241,6 +242,18 @@ export default async function DetallePrestamoPage({ params }: { params: Promise<
                 </SubmitButton>
               </form>
               <NotaAyuda>PDF, PNG o JPG de hasta 15 MB.</NotaAyuda>
+
+              {!firmado ? (
+                <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+                  <h3 className="mb-1 text-sm font-semibold text-slate-800 dark:text-white">O envía un link para que firme en pantalla</h3>
+                  <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                    El colaborador (o el contacto beneficiario) abre el link sin iniciar sesión, revisa el compromiso y
+                    firma con el dedo/mouse o subiendo una foto de su firma. Solo se captura su firma -- la de la
+                    empresa sigue siendo solo el nombre impreso. Vale 7 días; si vence, genera otro.
+                  </p>
+                  <GenerarLinkPrestamoButton idPrestamo={prestamo.ID_PRESTAMO} />
+                </div>
+              ) : null}
             </>
           ) : null}
         </section>

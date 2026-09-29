@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { headers } from "next/headers";
 import { revalidatePath, refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/get-current-user";
@@ -18,6 +20,7 @@ import {
   otorgarPrestamo,
   marcarCuotaPagadaManual,
   eliminarPrestamo,
+  generarLinkPrestamo,
 } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { listarCuentas, registrarMovimientoCuenta, obtenerIdTipoMovimientoEgreso } from "@/lib/db/repositories/cuenta.repository";
@@ -40,6 +43,8 @@ const TIPOS_COMPROMISO_FIRMADO: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
 };
+// Mismo plazo que el link de firma de Contratos, ver generarLinkContratoAction.
+const DIAS_VIGENCIA_LINK_PRESTAMO = 7;
 
 function hoyIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -556,9 +561,51 @@ export async function subirCompromisoFirmadoAction(formData: FormData): Promise<
 
   const rutaRelativa = `rrhh/prestamos/${idPrestamo}/compromiso-firmado.${extension}`;
   await guardarArchivo(rutaRelativa, new Uint8Array(await archivo.arrayBuffer()));
-  await registrarFirmaPrestamo(idPrestamo, rutaRelativa, sesion.idUsuario);
+  await registrarFirmaPrestamo(idPrestamo, rutaRelativa, null, sesion.idUsuario);
 
   revalidarPrestamo(idPrestamo);
+}
+
+// Estado devuelto por generarLinkPrestamoAction -- mismo patron que
+// GenerarLinkContratoState en rrhh.ts.
+export interface GenerarLinkPrestamoState {
+  ok: boolean;
+  error?: string;
+  url?: string;
+}
+
+// Genera (o regenera, si el anterior vencio) el link publico para que el
+// beneficiario firme el compromiso el mismo, sin iniciar sesion -- mismo
+// mecanismo que generarLinkContratoAction: token de 7 dias, sin volver a
+// pedir permiso extra. Solo tiene sentido en PENDIENTE_FIRMA (ya
+// otorgado, con cronograma y compromiso listos) -- el SP no-opea en
+// cualquier otro estado.
+export async function generarLinkPrestamoAction(
+  _prevState: GenerarLinkPrestamoState,
+  formData: FormData,
+): Promise<GenerarLinkPrestamoState> {
+  await requireGestionarPrestamos();
+
+  const idPrestamo = Number(formData.get("idPrestamo"));
+  if (!idPrestamo) return { ok: false, error: "Préstamo inválido." };
+
+  const prestamo = await obtenerPrestamo(idPrestamo);
+  if (!prestamo || prestamo.ESTADO_PRESTAMO_CODIGO !== "PENDIENTE_FIRMA") {
+    return { ok: false, error: "Solo se puede generar el link mientras el compromiso está pendiente de firma." };
+  }
+
+  const token = randomUUID();
+  const expira = new Date(Date.now() + DIAS_VIGENCIA_LINK_PRESTAMO * 24 * 60 * 60 * 1000);
+  await generarLinkPrestamo(idPrestamo, token, expira);
+
+  const listaHeaders = await headers();
+  const host = listaHeaders.get("host");
+  const protocolo = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  revalidatePath(`/rrhh/planilla/prestamos/${idPrestamo}`);
+  refresh();
+
+  return { ok: true, url: `${protocolo}://${host}/prestamos/firmar/${token}` };
 }
 
 // Para un prestamo con beneficiario CONTACTO (sin planilla de donde

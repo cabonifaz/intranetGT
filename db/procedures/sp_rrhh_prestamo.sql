@@ -26,6 +26,8 @@ DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_VINCULAR_DETALLE;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_LISTAR_DEL_DETALLE;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_CUOTA_MARCAR_PAGADA_MANUAL;
 DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_ELIMINAR;
+DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_GENERAR_LINK;
+DROP PROCEDURE IF EXISTS SP_RRHH_PRESTAMO_OBTENER_POR_TOKEN;
 
 DELIMITER $$
 
@@ -272,7 +274,7 @@ BEGIN
            p.ID_TIPO_PRESTAMO, tp.CODIGO AS TIPO_PRESTAMO_CODIGO, tp.DESCRIPCION AS TIPO_PRESTAMO_DESCRIPCION,
            p.ID_CUENTA_DESEMBOLSO, ce.NOMBRE AS CUENTA_DESEMBOLSO_NOMBRE, p.ID_MOVIMIENTO_DESEMBOLSO,
            p.ID_ESTADO_PRESTAMO, ep.CODIGO AS ESTADO_PRESTAMO_CODIGO, ep.DESCRIPCION AS ESTADO_PRESTAMO_DESCRIPCION,
-           p.DOCUMENTO_FIRMADO_PATH, p.FECHA_FIRMA_COMPROMISO,
+           p.DOCUMENTO_FIRMADO_PATH, p.FECHA_FIRMA_COMPROMISO, p.TOKEN_FIRMA, p.TOKEN_EXPIRA,
            p.MOTIVO_ANULACION, p.FECHA_ANULACION,
            p.FECHA_CREACION
       FROM RRHH_PRESTAMO p
@@ -297,9 +299,17 @@ END$$
 -- ruta). Pasa a ACTIVO -- desde aca sus cuotas entran a la planilla.
 -- Tambien sirve para reemplazar el archivo (ya ACTIVO). No-op silencioso
 -- si el prestamo esta ANULADO.
+-- p_firma_png_path es NULL cuando RRHH sube el documento ya firmado en
+-- papel (subirCompromisoFirmadoAction, sin firma digital propia que
+-- guardar) -- se completa cuando el beneficiario firma via el link
+-- publico (ver api/prestamos/publico/[token]/firmar, que llama este mismo
+-- SP con la ruta de la firma). Limpia el token de firma en cualquier
+-- caso: una vez firmado (por cualquiera de las dos vias) el link deja de
+-- servir.
 CREATE PROCEDURE SP_RRHH_PRESTAMO_REGISTRAR_FIRMA(
     IN p_id_prestamo INT UNSIGNED,
     IN p_documento_path VARCHAR(300),
+    IN p_firma_png_path VARCHAR(300),
     IN p_id_usuario INT UNSIGNED
 )
 BEGIN
@@ -309,8 +319,68 @@ BEGIN
     UPDATE RRHH_PRESTAMO p
       JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = p.ID_ESTADO_PRESTAMO
        SET p.ID_ESTADO_PRESTAMO = v_id_activo, p.DOCUMENTO_FIRMADO_PATH = p_documento_path,
-           p.FECHA_FIRMA_COMPROMISO = NOW(), p.USUARIO_FIRMA_REGISTRO = p_id_usuario
+           p.FIRMA_PNG_PATH = p_firma_png_path,
+           p.FECHA_FIRMA_COMPROMISO = NOW(), p.USUARIO_FIRMA_REGISTRO = p_id_usuario,
+           p.TOKEN_FIRMA = NULL, p.TOKEN_EXPIRA = NULL
      WHERE p.ID_PRESTAMO = p_id_prestamo AND ep.CODIGO IN ('PENDIENTE_FIRMA', 'ACTIVO');
+END$$
+
+-- Genera (o regenera) el link publico de firma -- mismo criterio que
+-- SP_RRHH_CONTRATO_GENERAR_LINK: llamarlo de nuevo simplemente pisa el
+-- token anterior (asi se puede reemplazar uno vencido). Solo tiene
+-- sentido mientras el prestamo esta PENDIENTE_FIRMA (ya otorgado, con
+-- cronograma y compromiso listos para firmar) -- no-op silencioso en
+-- cualquier otro estado.
+CREATE PROCEDURE SP_RRHH_PRESTAMO_GENERAR_LINK(
+    IN p_id_prestamo INT UNSIGNED,
+    IN p_token CHAR(36),
+    IN p_token_expira DATETIME
+)
+BEGIN
+    UPDATE RRHH_PRESTAMO p
+      JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = p.ID_ESTADO_PRESTAMO
+       SET p.TOKEN_FIRMA = p_token, p.TOKEN_EXPIRA = p_token_expira
+     WHERE p.ID_PRESTAMO = p_id_prestamo AND ep.CODIGO = 'PENDIENTE_FIRMA';
+END$$
+
+-- Para la pagina publica de firma (sin sesion) -- mismo shape que
+-- SP_RRHH_PRESTAMO_OBTENER (trabajador o contacto), mas el token/su
+-- vencimiento para que la app decida si el link sigue vigente.
+CREATE PROCEDURE SP_RRHH_PRESTAMO_OBTENER_POR_TOKEN(
+    IN p_token CHAR(36)
+)
+BEGIN
+    -- Mismo SELECT que SP_RRHH_PRESTAMO_OBTENER (misma forma de fila,
+    -- reusable directo para generar el PDF firmado) -- solo cambia el
+    -- WHERE, por token en vez de por ID.
+    SELECT p.ID_PRESTAMO, p.ID_USUARIO, p.ID_CONTACTO,
+           COALESCE(u.NOMBRES, dc.NOMBRES) AS NOMBRES, COALESCE(u.APELLIDOS, dc.APELLIDOS) AS APELLIDOS,
+           (p.ID_CONTACTO IS NOT NULL) AS ES_CONTACTO,
+           u.CORREO,
+           COALESCE(r.NOMBRE, dc.CARGO) AS PUESTO,
+           td.DESCRIPCION AS TIPO_DOCUMENTO_DESCRIPCION, e.NRO_DOCUMENTO, e.DIRECCION,
+           p.MONTO_TOTAL, p.ID_MONEDA, mo.CODIGO AS MONEDA_CODIGO, mo.DESCRIPCION AS MONEDA_DESCRIPCION, p.TIPO_CAMBIO,
+           p.DESCRIPCION, p.FECHA_ORIGEN,
+           p.NRO_CUOTAS_SOLICITADO, p.ANIO_INICIO_SOLICITADO, p.MES_INICIO_SOLICITADO,
+           p.ID_TIPO_PRESTAMO, tp.CODIGO AS TIPO_PRESTAMO_CODIGO, tp.DESCRIPCION AS TIPO_PRESTAMO_DESCRIPCION,
+           p.ID_CUENTA_DESEMBOLSO, ce.NOMBRE AS CUENTA_DESEMBOLSO_NOMBRE, p.ID_MOVIMIENTO_DESEMBOLSO,
+           p.ID_ESTADO_PRESTAMO, ep.CODIGO AS ESTADO_PRESTAMO_CODIGO, ep.DESCRIPCION AS ESTADO_PRESTAMO_DESCRIPCION,
+           p.DOCUMENTO_FIRMADO_PATH, p.FECHA_FIRMA_COMPROMISO, p.TOKEN_FIRMA, p.TOKEN_EXPIRA,
+           p.MOTIVO_ANULACION, p.FECHA_ANULACION,
+           p.FECHA_CREACION
+      FROM RRHH_PRESTAMO p
+      LEFT JOIN USUARIO u ON u.ID_USUARIO = p.ID_USUARIO
+      LEFT JOIN RRHH_EMPLEADO e ON e.ID_USUARIO = u.ID_USUARIO
+      LEFT JOIN MAESTRO_MAESTRO td ON td.ID_MAESTRO = e.ID_TIPO_DOCUMENTO
+      LEFT JOIN USUARIO_ROL ur ON ur.ID_USUARIO = u.ID_USUARIO AND ur.ES_PRINCIPAL = 1
+      LEFT JOIN ROL r ON r.ID_ROL = ur.ID_ROL
+      LEFT JOIN DIRECTORIO_CONTACTO_EXTERNO dc ON dc.ID_CONTACTO = p.ID_CONTACTO
+      JOIN MAESTRO_MAESTRO mo ON mo.ID_MAESTRO = p.ID_MONEDA
+      JOIN MAESTRO_MAESTRO ep ON ep.ID_MAESTRO = p.ID_ESTADO_PRESTAMO
+      JOIN MAESTRO_MAESTRO tp ON tp.ID_MAESTRO = p.ID_TIPO_PRESTAMO
+      LEFT JOIN CUENTA_EMPRESA ce ON ce.ID_CUENTA = p.ID_CUENTA_DESEMBOLSO
+     WHERE p.TOKEN_FIRMA = p_token
+     LIMIT 1;
 END$$
 
 -- No-op silencioso si alguna cuota ya fue tomada por una planilla

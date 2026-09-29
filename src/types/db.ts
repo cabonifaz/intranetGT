@@ -1232,6 +1232,8 @@ export interface PrestamoRow extends RowDataPacket {
   ESTADO_PRESTAMO_DESCRIPCION: string;
   DOCUMENTO_FIRMADO_PATH: string | null;
   FECHA_FIRMA_COMPROMISO: string | null;
+  TOKEN_FIRMA: string | null;
+  TOKEN_EXPIRA: string | null;
   MOTIVO_ANULACION: string | null;
   FECHA_ANULACION: string | null;
   FECHA_CREACION: string;

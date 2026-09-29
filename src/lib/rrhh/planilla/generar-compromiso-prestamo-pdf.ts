@@ -6,8 +6,13 @@ import type { PrestamoRow, PrestamoCuotaRow } from "@/types/db";
 
 // Compromiso de pago y autorizacion de descuento de un prestamo a un
 // colaborador: un documento con todo el detalle del prestamo y su
-// cronograma de descuentos, que el colaborador firma (se imprime, se
-// firma y se sube firmado desde el detalle del prestamo). Se genera al
+// cronograma de descuentos. Se firma de dos formas: (a) se imprime, se
+// firma a mano y se sube firmado desde el detalle del prestamo, o (b) el
+// beneficiario lo firma el mismo desde el link publico (dibujando su
+// firma o subiendo una foto, ver /prestamos/firmar/[token]) -- en ese
+// caso firmaColaboradorPngBytes trae la firma para incrustarla. La firma
+// de EL EMPLEADOR nunca se captura digitalmente, solo se imprime el
+// nombre del representante (mismo criterio que Contratos). Se genera al
 // vuelo con el cronograma vigente -- si el cronograma cambia despues de
 // firmar, se vuelve a generar para una nueva firma.
 //
@@ -28,6 +33,9 @@ export interface DatosCompromisoPrestamoPdf {
   cuotas: PrestamoCuotaRow[];
   logoBytes: Uint8Array | null;
   logoFormato: "png" | "jpg" | null;
+  // Firma dibujada/subida por el beneficiario via el link publico de
+  // firma -- null para la vista previa sin firmar.
+  firmaColaboradorPngBytes?: Uint8Array | null;
 }
 
 export async function generarCompromisoPrestamoPdf(datos: DatosCompromisoPrestamoPdf): Promise<Uint8Array> {
@@ -117,7 +125,11 @@ export async function generarCompromisoPrestamoPdf(datos: DatosCompromisoPrestam
 
   await writer.firmasEnColumnas(
     { nombre: EMPLEADOR.representanteNombre, rol: `EL EMPLEADOR - ${EMPLEADOR.razonSocial}`, firmaPngBytes: null },
-    { nombre: nombreColaborador, rol: `EL COLABORADOR - ${prestamo.TIPO_DOCUMENTO_DESCRIPCION ?? "DNI"} ${prestamo.NRO_DOCUMENTO ?? ""}`.trim(), firmaPngBytes: null },
+    {
+      nombre: nombreColaborador,
+      rol: `EL COLABORADOR - ${prestamo.TIPO_DOCUMENTO_DESCRIPCION ?? "DNI"} ${prestamo.NRO_DOCUMENTO ?? ""}`.trim(),
+      firmaPngBytes: datos.firmaColaboradorPngBytes ?? null,
+    },
   );
 
   return writer.bytes();

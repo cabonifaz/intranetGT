@@ -10,6 +10,18 @@ export async function obtenerPrestamo(idPrestamo: number): Promise<PrestamoRow |
   return rows[0] ?? null;
 }
 
+// Para la pagina publica de firma (sin sesion, ver /prestamos/firmar/[token]).
+export async function obtenerPrestamoPorToken(token: string): Promise<PrestamoRow | null> {
+  const rows = await callProcedure<PrestamoRow>("SP_RRHH_PRESTAMO_OBTENER_POR_TOKEN", [token]);
+  return rows[0] ?? null;
+}
+
+// Vale 7 dias, mismo criterio que Contratos -- llamarlo de nuevo pisa el
+// token anterior (sirve para regenerar uno vencido).
+export async function generarLinkPrestamo(idPrestamo: number, token: string, tokenExpira: Date): Promise<void> {
+  await callProcedure("SP_RRHH_PRESTAMO_GENERAR_LINK", [idPrestamo, token, tokenExpira]);
+}
+
 // Beneficiario: exactamente uno de idUsuario/idContacto (nunca ambos ni
 // ninguno) -- lo valida el SP, ver SP_RRHH_PRESTAMO_CREAR.
 interface CrearPrestamoParams {
@@ -95,8 +107,16 @@ export async function otorgarPrestamo(
   await callProcedure("SP_RRHH_PRESTAMO_OTORGAR", [idPrestamo, fechaOrigen, tipoCambio, idCuentaDesembolso]);
 }
 
-export async function registrarFirmaPrestamo(idPrestamo: number, documentoPath: string, idUsuario: number): Promise<void> {
-  await callProcedure("SP_RRHH_PRESTAMO_REGISTRAR_FIRMA", [idPrestamo, documentoPath, idUsuario]);
+// idUsuario: quien lo registra -- null cuando lo hace el propio
+// beneficiario via el link publico de firma (sin sesion). firmaPngPath
+// es null cuando RRHH sube el documento ya firmado en papel.
+export async function registrarFirmaPrestamo(
+  idPrestamo: number,
+  documentoPath: string,
+  firmaPngPath: string | null,
+  idUsuario: number | null,
+): Promise<void> {
+  await callProcedure("SP_RRHH_PRESTAMO_REGISTRAR_FIRMA", [idPrestamo, documentoPath, firmaPngPath, idUsuario]);
 }
 
 export async function anularPrestamo(idPrestamo: number, motivo: string, idUsuario: number): Promise<void> {
