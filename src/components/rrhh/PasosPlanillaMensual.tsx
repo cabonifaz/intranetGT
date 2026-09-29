@@ -28,7 +28,7 @@ function armarEtapas({ totalColaboradores, totalEmitidos, totalPagados }: PasosP
       descripcion: "Agrega a todos los colaboradores con contrato vigente ese mes, ya con su bruto y descuentos calculados.",
       hecho: hayColaboradores,
       progreso: null,
-      ahora: 'Ve a la lista de Planilla Mensual y usa "Generar planilla del mes". Si no agrega a nadie, revisa que exista una versión de parámetros vigente.',
+      ahora: 'Usa el botón "Generar planilla del mes" de arriba. Si no agrega a nadie, revisa que exista una versión de parámetros vigente.',
     },
     {
       titulo: "Revisar y emitir boletas/recibos",

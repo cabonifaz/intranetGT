@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermiso } from "@/lib/auth/require-permiso";
 import { obtenerPlanillaMensual, listarDetalle } from "@/lib/db/repositories/rrhh-planilla.repository";
-import { marcarPagadoDetalleAction, marcarPagadoMasivoAction, emitirPlanillaMensualAction } from "@/lib/actions/rrhh-planilla";
+import { marcarPagadoDetalleAction, marcarPagadoMasivoAction, emitirPlanillaMensualAction, generarPlanillaMensualAction } from "@/lib/actions/rrhh-planilla";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import SubmitButton from "@/components/ui/SubmitButton";
 import PasosPlanillaMensual from "@/components/rrhh/PasosPlanillaMensual";
@@ -44,6 +44,18 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {!emitida ? (
+            <form action={generarPlanillaMensualAction}>
+              <input type="hidden" name="anio" value={planilla.ANIO} />
+              <input type="hidden" name="mes" value={planilla.MES} />
+              <SubmitButton
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                pendingText="Generando..."
+              >
+                {filas.length === 0 ? "Generar planilla del mes" : "Actualizar planilla"}
+              </SubmitButton>
+            </form>
+          ) : null}
           <a
             href={`/api/rrhh/planilla/${idPlanillaMensual}/resumen`}
             target="_blank"
@@ -88,8 +100,8 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
         </div>
       ) : !hayPendientes && filas.length === 0 ? (
         <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
-          Todavia no hay colaboradores en esta planilla -- vuelve a la lista y usa &quot;Generar/Actualizar planilla&quot;. Si el
-          boton no agrega a nadie, revisa que exista una version de parametros vigente en{" "}
+          Todavia no hay colaboradores en esta planilla -- usa el boton &quot;Generar planilla del mes&quot; de arriba. Si no
+          agrega a nadie, revisa que exista una version de parametros vigente en{" "}
           <Link href="/rrhh/planilla/parametros" className="underline">
             /rrhh/planilla/parametros
           </Link>
