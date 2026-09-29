@@ -7,6 +7,8 @@ import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import SubmitButton from "@/components/ui/SubmitButton";
 import PasosPlanillaMensual from "@/components/rrhh/PasosPlanillaMensual";
 import ReabrirPlanillaBoton from "@/components/rrhh/ReabrirPlanillaBoton";
+import DiagnosticoPlanillaMensual from "@/components/rrhh/DiagnosticoPlanillaMensual";
+import { diagnosticarGeneracionPlanilla } from "@/lib/rrhh/planilla/diagnostico";
 
 function formatearMonto(monto: string | number): string {
   return `S/ ${Number(monto).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -30,6 +32,14 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
   const totalEmitidos = filas.filter((f) => f.ESTADO_EMISION_CODIGO === "EMITIDA").length;
   const totalPagados = filas.filter((f) => f.AFP_ESSALUD_PAGADO).length;
   const planillaVaciaYaEmitida = emitida && filas.length === 0;
+
+  const diagnostico = !emitida
+    ? await diagnosticarGeneracionPlanilla(
+        planilla.ANIO,
+        planilla.MES,
+        new Set(filas.map((f) => f.ID_CONTRATO)),
+      )
+    : null;
 
   return (
     <div>
@@ -100,14 +110,12 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
         </div>
       ) : !hayPendientes && filas.length === 0 ? (
         <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
-          Todavia no hay colaboradores en esta planilla -- usa el boton &quot;Generar planilla del mes&quot; de arriba. Si no
-          agrega a nadie, revisa que exista una version de parametros vigente en{" "}
-          <Link href="/rrhh/planilla/parametros" className="underline">
-            /rrhh/planilla/parametros
-          </Link>
-          .
+          Todavia no hay colaboradores en esta planilla -- usa el boton &quot;Generar planilla del mes&quot; de arriba. Mira abajo lo
+          que falta para que traiga a todos.
         </div>
       ) : null}
+
+      {diagnostico ? <DiagnosticoPlanillaMensual diagnostico={diagnostico} /> : null}
 
       <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <table className="w-full text-left text-sm">
