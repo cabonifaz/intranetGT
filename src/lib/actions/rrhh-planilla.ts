@@ -31,7 +31,7 @@ import { listarPeriodosPago, agregarPeriodoPago, actualizarPeriodoPago } from "@
 import { listarConceptosContrato } from "@/lib/db/repositories/contrato.repository";
 import { obtenerParametrosVigentes } from "@/lib/rrhh/planilla/parametros";
 import { calcularBoletaPlanilla, calcularRxH, type ParametrosPlanillaVigentes } from "@/lib/rrhh/planilla/calculo";
-import { generarPeriodosPendientes, etiquetaPeriodoMensual } from "@/lib/rrhh/periodos-pago";
+import { generarPeriodosPendientesDetallado, etiquetaPeriodoMensual, factorProrateoDelMes } from "@/lib/rrhh/periodos-pago";
 import { generarBoletaPdf } from "@/lib/rrhh/planilla/generar-boleta-pdf";
 import { generarReciboHonorariosPdf } from "@/lib/rrhh/planilla/generar-recibo-honorarios-pdf";
 import { cargarLogoEmpresa } from "@/lib/rrhh/resolver-plantilla";
@@ -53,12 +53,13 @@ function esVigenteEnMes(contrato: PlanillaContratoElegibleRow, inicioMes: string
 }
 
 // Asegura que exista el RRHH_CONTRATO_PERIODO_PAGO de este mes -- reusa
-// generarPeriodosPendientes/agregarPeriodoPago (no reimplementa esa
-// logica, ver src/lib/rrhh/periodos-pago.ts), con el mismo monto
+// generarPeriodosPendientesDetallado/agregarPeriodoPago (no reimplementa
+// esa logica, ver src/lib/rrhh/periodos-pago.ts), con el mismo monto
 // sugerido que ya usa generarPeriodosPendientesAction en rrhh.ts (suma
-// de conceptos para planilla, TARIFA para locador de tarifa unica).
-// null si el contrato aun no genera periodo este mes (ej. recien
-// arranca el mes que viene).
+// de conceptos para planilla, TARIFA para locador de tarifa unica) --
+// PRORRATEADO (30 dias fijos, ver factorProrateoDelMes) en el mes en que
+// el contrato empieza y/o termina a mitad de mes. null si el contrato
+// aun no genera periodo este mes (ej. recien arranca el mes que viene).
 async function asegurarPeriodoDelMes(
   contrato: PlanillaContratoElegibleRow,
   periodo: string,
@@ -70,19 +71,21 @@ async function asegurarPeriodoDelMes(
   const existente = periodosActuales.find((p) => p.PERIODO.trim().toUpperCase() === buscado);
   if (existente) return { idPeriodoPago: existente.ID_PERIODO_PAGO, monto: Number(existente.MONTO) };
 
-  const pendientes = generarPeriodosPendientes(
+  const pendientes = generarPeriodosPendientesDetallado(
     contrato.FECHA_INICIO,
     contrato.FECHA_FIN,
     periodosActuales.map((p) => p.PERIODO),
   );
-  if (!pendientes.some((p) => p.trim().toUpperCase() === buscado)) return null;
+  if (!pendientes.some((p) => p.etiqueta.trim().toUpperCase() === buscado)) return null;
 
   const conceptos = esPlanilla ? await listarConceptosContrato(contrato.ID_CONTRATO) : [];
   const montoSugerido = esPlanilla ? conceptos.reduce((suma, c) => suma + Number(c.MONTO), 0) : Number(contrato.TARIFA ?? 0);
   if (!montoSugerido) return null;
 
-  for (const etiqueta of pendientes) {
-    await agregarPeriodoPago(contrato.ID_CONTRATO, etiqueta, montoSugerido, idUsuario);
+  for (const pendiente of pendientes) {
+    const factor = factorProrateoDelMes(pendiente.anio, pendiente.mes, contrato.FECHA_INICIO, contrato.FECHA_FIN);
+    const monto = Math.round(montoSugerido * factor * 100) / 100;
+    await agregarPeriodoPago(contrato.ID_CONTRATO, pendiente.etiqueta, monto, idUsuario);
   }
 
   const periodosActualizados = await listarPeriodosPago(contrato.ID_CONTRATO);

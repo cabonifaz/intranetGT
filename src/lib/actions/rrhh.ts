@@ -35,7 +35,7 @@ import {
   eliminarPeriodoPago,
   marcarPeriodoPagoPagado,
 } from "@/lib/db/repositories/rrhh-periodo-pago.repository";
-import { generarPeriodosPendientes } from "@/lib/rrhh/periodos-pago";
+import { generarPeriodosPendientesDetallado, factorProrateoDelMes } from "@/lib/rrhh/periodos-pago";
 import {
   crearPlantilla,
   actualizarPlantilla,
@@ -470,9 +470,10 @@ export async function agregarPeriodoPagoAction(formData: FormData): Promise<void
 // FECHA_FIN si el contrato ya termino), saltando los que ya existen --
 // reemplaza tener que escribir "JUNIO 2026" a mano cada vez. El monto
 // sugerido es el mismo que ya se usaba en el form manual (suma de
-// conceptos para planilla, TARIFA para locador de tarifa unica); si un
-// mes puntual necesita otro monto, se corrige despues con
-// actualizarPeriodoPagoAction.
+// conceptos para planilla, TARIFA para locador de tarifa unica),
+// PRORRATEADO (30 dias fijos, ver factorProrateoDelMes) en el mes en que
+// el contrato empieza y/o termina a mitad de mes; si igual necesita otro
+// monto, se corrige despues con actualizarPeriodoPagoAction.
 export async function generarPeriodosPendientesAction(formData: FormData): Promise<void> {
   const sesion = await requirePermiso(CONTRATOS_APP_CODIGO, "ESCRITURA");
 
@@ -492,14 +493,16 @@ export async function generarPeriodosPendientesAction(formData: FormData): Promi
     : Number(contrato.TARIFA ?? 0);
   if (!montoSugerido) return;
 
-  const periodosNuevos = generarPeriodosPendientes(
+  const periodosNuevos = generarPeriodosPendientesDetallado(
     contrato.FECHA_INICIO,
     contrato.FECHA_FIN,
     periodosActuales.map((p) => p.PERIODO),
   );
 
-  for (const periodo of periodosNuevos) {
-    await agregarPeriodoPago(idContrato, periodo, montoSugerido, sesion.idUsuario);
+  for (const pendiente of periodosNuevos) {
+    const factor = factorProrateoDelMes(pendiente.anio, pendiente.mes, contrato.FECHA_INICIO, contrato.FECHA_FIN);
+    const monto = Math.round(montoSugerido * factor * 100) / 100;
+    await agregarPeriodoPago(idContrato, pendiente.etiqueta, monto, sesion.idUsuario);
   }
 
   revalidatePath(`/rrhh/contratos/${idContrato}`);
