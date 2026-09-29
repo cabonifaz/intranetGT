@@ -540,6 +540,13 @@ BEGIN
           FROM RRHH_PRESTAMO
          WHERE ID_PRESTAMO = p_id_prestamo;
 
+        -- El prestamo referencia el movimiento (FK_PRESTAMO_MOVIMIENTO) --
+        -- hay que borrar RRHH_PRESTAMO (y sus cuotas) ANTES de poder
+        -- borrar el CUENTA_MOVIMIENTO que referencia, si no la FK lo
+        -- rechaza (ER_ROW_IS_REFERENCED_2).
+        DELETE FROM RRHH_PRESTAMO_CUOTA WHERE ID_PRESTAMO = p_id_prestamo;
+        DELETE FROM RRHH_PRESTAMO WHERE ID_PRESTAMO = p_id_prestamo;
+
         IF v_id_movimiento IS NOT NULL THEN
             SELECT MONTO INTO v_monto FROM CUENTA_MOVIMIENTO WHERE ID_MOVIMIENTO = v_id_movimiento;
             -- El desembolso se registro como EGRESO -- revertirlo es
@@ -547,9 +554,6 @@ BEGIN
             UPDATE CUENTA_EMPRESA SET SALDO_ACTUAL = SALDO_ACTUAL + v_monto WHERE ID_CUENTA = v_id_cuenta;
             DELETE FROM CUENTA_MOVIMIENTO WHERE ID_MOVIMIENTO = v_id_movimiento;
         END IF;
-
-        DELETE FROM RRHH_PRESTAMO_CUOTA WHERE ID_PRESTAMO = p_id_prestamo;
-        DELETE FROM RRHH_PRESTAMO WHERE ID_PRESTAMO = p_id_prestamo;
     END IF;
 END$$
 
