@@ -15,6 +15,8 @@ import { listarProveedores } from "@/lib/db/repositories/compra.repository";
 import { listarTodosLosContactosExternos } from "@/lib/db/repositories/directorio-contacto.repository";
 import { listarDirectorio } from "@/lib/db/repositories/rrhh-empleado.repository";
 import { obtenerTipoCambioVigente } from "@/lib/db/repositories/tipo-cambio.repository";
+import { obtenerImportacionContrato } from "@/lib/db/repositories/contrato-importacion.repository";
+import { deshacerImportacionContratoAction } from "@/lib/actions/rrhh-contratos-importacion";
 import GenerarLinkContratoButton from "@/components/rrhh/GenerarLinkContratoButton";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
@@ -93,6 +95,7 @@ export default async function DetalleContratoPage({
     contactos,
     personal,
     tcPrestamo,
+    importacion,
   ] = await Promise.all([
     esPlanilla ? listarConceptosContrato(idContrato) : Promise.resolve([]),
     esPlanilla ? listarMaestros("CONCEPTO_REMUNERATIVO") : Promise.resolve([]),
@@ -107,6 +110,7 @@ export default async function DetalleContratoPage({
     necesitaCuentasYFinanciamiento ? listarTodosLosContactosExternos(null) : Promise.resolve([]),
     necesitaCuentasYFinanciamiento ? listarDirectorio(null, null) : Promise.resolve([]),
     necesitaCuentasYFinanciamiento ? obtenerTipoCambioVigente("PRESTAMO") : Promise.resolve(null),
+    obtenerImportacionContrato(idContrato),
   ]);
 
   const totalConceptos = conceptos.reduce((suma, c) => suma + Number(c.MONTO), 0);
@@ -562,6 +566,25 @@ export default async function DetalleContratoPage({
               className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
             >
               Eliminar contrato
+            </ConfirmSubmitButton>
+          </form>
+        </section>
+      ) : null}
+
+      {importacion && contrato.ESTADO_CONTRATO_CODIGO === "FIRMADO" ? (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-slate-800 dark:text-white">Deshacer importación</h2>
+          <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+            Este contrato se cargó importando un escaneo ya firmado. Se puede deshacer por completo (se borra el contrato y el
+            escaneo) mientras ningún mes de Planilla Mensual lo haya tomado -- si ya lo tomó, esto no hace nada.
+          </p>
+          <form action={deshacerImportacionContratoAction}>
+            <input type="hidden" name="idContrato" value={contrato.ID_CONTRATO} />
+            <ConfirmSubmitButton
+              mensaje="¿Deshacer esta importación? Se borra el contrato y el escaneo cargado por completo -- no se puede deshacer. Si ya se generó una planilla que lo tomó, no pasará nada."
+              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+            >
+              Deshacer importación
             </ConfirmSubmitButton>
           </form>
         </section>

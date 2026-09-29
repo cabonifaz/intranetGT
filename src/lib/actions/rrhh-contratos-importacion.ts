@@ -5,7 +5,12 @@ import { redirect } from "next/navigation";
 import { requireImportarContrato } from "@/lib/auth/require-permiso";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { agregarConceptoContrato } from "@/lib/db/repositories/contrato.repository";
-import { crearImportacionContrato, confirmarImportacionContrato } from "@/lib/db/repositories/contrato-importacion.repository";
+import {
+  crearImportacionContrato,
+  confirmarImportacionContrato,
+  deshacerImportacionContrato,
+} from "@/lib/db/repositories/contrato-importacion.repository";
+import { obtenerEmpleado, upsertEmpleado } from "@/lib/db/repositories/rrhh-empleado.repository";
 import { extraerSolicitudContrato, type DatosExtraidosSolicitud } from "@/lib/rrhh/contratos/extraer-solicitud-contrato";
 import { guardarArchivo } from "@/lib/storage/local-storage";
 
@@ -179,7 +184,38 @@ export async function confirmarImportacionContratoAction(formData: FormData): Pr
   const banco = String(formData.get("banco") ?? "").trim() || null;
   const fechaFirma = String(formData.get("fechaFirma") ?? "").trim() || null;
 
+  const idTipoDocumentoForm = Number(formData.get("idTipoDocumento") || 0) || null;
+  const nroDocumentoForm = String(formData.get("nroDocumento") ?? "").trim() || null;
+
   if (!idContrato || !idUsuario || !idTipoContrato || !cargo || !fechaInicio) return;
+
+  // Mismo criterio que crearContratoAction: el documento de identidad
+  // (tipo + numero) es obligatorio para que un contrato quede activo --
+  // aca no habia forma de pedirlo, asi que un contrato importado podia
+  // confirmarse sin eso. Se fusiona con lo que ya tenia el empleado.
+  const empleado = await obtenerEmpleado(idUsuario);
+  const idTipoDocumento = idTipoDocumentoForm ?? empleado?.ID_TIPO_DOCUMENTO ?? null;
+  const nroDocumento = nroDocumentoForm ?? empleado?.NRO_DOCUMENTO ?? null;
+  if (!(idTipoDocumento && nroDocumento)) return;
+
+  if (idTipoDocumentoForm || nroDocumentoForm) {
+    await upsertEmpleado({
+      idUsuario,
+      telefono: empleado?.TELEFONO ?? null,
+      extension: empleado?.EXTENSION ?? null,
+      fotoUrl: empleado?.FOTO_URL ?? null,
+      idTipoDocumento,
+      nroDocumento,
+      direccion: empleado?.DIRECCION ?? null,
+      idPais: empleado?.ID_PAIS ?? null,
+      idCiudad: empleado?.ID_CIUDAD ?? null,
+      correoClockify: empleado?.CORREO_CLOCKIFY ?? null,
+      idSistemaPension: empleado?.ID_SISTEMA_PENSION ?? null,
+      idAfpFondo: empleado?.ID_AFP_FONDO ?? null,
+      suspensionRetencion4taHasta: empleado?.SUSPENSION_RETENCION_4TA_HASTA ?? null,
+      idUsuarioModificacion: sesion.idUsuario,
+    });
+  }
 
   await confirmarImportacionContrato({
     idContrato,
@@ -206,4 +242,22 @@ export async function confirmarImportacionContratoAction(formData: FormData): Pr
   revalidatePath("/rrhh/contratos");
   revalidatePath(`/rrhh/contratos/${idContrato}`);
   redirect(`/rrhh/contratos/${idContrato}`);
+}
+
+// Deshace por completo la carga de un contrato importado (revisado o ya
+// confirmado/activo) -- a diferencia de eliminarContratoAction (solo
+// BORRADOR/PENDIENTE_FIRMA del flujo normal), esto tambien alcanza a uno
+// ya FIRMADO por importacion, siempre que ningun mes de Planilla Mensual
+// ya lo haya tomado (ver SP_RRHH_CONTRATO_IMPORTACION_DESHACER). No-op
+// silencioso en cualquier otro caso -- mismo criterio que eliminarContratoAction.
+export async function deshacerImportacionContratoAction(formData: FormData): Promise<void> {
+  await requireImportarContrato();
+
+  const idContrato = Number(formData.get("idContrato"));
+  if (!idContrato) return;
+
+  await deshacerImportacionContrato(idContrato);
+
+  revalidatePath("/rrhh/contratos");
+  redirect("/rrhh/contratos");
 }

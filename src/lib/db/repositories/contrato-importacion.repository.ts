@@ -109,3 +109,7 @@ export async function confirmarImportacionContrato(params: ConfirmarImportacionP
     params.idUsuarioConfirmacion,
   ]);
 }
+
+export async function deshacerImportacionContrato(idContrato: number): Promise<void> {
+  await callProcedure("SP_RRHH_CONTRATO_IMPORTACION_DESHACER", [idContrato]);
+}

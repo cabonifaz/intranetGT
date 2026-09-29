@@ -4,6 +4,7 @@ import { useState } from "react";
 import { confirmarImportacionContratoAction } from "@/lib/actions/rrhh-contratos-importacion";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
 import type { ContratoImportacionRow, EmpleadoDirectorioRow } from "@/types/db";
+import { tieneIdentidadCompleta } from "@/lib/rrhh/identidad";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
 import NotaAyuda from "@/components/ui/NotaAyuda";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
@@ -14,6 +15,7 @@ interface RevisarImportacionContratoFormProps {
   tiposContrato: MaestroRow[];
   tiposPagoLocador: MaestroRow[];
   monedas: MaestroRow[];
+  tiposDocumento: MaestroRow[];
 }
 
 export default function RevisarImportacionContratoForm({
@@ -22,10 +24,19 @@ export default function RevisarImportacionContratoForm({
   tiposContrato,
   tiposPagoLocador,
   monedas,
+  tiposDocumento,
 }: RevisarImportacionContratoFormProps) {
   const [idTipoContrato, setIdTipoContrato] = useState<number | "">(importacion.ID_TIPO_CONTRATO);
   const [idTipoPagoLocador, setIdTipoPagoLocador] = useState<number | "">(importacion.ID_TIPO_PAGO_LOCADOR ?? "");
   const [idMoneda, setIdMoneda] = useState<number | "">(importacion.ID_MONEDA ?? "");
+  const [idUsuarioSel, setIdUsuarioSel] = useState(String(importacion.ID_USUARIO));
+
+  const personaSel = colaboradores.find((u) => String(u.ID_USUARIO) === idUsuarioSel) ?? null;
+  const identidadCompleta = tieneIdentidadCompleta(personaSel);
+  const camposObligatoriosFaltantes = [
+    !personaSel?.ID_TIPO_DOCUMENTO ? "Tipo de documento" : null,
+    !personaSel?.NRO_DOCUMENTO ? "Numero de documento" : null,
+  ].filter((c): c is string => c !== null);
 
   const tipoContratoCodigo = tiposContrato.find((t) => t.ID_MAESTRO === idTipoContrato)?.CODIGO;
   const tipoPagoCodigo = tiposPagoLocador.find((t) => t.ID_MAESTRO === idTipoPagoLocador)?.CODIGO;
@@ -45,8 +56,30 @@ export default function RevisarImportacionContratoForm({
           name="idUsuario"
           defaultValue={String(importacion.ID_USUARIO)}
           opciones={colaboradores.map((u) => ({ value: String(u.ID_USUARIO), label: `${u.NOMBRES} ${u.APELLIDOS} (${u.CORREO})` }))}
+          onSeleccionar={setIdUsuarioSel}
         />
       </div>
+
+      {personaSel && !identidadCompleta ? (
+        <div className="rounded-lg border border-dashed border-amber-300 p-3 dark:border-amber-800">
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            Completa el documento de identidad de {personaSel.NOMBRES} {personaSel.APELLIDOS} antes de confirmar -- falta:{" "}
+            {camposObligatoriosFaltantes.join(", ")}.
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Tipo de documento</label>
+              <ComboBusqueda
+                name="idTipoDocumento"
+                placeholder="-- selecciona --"
+                defaultValue={personaSel.ID_TIPO_DOCUMENTO ? String(personaSel.ID_TIPO_DOCUMENTO) : ""}
+                opciones={tiposDocumento.map((t) => ({ value: String(t.ID_MAESTRO), label: t.DESCRIPCION }))}
+              />
+            </div>
+            <Campo name="nroDocumento" label="Numero de documento" required={false} defaultValue={personaSel.NRO_DOCUMENTO ?? ""} />
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
