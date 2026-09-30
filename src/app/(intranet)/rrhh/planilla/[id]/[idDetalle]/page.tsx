@@ -20,6 +20,11 @@ import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import SubmitButton from "@/components/ui/SubmitButton";
 import NotaAyuda from "@/components/ui/NotaAyuda";
 import PasosDetallePlanilla from "@/components/rrhh/PasosDetallePlanilla";
+import CampoMontoBrutoDetalle from "@/components/rrhh/CampoMontoBrutoDetalle";
+import Suspension4taForm from "@/components/rrhh/Suspension4taForm";
+import { diasHastaVencimiento } from "@/components/ui/IconoAlertaVencimiento";
+
+const DIAS_ALERTA_SUSPENSION_4TA = 30;
 
 function formatearMonto(monto: string | number | null): string {
   if (monto === null) return "S/ 0.00";
@@ -61,6 +66,12 @@ export default async function PlanillaDetalleColaboradorPage({
   const faltaPension = esPlanilla && !detalle.ID_SISTEMA_PENSION;
   const hoy = new Date().toISOString().slice(0, 10);
   const tieneSuspension = Boolean(detalle.SUSPENSION_RETENCION_4TA_HASTA && detalle.SUSPENSION_RETENCION_4TA_HASTA >= hoy);
+  const diasSuspension = detalle.SUSPENSION_RETENCION_4TA_HASTA ? diasHastaVencimiento(detalle.SUSPENSION_RETENCION_4TA_HASTA) : null;
+  const suspensionPorVencer = tieneSuspension && diasSuspension !== null && diasSuspension <= DIAS_ALERTA_SUSPENSION_4TA;
+  // Si ya tiene suspension vigente pero el monto guardado todavia carga
+  // retencion, es porque se calculo ANTES de que se suba/renueve la
+  // suspension -- falta Recalcular para que se refleje.
+  const necesitaRecalculoPorSuspension = !esPlanilla && !emitida && tieneSuspension && Number(detalle.MONTO_RETENCION_RENTA ?? 0) > 0;
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -123,6 +134,47 @@ export default async function PlanillaDetalleColaboradorPage({
         </div>
       ) : null}
 
+      {!esPlanilla ? (
+        !tieneSuspension ? (
+          <div className="animate-pulse rounded-xl border-2 border-red-400 bg-red-50 p-4 dark:border-red-700 dark:bg-red-950/40">
+            <p className="text-sm font-bold text-red-800 dark:text-red-300">
+              ⚠ Sin suspensión de Renta 4ta vigente
+              {detalle.SUSPENSION_RETENCION_4TA_HASTA ? ` -- venció el ${formatearFecha(detalle.SUSPENSION_RETENCION_4TA_HASTA)}` : ""}
+            </p>
+            <p className="mt-1 text-sm text-red-700 dark:text-red-400">
+              Se le está calculando el 8% de retención de Renta 4ta sobre el recibo. Si {detalle.NOMBRES} ya renovó su
+              suspensión ante SUNAT, súbela aquí mismo.
+            </p>
+            {puedeGestionar ? (
+              <Suspension4taForm idUsuario={detalle.ID_USUARIO} origen={`/rrhh/planilla/${idPlanillaMensual}/${idPlanillaDetalle}`} />
+            ) : null}
+          </div>
+        ) : suspensionPorVencer ? (
+          <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/40">
+            <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
+              ⚠ La suspensión de Renta 4ta vence el {formatearFecha(detalle.SUSPENSION_RETENCION_4TA_HASTA as string)} (en{" "}
+              {diasSuspension} día{diasSuspension === 1 ? "" : "s"})
+            </p>
+            <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+              Renueva la constancia ante SUNAT antes de que venza para que no se le empiece a descontar el 8%.
+            </p>
+            {puedeGestionar ? (
+              <Suspension4taForm idUsuario={detalle.ID_USUARIO} origen={`/rrhh/planilla/${idPlanillaMensual}/${idPlanillaDetalle}`} />
+            ) : null}
+          </div>
+        ) : null
+      ) : null}
+
+      {necesitaRecalculoPorSuspension ? (
+        <div className="rounded-xl border-2 border-blue-400 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-950/40">
+          <p className="text-sm font-bold text-blue-800 dark:text-blue-300">↻ Este recibo todavía no refleja la suspensión vigente</p>
+          <p className="mt-1 text-sm text-blue-700 dark:text-blue-400">
+            La retención de Renta 4ta se calculó antes de que se registrara la suspensión -- usa &quot;Recalcular con tasas
+            vigentes&quot; más abajo para que el monto se actualice.
+          </p>
+        </div>
+      ) : null}
+
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <Dato etiqueta={detalle.TIPO_DOCUMENTO_DESCRIPCION ?? "DNI"} valor={detalle.NRO_DOCUMENTO ?? "-"} />
@@ -158,7 +210,7 @@ export default async function PlanillaDetalleColaboradorPage({
         {!emitida && puedeGestionar ? (
           <form action={actualizarMontosDetalleAction} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
-            <Campo name="montoBruto" label="Monto bruto" defaultValue={detalle.MONTO_BRUTO} />
+            <CampoMontoBrutoDetalle valorInicial={detalle.MONTO_BRUTO} />
             {esPlanilla ? (
               <Campo name="montoAportePension" label="Aporte de pension" defaultValue={detalle.MONTO_APORTE_PENSION ?? "0"} />
             ) : null}

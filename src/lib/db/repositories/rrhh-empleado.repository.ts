@@ -1,5 +1,5 @@
 import { callProcedure } from "../callProcedure";
-import type { EmpleadoDetalleRow, EmpleadoDirectorioRow } from "@/types/db";
+import type { EmpleadoDetalleRow, EmpleadoDirectorioRow, Suspension4taRow } from "@/types/db";
 
 export async function listarDirectorio(idArea: number | null, busqueda: string | null): Promise<EmpleadoDirectorioRow[]> {
   return callProcedure<EmpleadoDirectorioRow>("SP_RRHH_EMPLEADO_LISTAR", [idArea, busqueda]);
@@ -44,4 +44,17 @@ export async function upsertEmpleado(params: UpsertEmpleadoParams): Promise<void
     params.suspensionRetencion4taHasta,
     params.idUsuarioModificacion,
   ]);
+}
+
+export async function actualizarSuspension4ta(
+  idUsuario: number,
+  suspensionHasta: string,
+  path: string,
+  idUsuarioSubida: number,
+): Promise<void> {
+  await callProcedure("SP_RRHH_EMPLEADO_SUSPENSION_4TA_ACTUALIZAR", [idUsuario, suspensionHasta, path, idUsuarioSubida]);
+}
+
+export async function listarSuspension4ta(): Promise<Suspension4taRow[]> {
+  return callProcedure<Suspension4taRow>("SP_RRHH_EMPLEADO_SUSPENSION_4TA_LISTAR", []);
 }

@@ -91,7 +91,14 @@ export async function actualizarEmpleadoAction(formData: FormData): Promise<void
   let correoClockify: string | null;
   let idSistemaPension: number | null;
   let idAfpFondo: number | null;
-  let suspensionRetencion4taHasta: string | null;
+
+  // La suspension de Renta 4ta ya NO se edita desde este formulario
+  // generico -- tiene su propio flujo (subirSuspension4taAction, ver
+  // /rrhh/planilla/suspension-4ta) que exige fecha + constancia SUNAT
+  // juntos. Aca siempre se preserva el valor actual, nunca se toma del
+  // form, para que ese sea el unico camino para cambiarla.
+  const actual = await obtenerEmpleado(idUsuario);
+  const suspensionRetencion4taHasta = actual?.SUSPENSION_RETENCION_4TA_HASTA ?? null;
 
   if (tieneEscrituraRrhh) {
     extension = String(formData.get("extension") ?? "").trim() || null;
@@ -102,9 +109,7 @@ export async function actualizarEmpleadoAction(formData: FormData): Promise<void
     correoClockify = String(formData.get("correoClockify") ?? "").trim() || null;
     idSistemaPension = Number(formData.get("idSistemaPension") || 0) || null;
     idAfpFondo = Number(formData.get("idAfpFondo") || 0) || null;
-    suspensionRetencion4taHasta = String(formData.get("suspensionRetencion4taHasta") ?? "").trim() || null;
   } else {
-    const actual = await obtenerEmpleado(idUsuario);
     extension = actual?.EXTENSION ?? null;
     idTipoDocumento = actual?.ID_TIPO_DOCUMENTO ?? null;
     nroDocumento = actual?.NRO_DOCUMENTO ?? null;
@@ -113,7 +118,6 @@ export async function actualizarEmpleadoAction(formData: FormData): Promise<void
     correoClockify = actual?.CORREO_CLOCKIFY ?? null;
     idSistemaPension = actual?.ID_SISTEMA_PENSION ?? null;
     idAfpFondo = actual?.ID_AFP_FONDO ?? null;
-    suspensionRetencion4taHasta = actual?.SUSPENSION_RETENCION_4TA_HASTA ?? null;
   }
 
   await upsertEmpleado({

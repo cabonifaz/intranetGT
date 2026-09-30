@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { requirePermiso } from "@/lib/auth/require-permiso";
 import { listarPlanillasMensuales } from "@/lib/db/repositories/rrhh-planilla.repository";
+import { listarSuspension4ta } from "@/lib/db/repositories/rrhh-empleado.repository";
 import { generarPlanillaMensualAction } from "@/lib/actions/rrhh-planilla";
+import { diasHastaVencimiento } from "@/components/ui/IconoAlertaVencimiento";
 import SubmitButton from "@/components/ui/SubmitButton";
+
+const DIAS_ALERTA_SUSPENSION_4TA = 30;
 
 const MESES = [
   "Enero",
@@ -22,12 +26,20 @@ const MESES = [
 export default async function PlanillaMensualPage() {
   await requirePermiso("RRHH_PLANILLA", "LECTURA");
 
-  const planillas = await listarPlanillasMensuales();
+  const [planillas, personasSuspension4ta] = await Promise.all([listarPlanillasMensuales(), listarSuspension4ta()]);
 
   const hoy = new Date();
   const anioActual = hoy.getFullYear();
   const mesActual = hoy.getMonth() + 1;
   const yaExisteMesActual = planillas.some((p) => p.ANIO === anioActual && p.MES === mesActual);
+
+  const hoyIso = hoy.toISOString().slice(0, 10);
+  const alertasSuspension4ta = personasSuspension4ta.filter(
+    (p) =>
+      !p.SUSPENSION_RETENCION_4TA_HASTA ||
+      p.SUSPENSION_RETENCION_4TA_HASTA < hoyIso ||
+      diasHastaVencimiento(p.SUSPENSION_RETENCION_4TA_HASTA) <= DIAS_ALERTA_SUSPENSION_4TA,
+  ).length;
 
   return (
     <div>
@@ -50,6 +62,17 @@ export default async function PlanillaMensualPage() {
             className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             Parametros
+          </Link>
+          <Link
+            href="/rrhh/planilla/suspension-4ta"
+            className="relative rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            Suspensión 4ta
+            {alertasSuspension4ta > 0 ? (
+              <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
+                {alertasSuspension4ta}
+              </span>
+            ) : null}
           </Link>
           <form action={generarPlanillaMensualAction}>
             <input type="hidden" name="anio" value={anioActual} />

@@ -307,12 +307,16 @@ export default async function FichaEmpleadoPage({
                 opciones={afpFondos.map((f) => ({ value: String(f.ID_MAESTRO), label: f.DESCRIPCION }))}
               />
             </div>
-            <Campo
-              name="suspensionRetencion4taHasta"
-              label="Suspension retencion Renta 4ta hasta (Locador, opcional)"
-              type="date"
-              defaultValue={empleado.SUSPENSION_RETENCION_4TA_HASTA ?? ""}
-            />
+            <div className="sm:col-span-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                La suspensión de Renta 4ta (Locador) ya no se edita aquí -- tiene su propio lugar, con la constancia de
+                SUNAT adjunta:{" "}
+                <Link href="/rrhh/planilla/suspension-4ta" className="text-blue-600 underline dark:text-blue-400">
+                  Suspensión 4ta
+                </Link>
+                .
+              </p>
+            </div>
             <div className="sm:col-span-2">
               <Campo name="fotoUrl" label="URL de foto (opcional)" defaultValue={empleado.FOTO_URL ?? ""} />
             </div>

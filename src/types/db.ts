@@ -151,6 +151,15 @@ export interface EmpleadoDirectorioRow extends RowDataPacket {
 export type SistemaPensionCodigo = "AFP" | "ONP";
 export type AfpFondoCodigo = "INTEGRA" | "PRIMA" | "PROFUTURO" | "HABITAT";
 
+export interface Suspension4taRow extends RowDataPacket {
+  ID_USUARIO: number;
+  NOMBRES: string;
+  APELLIDOS: string;
+  SUSPENSION_RETENCION_4TA_HASTA: string | null;
+  SUSPENSION_RETENCION_4TA_PATH: string | null;
+  FECHA_SUSPENSION_4TA_SUBIDA: string | null;
+}
+
 export interface EmpleadoDetalleRow extends RowDataPacket {
   ID_USUARIO: number;
   USUARIO: string;
@@ -182,6 +191,8 @@ export interface EmpleadoDetalleRow extends RowDataPacket {
   AFP_FONDO_CODIGO: AfpFondoCodigo | null;
   AFP_FONDO_DESCRIPCION: string | null;
   SUSPENSION_RETENCION_4TA_HASTA: string | null;
+  SUSPENSION_RETENCION_4TA_PATH: string | null;
+  FECHA_SUSPENSION_4TA_SUBIDA: string | null;
 }
 
 export interface UsuarioListadoRow extends RowDataPacket {
@@ -1110,6 +1121,7 @@ export interface PlanillaDetalleRow extends RowDataPacket {
   AFP_FONDO_CODIGO: AfpFondoCodigo | null;
   AFP_FONDO_DESCRIPCION: string | null;
   SUSPENSION_RETENCION_4TA_HASTA: string | null;
+  SUSPENSION_RETENCION_4TA_PATH: string | null;
   TIPO_REFERENCIA: string | null;
   ID_REFERENCIA: number | null;
   MONTO_BRUTO: string;

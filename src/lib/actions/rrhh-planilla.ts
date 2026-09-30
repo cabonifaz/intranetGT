@@ -45,6 +45,7 @@ import { guardarArchivo } from "@/lib/storage/local-storage";
 import { listarAplicaciones } from "@/lib/db/repositories/aplicacion.repository";
 import { crearNotificacion } from "@/lib/db/repositories/notificacion.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
+import { actualizarSuspension4ta } from "@/lib/db/repositories/rrhh-empleado.repository";
 import type { PlanillaContratoElegibleRow, PlanillaDetalleRow } from "@/types/db";
 
 const PLANILLA_APP_CODIGO = "RRHH_PLANILLA";
@@ -785,5 +786,36 @@ export async function confirmarRecepcionBoletaAction(formData: FormData): Promis
   await confirmarRecepcionBoleta(idPlanillaDetalle, sesion.idUsuario);
 
   revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${idPlanillaDetalle}`);
+  refresh();
+}
+
+// Registra/renueva la suspension de Renta 4ta de un locador -- fecha y
+// constancia (PDF/imagen de SUNAT) siempre juntos, ver SP_RRHH_EMPLEADO_
+// SUSPENSION_4TA_ACTUALIZAR. Se llama desde el "lugar" central
+// (/rrhh/planilla/suspension-4ta) y tambien, atajo directo, desde el
+// detalle de un RxH puntual -- "origen" (opcional) es a que ruta volver
+// despues de guardar, para que funcione desde ambos lugares.
+export async function subirSuspension4taAction(formData: FormData): Promise<void> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idUsuario = Number(formData.get("idUsuario"));
+  const suspensionHasta = String(formData.get("suspensionHasta") ?? "").trim();
+  const archivo = formData.get("archivo");
+  const origen = String(formData.get("origen") ?? "").trim() || "/rrhh/planilla/suspension-4ta";
+
+  if (!idUsuario || !suspensionHasta) return;
+  if (!(archivo instanceof File) || archivo.size === 0) return;
+  if (archivo.size > TAMANO_MAX_ADJUNTO_BYTES) return;
+
+  const extension = TIPOS_ADJUNTO_PERMITIDOS[archivo.type];
+  if (!extension) return;
+
+  const sesion = await requireSession();
+  const rutaRelativa = `rrhh/empleados/suspension-4ta/${idUsuario}.${extension}`;
+  await guardarArchivo(rutaRelativa, new Uint8Array(await archivo.arrayBuffer()));
+  await actualizarSuspension4ta(idUsuario, suspensionHasta, rutaRelativa, sesion.idUsuario);
+
+  revalidatePath("/rrhh/planilla/suspension-4ta");
+  revalidatePath(origen);
   refresh();
 }

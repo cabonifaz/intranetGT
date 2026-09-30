@@ -5,6 +5,8 @@
 DROP PROCEDURE IF EXISTS SP_RRHH_EMPLEADO_LISTAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_EMPLEADO_OBTENER;
 DROP PROCEDURE IF EXISTS SP_RRHH_EMPLEADO_UPSERT;
+DROP PROCEDURE IF EXISTS SP_RRHH_EMPLEADO_SUSPENSION_4TA_ACTUALIZAR;
+DROP PROCEDURE IF EXISTS SP_RRHH_EMPLEADO_SUSPENSION_4TA_LISTAR;
 
 DELIMITER $$
 
@@ -63,7 +65,7 @@ BEGIN
            e.CORREO_CLOCKIFY,
            e.ID_SISTEMA_PENSION, spn.CODIGO AS SISTEMA_PENSION_CODIGO, spn.DESCRIPCION AS SISTEMA_PENSION_DESCRIPCION,
            e.ID_AFP_FONDO, afp.CODIGO AS AFP_FONDO_CODIGO, afp.DESCRIPCION AS AFP_FONDO_DESCRIPCION,
-           e.SUSPENSION_RETENCION_4TA_HASTA
+           e.SUSPENSION_RETENCION_4TA_HASTA, e.SUSPENSION_RETENCION_4TA_PATH, e.FECHA_SUSPENSION_4TA_SUBIDA
       FROM USUARIO u
       LEFT JOIN USUARIO_ROL ur ON ur.ID_USUARIO = u.ID_USUARIO AND ur.ES_PRINCIPAL = 1
       LEFT JOIN ROL r ON r.ID_ROL = ur.ID_ROL
@@ -123,6 +125,60 @@ BEGIN
         ID_AFP_FONDO = p_id_afp_fondo,
         SUSPENSION_RETENCION_4TA_HASTA = p_suspension_retencion_4ta_hasta,
         USUARIO_MODIFICACION = p_id_usuario_modificacion;
+END$$
+
+-- Registra/renueva la suspension de Renta 4ta -- fecha y constancia
+-- (PDF/imagen de SUNAT) siempre juntos, ver subirSuspension4taAction.
+-- INSERT...ON DUPLICATE (no un UPDATE a secas) porque la persona puede
+-- no tener fila en RRHH_EMPLEADO todavia (1:1 opcional con USUARIO).
+CREATE PROCEDURE SP_RRHH_EMPLEADO_SUSPENSION_4TA_ACTUALIZAR(
+    IN p_id_usuario INT UNSIGNED,
+    IN p_suspension_hasta DATE,
+    IN p_path VARCHAR(300),
+    IN p_id_usuario_subida INT UNSIGNED
+)
+BEGIN
+    DECLARE v_id_activo INT UNSIGNED;
+    SET v_id_activo = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_GENERAL' AND CODIGO = 'ACTIVO' LIMIT 1);
+
+    INSERT INTO RRHH_EMPLEADO (
+        ID_USUARIO, SUSPENSION_RETENCION_4TA_HASTA, SUSPENSION_RETENCION_4TA_PATH,
+        FECHA_SUSPENSION_4TA_SUBIDA, USUARIO_SUSPENSION_4TA_SUBIDA, ID_ESTADO, USUARIO_MODIFICACION
+    )
+    VALUES (
+        p_id_usuario, p_suspension_hasta, p_path,
+        NOW(), p_id_usuario_subida, v_id_activo, p_id_usuario_subida
+    )
+    ON DUPLICATE KEY UPDATE
+        SUSPENSION_RETENCION_4TA_HASTA = p_suspension_hasta,
+        SUSPENSION_RETENCION_4TA_PATH = p_path,
+        FECHA_SUSPENSION_4TA_SUBIDA = NOW(),
+        USUARIO_SUSPENSION_4TA_SUBIDA = p_id_usuario_subida;
+END$$
+
+-- Todas las personas con al menos un contrato LOCADOR FIRMADO vigente
+-- hoy -- el "lugar" central para revisar/renovar la suspension de Renta
+-- 4ta de todos, en vez de entrar de a una a su ficha del Directorio.
+-- LEFT JOIN a RRHH_EMPLEADO: puede no tener fila todavia (nunca se le
+-- registro ninguna suspension).
+CREATE PROCEDURE SP_RRHH_EMPLEADO_SUSPENSION_4TA_LISTAR()
+BEGIN
+    SELECT u.ID_USUARIO, u.NOMBRES, u.APELLIDOS,
+           e.SUSPENSION_RETENCION_4TA_HASTA, e.SUSPENSION_RETENCION_4TA_PATH, e.FECHA_SUSPENSION_4TA_SUBIDA
+      FROM USUARIO u
+      LEFT JOIN RRHH_EMPLEADO e ON e.ID_USUARIO = u.ID_USUARIO
+     WHERE EXISTS (
+               SELECT 1
+                 FROM RRHH_CONTRATO c
+                 JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = c.ID_ESTADO_CONTRATO
+                 JOIN MAESTRO_MAESTRO tc ON tc.ID_MAESTRO = c.ID_TIPO_CONTRATO
+                WHERE c.ID_USUARIO = u.ID_USUARIO
+                  AND ec.CODIGO = 'FIRMADO'
+                  AND tc.CODIGO = 'LOCADOR'
+                  AND c.FECHA_INICIO <= CURDATE()
+                  AND (c.FECHA_FIN IS NULL OR c.FECHA_FIN >= CURDATE())
+           )
+     ORDER BY u.APELLIDOS, u.NOMBRES;
 END$$
 
 DELIMITER ;
