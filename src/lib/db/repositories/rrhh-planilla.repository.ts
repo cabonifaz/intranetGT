@@ -22,7 +22,7 @@ export async function obtenerAcumuladoAnio(idContrato: number, anio: number, mes
   return rows[0] ?? ({ BRUTO_ACUMULADO: "0", RETENCION_ACUMULADA: "0" } as PlanillaAcumuladoAnioRow);
 }
 
-export async function obtenerOCrearPlanillaMensual(anio: number, mes: number, periodo: string, idUsuarioCreacion: number): Promise<{ id_planilla_mensual: number }> {
+export async function obtenerOCrearPlanillaMensual(anio: number, mes: number, periodo: string, idUsuarioCreacion: number | null): Promise<{ id_planilla_mensual: number }> {
   const resultado = await callProcedureWithOut<{ id_planilla_mensual: number | null }>(
     "SP_RRHH_PLANILLA_MENSUAL_OBTENER_O_CREAR",
     [anio, mes, periodo, idUsuarioCreacion],
@@ -63,7 +63,7 @@ interface AgregarDetalleParams {
   idSistemaPensionAplicado: number | null;
   idAfpFondoAplicado: number | null;
   idParametroAplicado: number | null;
-  idUsuarioCreacion: number;
+  idUsuarioCreacion: number | null;
 }
 
 export async function agregarDetalle(params: AgregarDetalleParams): Promise<{ id_planilla_detalle: number | null }> {

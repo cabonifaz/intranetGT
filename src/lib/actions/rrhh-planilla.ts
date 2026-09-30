@@ -63,7 +63,7 @@ function esVigenteEnMes(contrato: PlanillaContratoElegibleRow, inicioMes: string
 async function asegurarPeriodoDelMes(
   contrato: PlanillaContratoElegibleRow,
   periodo: string,
-  idUsuario: number,
+  idUsuario: number | null,
 ): Promise<{ idPeriodoPago: number; monto: number } | null> {
   const esPlanilla = contrato.TIPO_CONTRATO_CODIGO !== "LOCADOR";
   const periodosActuales = await listarPeriodosPago(contrato.ID_CONTRATO);
@@ -100,7 +100,7 @@ async function procesarPeriodoRegular(
   anio: number,
   mes: number,
   parametros: ParametrosPlanillaVigentes,
-  idUsuario: number,
+  idUsuario: number | null,
 ): Promise<void> {
   const periodoInfo = await asegurarPeriodoDelMes(contrato, periodo, idUsuario);
   if (!periodoInfo) return;
@@ -174,7 +174,7 @@ async function procesarLocadorPorHora(
   anio: number,
   mes: number,
   parametros: ParametrosPlanillaVigentes,
-  idUsuario: number,
+  idUsuario: number | null,
 ): Promise<void> {
   const horas = await listarHorasDelPeriodo(contrato.ID_CONTRATO, periodo);
   if (horas.length === 0) return;
@@ -214,24 +214,28 @@ async function procesarLocadorPorHora(
   }
 }
 
-// Un solo click genera toda la planilla del mes: por cada contrato
-// FIRMADO vigente ese mes que todavia no tenga fila en esta planilla,
-// calcula su bruto/descuentos/neto y los persiste como PENDIENTE (ver
-// SP_RRHH_PLANILLA_DETALLE_AGREGAR, no-op si ya existia -- reintentar es
-// seguro). Si todavia no hay ninguna version de parametros cargada
-// (base de datos sin el seed 036), solo crea el header vacio -- la
-// pantalla debe avisar que falta configurar /rrhh/planilla/parametros.
-export async function generarPlanillaMensualAction(formData: FormData): Promise<void> {
-  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+export interface ResultadoGenerarPlanillaMensual {
+  idPlanillaMensual: number;
+  totalAgregados: number;
+  hayParametrosVigentes: boolean;
+}
 
-  const hoy = new Date();
-  const anio = Number(formData.get("anio")) || hoy.getFullYear();
-  const mes = Number(formData.get("mes")) || hoy.getMonth() + 1;
+// Por cada contrato FIRMADO vigente ese mes que todavia no tenga fila en
+// esta planilla, calcula su bruto/descuentos/neto y los persiste como
+// PENDIENTE (ver SP_RRHH_PLANILLA_DETALLE_AGREGAR, no-op si ya existia --
+// reintentar es seguro). Si todavia no hay ninguna version de parametros
+// cargada, solo crea/asegura el header vacio -- el llamador (accion o
+// cron) decide que avisar. idUsuario null cuando lo dispara un cron sin
+// sesion (ver /api/cron/generar-planilla-mensual) -- las columnas de
+// auditoria correspondientes son nullable.
+export async function generarPlanillaMensual(anio: number, mes: number, idUsuario: number | null): Promise<ResultadoGenerarPlanillaMensual> {
   const periodo = etiquetaPeriodoMensual(anio, mes - 1);
 
-  const { id_planilla_mensual: idPlanillaMensual } = await obtenerOCrearPlanillaMensual(anio, mes, periodo, sesion.idUsuario);
+  const { id_planilla_mensual: idPlanillaMensual } = await obtenerOCrearPlanillaMensual(anio, mes, periodo, idUsuario);
 
   const parametros = await obtenerParametrosVigentes();
+  let totalAgregados = 0;
+
   if (parametros) {
     const inicioMes = `${anio}-${String(mes).padStart(2, "0")}-01`;
     const finMes = new Date(anio, mes, 0).toISOString().slice(0, 10);
@@ -244,12 +248,25 @@ export async function generarPlanillaMensualAction(formData: FormData): Promise<
       if (!esVigenteEnMes(contrato, inicioMes, finMes)) continue;
 
       if (contrato.TIPO_CONTRATO_CODIGO === "LOCADOR" && contrato.TIPO_PAGO_LOCADOR_CODIGO === "POR_HORA") {
-        await procesarLocadorPorHora(idPlanillaMensual, contrato, periodo, anio, mes, parametros, sesion.idUsuario);
+        await procesarLocadorPorHora(idPlanillaMensual, contrato, periodo, anio, mes, parametros, idUsuario);
       } else {
-        await procesarPeriodoRegular(idPlanillaMensual, contrato, periodo, anio, mes, parametros, sesion.idUsuario);
+        await procesarPeriodoRegular(idPlanillaMensual, contrato, periodo, anio, mes, parametros, idUsuario);
       }
+      totalAgregados++;
     }
   }
+
+  return { idPlanillaMensual, totalAgregados, hayParametrosVigentes: Boolean(parametros) };
+}
+
+export async function generarPlanillaMensualAction(formData: FormData): Promise<void> {
+  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const hoy = new Date();
+  const anio = Number(formData.get("anio")) || hoy.getFullYear();
+  const mes = Number(formData.get("mes")) || hoy.getMonth() + 1;
+
+  const { idPlanillaMensual } = await generarPlanillaMensual(anio, mes, sesion.idUsuario);
 
   revalidatePath("/rrhh/planilla");
   redirect(`/rrhh/planilla/${idPlanillaMensual}`);

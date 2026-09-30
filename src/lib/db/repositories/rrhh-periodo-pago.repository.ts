@@ -5,7 +5,7 @@ export async function agregarPeriodoPago(
   idContrato: number,
   periodo: string,
   monto: number,
-  idUsuarioCreacion: number,
+  idUsuarioCreacion: number | null,
 ): Promise<{ id_periodo_pago: number | null }> {
   return callProcedureWithOut<{ id_periodo_pago: number | null }>(
     "SP_RRHH_CONTRATO_PERIODO_PAGO_AGREGAR",
