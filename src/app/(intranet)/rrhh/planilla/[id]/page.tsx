@@ -8,6 +8,7 @@ import SubmitButton from "@/components/ui/SubmitButton";
 import PasosPlanillaMensual from "@/components/rrhh/PasosPlanillaMensual";
 import ReabrirPlanillaBoton from "@/components/rrhh/ReabrirPlanillaBoton";
 import DiagnosticoPlanillaMensual from "@/components/rrhh/DiagnosticoPlanillaMensual";
+import PasosDetallePlanilla from "@/components/rrhh/PasosDetallePlanilla";
 import { diagnosticarGeneracionPlanilla } from "@/lib/rrhh/planilla/diagnostico";
 
 function formatearMonto(monto: string | number): string {
@@ -126,7 +127,7 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
               <th className="px-4 py-2 text-right">Bruto</th>
               <th className="px-4 py-2 text-right">Descuentos</th>
               <th className="px-4 py-2 text-right">Neto</th>
-              <th className="px-4 py-2">Estado</th>
+              <th className="px-4 py-2">Proceso de pago</th>
               <th className="px-4 py-2">Aportes pagados</th>
             </tr>
           </thead>
@@ -151,15 +152,15 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
                   <td className="px-4 py-2 text-right text-slate-700 dark:text-slate-300">{formatearMonto(descuentos)}</td>
                   <td className="px-4 py-2 text-right font-medium text-slate-800 dark:text-slate-200">{formatearMonto(f.MONTO_NETO)}</td>
                   <td className="px-4 py-2">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        f.ESTADO_EMISION_CODIGO === "EMITIDA"
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                          : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-                      }`}
-                    >
-                      {f.ESTADO_EMISION_DESCRIPCION}
-                    </span>
+                    <PasosDetallePlanilla
+                      compact
+                      esLocador={f.TIPO_CONTRATO_CODIGO === "LOCADOR"}
+                      emitida={f.ESTADO_EMISION_CODIGO === "EMITIDA"}
+                      aportesPagados={Boolean(f.AFP_ESSALUD_PAGADO)}
+                      rxhFirmadoSubido={Boolean(f.RXH_FIRMADO_PATH)}
+                      evidenciaPagoSubida={Boolean(f.EVIDENCIA_PAGO_PATH)}
+                      confirmadoPorColaborador={Boolean(f.FECHA_CONFIRMACION_COLABORADOR)}
+                    />
                   </td>
                   <td className="px-4 py-2">
                     <form action={marcarPagadoDetalleAction}>

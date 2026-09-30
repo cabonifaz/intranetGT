@@ -149,3 +149,15 @@ export async function regenerarDocumentoDetalle(idPlanillaDetalle: number, docum
 export async function eliminarDetalle(idPlanillaDetalle: number): Promise<void> {
   await callProcedure("SP_RRHH_PLANILLA_DETALLE_ELIMINAR", [idPlanillaDetalle]);
 }
+
+export async function subirRxhFirmado(idPlanillaDetalle: number, path: string): Promise<void> {
+  await callProcedure("SP_RRHH_PLANILLA_DETALLE_SUBIR_RXH_FIRMADO", [idPlanillaDetalle, path]);
+}
+
+export async function subirEvidenciaPago(idPlanillaDetalle: number, path: string): Promise<void> {
+  await callProcedure("SP_RRHH_PLANILLA_DETALLE_SUBIR_EVIDENCIA_PAGO", [idPlanillaDetalle, path]);
+}
+
+export async function confirmarRecepcionBoleta(idPlanillaDetalle: number, idUsuario: number): Promise<void> {
+  await callProcedure("SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION", [idPlanillaDetalle, idUsuario]);
+}

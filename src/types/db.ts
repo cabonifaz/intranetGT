@@ -1073,6 +1073,9 @@ export interface PlanillaDetalleListadoRow extends RowDataPacket {
   ESTADO_EMISION_DESCRIPCION: string;
   DOCUMENTO_PATH: string | null;
   FECHA_EMISION: string | null;
+  RXH_FIRMADO_PATH: string | null;
+  EVIDENCIA_PAGO_PATH: string | null;
+  FECHA_CONFIRMACION_COLABORADOR: string | null;
 }
 
 export interface PlanillaDetalleRow extends RowDataPacket {
@@ -1123,6 +1126,11 @@ export interface PlanillaDetalleRow extends RowDataPacket {
   ESTADO_EMISION_DESCRIPCION: string;
   DOCUMENTO_PATH: string | null;
   FECHA_EMISION: string | null;
+  RXH_FIRMADO_PATH: string | null;
+  FECHA_RXH_FIRMADO_SUBIDO: string | null;
+  EVIDENCIA_PAGO_PATH: string | null;
+  FECHA_EVIDENCIA_PAGO_SUBIDA: string | null;
+  FECHA_CONFIRMACION_COLABORADOR: string | null;
 }
 
 export interface PlanillaDetalleHorasRow extends RowDataPacket {

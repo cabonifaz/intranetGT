@@ -3,6 +3,7 @@
 import { revalidatePath, refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermiso } from "@/lib/auth/require-permiso";
+import { requireSession } from "@/lib/auth/get-current-user";
 import {
   listarContratosElegibles,
   listarHorasDelPeriodo,
@@ -21,6 +22,9 @@ import {
   emitirDetalle,
   regenerarDocumentoDetalle,
   eliminarDetalle,
+  subirRxhFirmado,
+  subirEvidenciaPago,
+  confirmarRecepcionBoleta,
 } from "@/lib/db/repositories/rrhh-planilla.repository";
 import {
   crearParametro,
@@ -38,6 +42,9 @@ import { cargarLogoEmpresa } from "@/lib/rrhh/resolver-plantilla";
 import { cuotasADescontar, vincularCuotasADetalle, etiquetaCuotaPrestamo } from "@/lib/rrhh/planilla/prestamos-planilla";
 import { listarCuotasDelDetalle } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { guardarArchivo } from "@/lib/storage/local-storage";
+import { listarAplicaciones } from "@/lib/db/repositories/aplicacion.repository";
+import { crearNotificacion } from "@/lib/db/repositories/notificacion.repository";
+import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import type { PlanillaContratoElegibleRow, PlanillaDetalleRow } from "@/types/db";
 
 const PLANILLA_APP_CODIGO = "RRHH_PLANILLA";
@@ -484,6 +491,32 @@ async function generarYGuardarDocumentoDetalle(detalle: PlanillaDetalleRow): Pro
   return documentoPath;
 }
 
+// Avisa al colaborador que ya puede ver y descargar su boleta/RxH, con
+// link directo a su propio detalle (accede aunque no tenga permiso sobre
+// RRHH_PLANILLA, ver la pagina). No-op silencioso ante cualquier error --
+// una notificacion que falla no debe tumbar la emision, que ya quedo guardada.
+async function notificarDocumentoEmitido(detalle: PlanillaDetalleRow): Promise<void> {
+  try {
+    const esPlanilla = detalle.TIPO_CONTRATO_CODIGO !== "LOCADOR";
+    const [aplicaciones, categorias] = await Promise.all([listarAplicaciones(), listarMaestros("CATEGORIA_NOTIFICACION")]);
+    const idAplicacionOrigen = aplicaciones.find((a) => a.CODIGO === "RRHH_PLANILLA")?.ID_APLICACION ?? null;
+    const idCategoria = categorias.find((c) => c.CODIGO === "MODULO")?.ID_MAESTRO;
+    if (!idCategoria) return;
+
+    await crearNotificacion({
+      idCategoria,
+      titulo: esPlanilla ? "Ya está tu boleta de pago" : "Ya está tu recibo por honorarios",
+      mensaje: `Se emitió tu ${esPlanilla ? "boleta de pago" : "recibo por honorarios"} de ${detalle.PERIODO}. Descárgala y confirma que la recibiste.`,
+      idAplicacionOrigen,
+      urlDestino: `/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${detalle.ID_PLANILLA_DETALLE}`,
+      idUsuarioEmisor: null,
+      destinatarios: { usuarios: [detalle.ID_USUARIO] },
+    });
+  } catch {
+    // Silencioso -- ver comentario de la funcion.
+  }
+}
+
 // Genera el PDF (boleta o RxH segun regimen), lo guarda, y recien
 // entonces marca el detalle como EMITIDA -- mismo orden que la firma de
 // contratos (primero el archivo, despues persistir la ruta).
@@ -492,6 +525,7 @@ async function emitirDetalleInterno(detalle: PlanillaDetalleRow, idUsuario: numb
 
   const documentoPath = await generarYGuardarDocumentoDetalle(detalle);
   await emitirDetalle(detalle.ID_PLANILLA_DETALLE, documentoPath, idUsuario);
+  await notificarDocumentoEmitido(detalle);
 }
 
 // Re-genera el PDF de un detalle YA EMITIDA sobre la misma ruta (ej.
@@ -671,5 +705,85 @@ export async function crearVersionParametrosAction(formData: FormData): Promise<
   }
 
   revalidatePath("/rrhh/planilla/parametros");
+  refresh();
+}
+
+const TAMANO_MAX_ADJUNTO_BYTES = 15 * 1024 * 1024;
+const TIPOS_ADJUNTO_PERMITIDOS: Record<string, string> = {
+  "application/pdf": "pdf",
+  "image/png": "png",
+  "image/jpeg": "jpg",
+};
+
+// RxH firmado por el colaborador (Locador) -- RRHH lo sube desde el
+// detalle, mismo patron de archivo que subirCompromisoFirmadoAction
+// (prestamos). Solo tiene sentido para Locador -- no-op silencioso en
+// Planilla.
+export async function subirRxhFirmadoAction(formData: FormData): Promise<void> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPlanillaDetalle = Number(formData.get("idPlanillaDetalle"));
+  const archivo = formData.get("archivo");
+  if (!idPlanillaDetalle || !(archivo instanceof File) || archivo.size === 0) return;
+  if (archivo.size > TAMANO_MAX_ADJUNTO_BYTES) return;
+
+  const extension = TIPOS_ADJUNTO_PERMITIDOS[archivo.type];
+  if (!extension) return;
+
+  const detalle = await obtenerDetalle(idPlanillaDetalle);
+  if (!detalle || detalle.TIPO_CONTRATO_CODIGO !== "LOCADOR") return;
+
+  const rutaRelativa = `rrhh/planilla/rxh-firmado/${idPlanillaDetalle}.${extension}`;
+  await guardarArchivo(rutaRelativa, new Uint8Array(await archivo.arrayBuffer()));
+  await subirRxhFirmado(idPlanillaDetalle, rutaRelativa);
+
+  revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${idPlanillaDetalle}`);
+  revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}`);
+  refresh();
+}
+
+// Evidencia de la transferencia/pago real al colaborador (Locador) --
+// independiente de "marcar pagados los aportes" (eso es AFP/EsSalud a
+// SUNAT). Mismo criterio que el RxH: solo aplica a Locador.
+export async function subirEvidenciaPagoAction(formData: FormData): Promise<void> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPlanillaDetalle = Number(formData.get("idPlanillaDetalle"));
+  const archivo = formData.get("archivo");
+  if (!idPlanillaDetalle || !(archivo instanceof File) || archivo.size === 0) return;
+  if (archivo.size > TAMANO_MAX_ADJUNTO_BYTES) return;
+
+  const extension = TIPOS_ADJUNTO_PERMITIDOS[archivo.type];
+  if (!extension) return;
+
+  const detalle = await obtenerDetalle(idPlanillaDetalle);
+  if (!detalle || detalle.TIPO_CONTRATO_CODIGO !== "LOCADOR") return;
+
+  const rutaRelativa = `rrhh/planilla/evidencia-pago/${idPlanillaDetalle}.${extension}`;
+  await guardarArchivo(rutaRelativa, new Uint8Array(await archivo.arrayBuffer()));
+  await subirEvidenciaPago(idPlanillaDetalle, rutaRelativa);
+
+  revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${idPlanillaDetalle}`);
+  revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}`);
+  refresh();
+}
+
+// El propio colaborador (Planilla) confirma que recibio su boleta --
+// requireSession en vez de requirePermiso: no necesita acceso a
+// RRHH_PLANILLA, solo ser el dueño del detalle (chequeado tambien en el
+// SP). No-op silencioso si no es el suyo, si no esta EMITIDA, o si ya
+// habia confirmado.
+export async function confirmarRecepcionBoletaAction(formData: FormData): Promise<void> {
+  const sesion = await requireSession();
+
+  const idPlanillaDetalle = Number(formData.get("idPlanillaDetalle"));
+  if (!idPlanillaDetalle) return;
+
+  const detalle = await obtenerDetalle(idPlanillaDetalle);
+  if (!detalle || detalle.ID_USUARIO !== sesion.idUsuario) return;
+
+  await confirmarRecepcionBoleta(idPlanillaDetalle, sesion.idUsuario);
+
+  revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${idPlanillaDetalle}`);
   refresh();
 }

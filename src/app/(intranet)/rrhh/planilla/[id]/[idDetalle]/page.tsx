@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { requirePermiso } from "@/lib/auth/require-permiso";
+import { notFound, redirect } from "next/navigation";
+import { requireSession } from "@/lib/auth/get-current-user";
+import { obtenerPermisosUsuario } from "@/lib/db/repositories/permiso.repository";
+import { tienePermiso } from "@/lib/rbac/permissions";
 import { obtenerDetalle } from "@/lib/db/repositories/rrhh-planilla.repository";
 import { listarCuotasDelDetalle } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { etiquetaCuotaPrestamo } from "@/lib/rrhh/planilla/prestamos-planilla";
@@ -10,9 +12,14 @@ import {
   marcarPagadoDetalleAction,
   emitirDetalleAction,
   regenerarDocumentoDetalleAction,
+  subirRxhFirmadoAction,
+  subirEvidenciaPagoAction,
+  confirmarRecepcionBoletaAction,
 } from "@/lib/actions/rrhh-planilla";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import SubmitButton from "@/components/ui/SubmitButton";
+import NotaAyuda from "@/components/ui/NotaAyuda";
+import PasosDetallePlanilla from "@/components/rrhh/PasosDetallePlanilla";
 
 function formatearMonto(monto: string | number | null): string {
   if (monto === null) return "S/ 0.00";
@@ -29,13 +36,23 @@ export default async function PlanillaDetalleColaboradorPage({
 }: {
   params: Promise<{ id: string; idDetalle: string }>;
 }) {
-  await requirePermiso("RRHH_PLANILLA", "LECTURA");
+  const sesion = await requireSession();
   const { id, idDetalle } = await params;
   const idPlanillaMensual = Number(id);
   const idPlanillaDetalle = Number(idDetalle);
 
   const detalle = await obtenerDetalle(idPlanillaDetalle);
   if (!detalle || detalle.ID_PLANILLA_MENSUAL !== idPlanillaMensual) notFound();
+
+  // Ademas de quien tiene LECTURA sobre RRHH_PLANILLA, el propio
+  // colaborador puede ver su boleta/RxH -- de solo lectura (y con boton
+  // para confirmar que la recibio, si es Planilla), sin las secciones de
+  // gestion de RRHH.
+  const permisos = await obtenerPermisosUsuario(sesion.idUsuario);
+  const tienePermisoPlanilla = tienePermiso(permisos, "RRHH_PLANILLA", "LECTURA");
+  const esPropio = detalle.ID_USUARIO === sesion.idUsuario;
+  if (!tienePermisoPlanilla && !esPropio) redirect("/");
+  const puedeGestionar = tienePermiso(permisos, "RRHH_PLANILLA", "ESCRITURA");
 
   const cuotasPrestamo = await listarCuotasDelDetalle(idPlanillaDetalle);
   const netoNegativo = Number(detalle.MONTO_NETO) < 0;
@@ -70,19 +87,30 @@ export default async function PlanillaDetalleColaboradorPage({
               >
                 {esPlanilla ? "Ver boleta" : "Ver RxH"}
               </a>
-              <form action={regenerarDocumentoDetalleAction}>
-                <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
-                <ConfirmSubmitButton
-                  mensaje={`¿Regenerar ${esPlanilla ? "la boleta" : "el RxH"} con los datos y formato actuales? Se reemplaza el PDF ya emitido, sin cambiar montos ni estado.`}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  Regenerar {esPlanilla ? "boleta" : "RxH"}
-                </ConfirmSubmitButton>
-              </form>
+              {puedeGestionar ? (
+                <form action={regenerarDocumentoDetalleAction}>
+                  <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+                  <ConfirmSubmitButton
+                    mensaje={`¿Regenerar ${esPlanilla ? "la boleta" : "el RxH"} con los datos y formato actuales? Se reemplaza el PDF ya emitido, sin cambiar montos ni estado.`}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    Regenerar {esPlanilla ? "boleta" : "RxH"}
+                  </ConfirmSubmitButton>
+                </form>
+              ) : null}
             </div>
           ) : null}
         </div>
       </div>
+
+      <PasosDetallePlanilla
+        esLocador={!esPlanilla}
+        emitida={emitida}
+        aportesPagados={Boolean(detalle.AFP_ESSALUD_PAGADO)}
+        rxhFirmadoSubido={Boolean(detalle.RXH_FIRMADO_PATH)}
+        evidenciaPagoSubida={Boolean(detalle.EVIDENCIA_PAGO_PATH)}
+        confirmadoPorColaborador={Boolean(detalle.FECHA_CONFIRMACION_COLABORADOR)}
+      />
 
       {faltaPension ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
@@ -127,7 +155,7 @@ export default async function PlanillaDetalleColaboradorPage({
           </span>
         </div>
 
-        {!emitida ? (
+        {!emitida && puedeGestionar ? (
           <form action={actualizarMontosDetalleAction} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
             <Campo name="montoBruto" label="Monto bruto" defaultValue={detalle.MONTO_BRUTO} />
@@ -185,7 +213,7 @@ export default async function PlanillaDetalleColaboradorPage({
           </div>
         ) : null}
 
-        {!emitida ? (
+        {!emitida && puedeGestionar ? (
           <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
             <form action={recalcularDetalleAction}>
               <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
@@ -211,26 +239,134 @@ export default async function PlanillaDetalleColaboradorPage({
         ) : null}
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Aportes (AFP/EsSalud) a SUNAT</h2>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          Independiente de si ya se pago el neto al colaborador -- marca cuando la empresa ya remitio estos aportes.
-        </p>
-        <form action={marcarPagadoDetalleAction} className="mt-3">
-          <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
-          <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
-          <input type="hidden" name="pagado" value={detalle.AFP_ESSALUD_PAGADO ? "0" : "1"} />
-          <SubmitButton
-            className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-              detalle.AFP_ESSALUD_PAGADO
-                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
-            }`}
-          >
-            {detalle.AFP_ESSALUD_PAGADO ? "Pagado" : "Marcar como pagado"}
-          </SubmitButton>
-        </form>
-      </section>
+      {puedeGestionar ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Aportes (AFP/EsSalud) a SUNAT</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Independiente de si ya se pago el neto al colaborador -- marca cuando la empresa ya remitio estos aportes.
+          </p>
+          <form action={marcarPagadoDetalleAction} className="mt-3">
+            <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+            <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
+            <input type="hidden" name="pagado" value={detalle.AFP_ESSALUD_PAGADO ? "0" : "1"} />
+            <SubmitButton
+              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                detalle.AFP_ESSALUD_PAGADO
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                  : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
+              }`}
+            >
+              {detalle.AFP_ESSALUD_PAGADO ? "Pagado" : "Marcar como pagado"}
+            </SubmitButton>
+          </form>
+        </section>
+      ) : null}
+
+      {!esPlanilla ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-white">RxH firmado y evidencia de pago</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            El recibo por honorarios que el colaborador firmo, y el comprobante de que se le hizo la transferencia --
+            independiente de marcar pagados los aportes a SUNAT.
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">RxH firmado</p>
+              {detalle.RXH_FIRMADO_PATH ? (
+                <a
+                  href={`/api/rrhh/planilla/${idPlanillaDetalle}/rxh-firmado`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-block text-sm text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Ver RxH firmado (subido el {formatearFecha(detalle.FECHA_RXH_FIRMADO_SUBIDO)})
+                </a>
+              ) : (
+                <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">Todavía no se sube.</p>
+              )}
+              {puedeGestionar ? (
+                <form action={subirRxhFirmadoAction} className="mt-2 flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+                  <input
+                    name="archivo"
+                    type="file"
+                    required
+                    accept="application/pdf,image/png,image/jpeg"
+                    className="block text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-300 dark:file:bg-slate-800 dark:file:text-slate-200"
+                  />
+                  <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700" pendingText="Subiendo...">
+                    {detalle.RXH_FIRMADO_PATH ? "Reemplazar" : "Subir"}
+                  </SubmitButton>
+                </form>
+              ) : null}
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Evidencia de pago</p>
+              {detalle.EVIDENCIA_PAGO_PATH ? (
+                <a
+                  href={`/api/rrhh/planilla/${idPlanillaDetalle}/evidencia-pago`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-block text-sm text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Ver evidencia (subida el {formatearFecha(detalle.FECHA_EVIDENCIA_PAGO_SUBIDA)})
+                </a>
+              ) : (
+                <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">Todavía no se sube.</p>
+              )}
+              {puedeGestionar ? (
+                <form action={subirEvidenciaPagoAction} className="mt-2 flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+                  <input
+                    name="archivo"
+                    type="file"
+                    required
+                    accept="application/pdf,image/png,image/jpeg"
+                    className="block text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-300 dark:file:bg-slate-800 dark:file:text-slate-200"
+                  />
+                  <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700" pendingText="Subiendo...">
+                    {detalle.EVIDENCIA_PAGO_PATH ? "Reemplazar" : "Subir"}
+                  </SubmitButton>
+                </form>
+              ) : null}
+            </div>
+          </div>
+          {puedeGestionar ? <NotaAyuda>PDF, PNG o JPG de hasta 15 MB.</NotaAyuda> : null}
+        </section>
+      ) : null}
+
+      {esPlanilla ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Recepción de la boleta</h2>
+          {detalle.FECHA_CONFIRMACION_COLABORADOR ? (
+            <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-400">
+              ✓ {esPropio ? "Confirmaste" : `${detalle.NOMBRES} confirmó`} haber recibido la boleta el{" "}
+              {formatearFecha(detalle.FECHA_CONFIRMACION_COLABORADOR)}.
+            </p>
+          ) : esPropio && emitida ? (
+            <>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Si ya descargaste y revisaste tu boleta de arriba, confirma que la recibiste.
+              </p>
+              <form action={confirmarRecepcionBoletaAction} className="mt-3">
+                <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+                <SubmitButton
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                  pendingText="Confirmando..."
+                >
+                  Confirmar recepción de mi boleta
+                </SubmitButton>
+              </form>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+              {emitida ? "El colaborador todavía no confirma que la recibió." : "Pendiente de emitir."}
+            </p>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }
