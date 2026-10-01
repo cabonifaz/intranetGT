@@ -315,26 +315,36 @@ END$$
 -- AFP/EsSalud pagados a SUNAT es independiente de si ya se emitio la
 -- boleta/RxH -- no se bloquea por ID_ESTADO_EMISION (RRHH puede marcar
 -- el pago de aportes dias despues de emitir).
+-- Paso 2 de Planilla en el checklist (PasosDetallePlanilla): no se puede
+-- marcar pagado un detalle que todavia no se emitio -- no-op silencioso,
+-- la UI avisa antes de que esto pase (ver DiagnosticoPlanillaMensual /
+-- alerta en el detalle). Decision 2026-10-01: antes era independiente de
+-- la emision (el pago de aportes a SUNAT no depende de la boleta), pero
+-- ahora el checklist se exige en orden estricto para todos los pasos.
 CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_MARCAR_PAGADO(
     IN p_id_planilla_detalle INT UNSIGNED,
     IN p_pagado TINYINT,
     IN p_id_usuario INT UNSIGNED
 )
 BEGIN
-    UPDATE RRHH_PLANILLA_DETALLE
-       SET AFP_ESSALUD_PAGADO = p_pagado, FECHA_MARCADO_PAGADO = NOW(), USUARIO_MARCADO_PAGADO = p_id_usuario
-     WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
+    UPDATE RRHH_PLANILLA_DETALLE d
+      JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+       SET d.AFP_ESSALUD_PAGADO = p_pagado, d.FECHA_MARCADO_PAGADO = NOW(), d.USUARIO_MARCADO_PAGADO = p_id_usuario
+     WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle AND ee.CODIGO = 'EMITIDA';
 END$$
 
+-- Mismo guard que la version individual -- los detalles todavia no
+-- emitidos quedan afuera (no-op para esas filas), el resto se marca.
 CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_MARCAR_PAGADO_MASIVO(
     IN p_id_planilla_mensual INT UNSIGNED,
     IN p_pagado TINYINT,
     IN p_id_usuario INT UNSIGNED
 )
 BEGIN
-    UPDATE RRHH_PLANILLA_DETALLE
-       SET AFP_ESSALUD_PAGADO = p_pagado, FECHA_MARCADO_PAGADO = NOW(), USUARIO_MARCADO_PAGADO = p_id_usuario
-     WHERE ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
+    UPDATE RRHH_PLANILLA_DETALLE d
+      JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+       SET d.AFP_ESSALUD_PAGADO = p_pagado, d.FECHA_MARCADO_PAGADO = NOW(), d.USUARIO_MARCADO_PAGADO = p_id_usuario
+     WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual AND ee.CODIGO = 'EMITIDA';
 END$$
 
 -- Se llama despues de que la app ya genero y guardo el PDF (mismo orden
@@ -394,19 +404,25 @@ END$$
 -- RxH firmado por el colaborador (Locador) -- RRHH lo sube desde el
 -- detalle. Sin guard de estado: puede subirse antes o despues de marcar
 -- pagados los aportes, no depende de eso.
+-- Paso 2 del checklist de Locador: no se puede subir el RxH firmado si
+-- el RxH todavia no se emitio (no existe el documento que el colaborador
+-- habria firmado) -- no-op silencioso, la UI bloquea el formulario antes
+-- de llegar aca.
 CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_SUBIR_RXH_FIRMADO(
     IN p_id_planilla_detalle INT UNSIGNED,
     IN p_path VARCHAR(300)
 )
 BEGIN
-    UPDATE RRHH_PLANILLA_DETALLE
-       SET RXH_FIRMADO_PATH = p_path, FECHA_RXH_FIRMADO_SUBIDO = NOW()
-     WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
+    UPDATE RRHH_PLANILLA_DETALLE d
+      JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+       SET d.RXH_FIRMADO_PATH = p_path, d.FECHA_RXH_FIRMADO_SUBIDO = NOW()
+     WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle AND ee.CODIGO = 'EMITIDA';
 END$$
 
 -- Evidencia de la transferencia/pago real al colaborador (Locador) --
 -- independiente de AFP_ESSALUD_PAGADO (eso es el pago de aportes a
--- SUNAT, no el pago al colaborador).
+-- SUNAT, no el pago al colaborador). Paso 3 del checklist: exige que el
+-- RxH firmado (paso 2) ya se haya subido -- no-op silencioso si no.
 CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_SUBIR_EVIDENCIA_PAGO(
     IN p_id_planilla_detalle INT UNSIGNED,
     IN p_path VARCHAR(300)
@@ -414,7 +430,7 @@ CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_SUBIR_EVIDENCIA_PAGO(
 BEGIN
     UPDATE RRHH_PLANILLA_DETALLE
        SET EVIDENCIA_PAGO_PATH = p_path, FECHA_EVIDENCIA_PAGO_SUBIDA = NOW()
-     WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
+     WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle AND RXH_FIRMADO_PATH IS NOT NULL;
 END$$
 
 -- El colaborador (Planilla) confirma que recibio su boleta -- no-op

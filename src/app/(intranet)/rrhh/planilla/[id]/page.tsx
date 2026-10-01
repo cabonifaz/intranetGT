@@ -33,6 +33,7 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
   const totalEmitidos = filas.filter((f) => f.ESTADO_EMISION_CODIGO === "EMITIDA").length;
   const totalPagados = filas.filter((f) => f.AFP_ESSALUD_PAGADO).length;
   const planillaVaciaYaEmitida = emitida && filas.length === 0;
+  const noEmitidos = filas.filter((f) => f.ESTADO_EMISION_CODIGO !== "EMITIDA");
 
   const diagnostico = !emitida
     ? await diagnosticarGeneracionPlanilla(
@@ -75,7 +76,7 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
           >
             Descargar resumen
           </a>
-          <form action={marcarPagadoMasivoAction}>
+          <form action={marcarPagadoMasivoAction} title={noEmitidos.length > 0 ? "Solo afecta a los ya emitidos -- los pendientes quedan bloqueados" : undefined}>
             <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
             <input type="hidden" name="pagado" value="1" />
             <SubmitButton className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
@@ -117,6 +118,19 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
       ) : null}
 
       {diagnostico ? <DiagnosticoPlanillaMensual diagnostico={diagnostico} /> : null}
+
+      {!planillaVaciaYaEmitida && noEmitidos.length > 0 ? (
+        <div className="mt-6 rounded-xl border-2 border-red-300 bg-red-50 p-4 text-sm dark:border-red-800 dark:bg-red-950/30">
+          <p className="font-bold text-red-800 dark:text-red-300">
+            🔒 {noEmitidos.length} colaborador{noEmitidos.length === 1 ? "" : "es"} bloqueado{noEmitidos.length === 1 ? "" : "s"} en el
+            paso 1 (Emitir)
+          </p>
+          <p className="mt-1 text-red-700 dark:text-red-400">
+            No pueden avanzar a los siguientes pasos (marcar aportes pagados, subir RxH firmado, subir evidencia de pago) hasta que
+            se emita {noEmitidos.length === 1 ? "su boleta/RxH" : "cada boleta/RxH"}: {noEmitidos.map((f) => `${f.NOMBRES} ${f.APELLIDOS}`).join(", ")}.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <table className="w-full text-left text-sm">
@@ -163,20 +177,29 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
                     />
                   </td>
                   <td className="px-4 py-2">
-                    <form action={marcarPagadoDetalleAction}>
-                      <input type="hidden" name="idPlanillaDetalle" value={f.ID_PLANILLA_DETALLE} />
-                      <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
-                      <input type="hidden" name="pagado" value={f.AFP_ESSALUD_PAGADO ? "0" : "1"} />
-                      <SubmitButton
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          f.AFP_ESSALUD_PAGADO
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                            : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
-                        }`}
+                    {f.ESTADO_EMISION_CODIGO === "EMITIDA" ? (
+                      <form action={marcarPagadoDetalleAction}>
+                        <input type="hidden" name="idPlanillaDetalle" value={f.ID_PLANILLA_DETALLE} />
+                        <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
+                        <input type="hidden" name="pagado" value={f.AFP_ESSALUD_PAGADO ? "0" : "1"} />
+                        <SubmitButton
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            f.AFP_ESSALUD_PAGADO
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                              : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
+                          }`}
+                        >
+                          {f.AFP_ESSALUD_PAGADO ? "Pagado" : "Marcar pagado"}
+                        </SubmitButton>
+                      </form>
+                    ) : (
+                      <span
+                        title="Bloqueado -- primero hay que emitir"
+                        className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400"
                       >
-                        {f.AFP_ESSALUD_PAGADO ? "Pagado" : "Marcar pagado"}
-                      </SubmitButton>
-                    </form>
+                        🔒 Emitir primero
+                      </span>
+                    )}
                   </td>
                 </tr>
               );

@@ -297,20 +297,26 @@ export default async function PlanillaDetalleColaboradorPage({
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Independiente de si ya se pago el neto al colaborador -- marca cuando la empresa ya remitio estos aportes.
           </p>
-          <form action={marcarPagadoDetalleAction} className="mt-3">
-            <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
-            <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
-            <input type="hidden" name="pagado" value={detalle.AFP_ESSALUD_PAGADO ? "0" : "1"} />
-            <SubmitButton
-              className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                detalle.AFP_ESSALUD_PAGADO
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                  : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
-              }`}
-            >
-              {detalle.AFP_ESSALUD_PAGADO ? "Pagado" : "Marcar como pagado"}
-            </SubmitButton>
-          </form>
+          {emitida ? (
+            <form action={marcarPagadoDetalleAction} className="mt-3">
+              <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+              <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
+              <input type="hidden" name="pagado" value={detalle.AFP_ESSALUD_PAGADO ? "0" : "1"} />
+              <SubmitButton
+                className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                  detalle.AFP_ESSALUD_PAGADO
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
+                }`}
+              >
+                {detalle.AFP_ESSALUD_PAGADO ? "Pagado" : "Marcar como pagado"}
+              </SubmitButton>
+            </form>
+          ) : (
+            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
+              🔒 Bloqueado -- primero hay que emitir {esPlanilla ? "la boleta" : "el RxH"} (paso 1) más arriba.
+            </p>
+          )}
         </section>
       ) : null}
 
@@ -321,6 +327,12 @@ export default async function PlanillaDetalleColaboradorPage({
             El recibo por honorarios que el colaborador firmo, y el comprobante de que se le hizo la transferencia --
             independiente de marcar pagados los aportes a SUNAT.
           </p>
+
+          {!emitida ? (
+            <p className="mt-3 rounded-lg border-2 border-red-400 bg-red-50 px-3 py-2 text-sm font-bold text-red-800 dark:border-red-700 dark:bg-red-950/40 dark:text-red-300">
+              🔒 Debes emitir el RxH (paso 1) antes de poder subir el RxH firmado o la evidencia de pago.
+            </p>
+          ) : null}
 
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
@@ -338,19 +350,25 @@ export default async function PlanillaDetalleColaboradorPage({
                 <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">Todavía no se sube.</p>
               )}
               {puedeGestionar ? (
-                <form action={subirRxhFirmadoAction} className="mt-2 flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
-                  <input
-                    name="archivo"
-                    type="file"
-                    required
-                    accept="application/pdf,image/png,image/jpeg"
-                    className="block text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-300 dark:file:bg-slate-800 dark:file:text-slate-200"
-                  />
-                  <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700" pendingText="Subiendo...">
-                    {detalle.RXH_FIRMADO_PATH ? "Reemplazar" : "Subir"}
-                  </SubmitButton>
-                </form>
+                emitida ? (
+                  <form action={subirRxhFirmadoAction} className="mt-2 flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+                    <input
+                      name="archivo"
+                      type="file"
+                      required
+                      accept="application/pdf,image/png,image/jpeg"
+                      className="block text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-300 dark:file:bg-slate-800 dark:file:text-slate-200"
+                    />
+                    <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700" pendingText="Subiendo...">
+                      {detalle.RXH_FIRMADO_PATH ? "Reemplazar" : "Subir"}
+                    </SubmitButton>
+                  </form>
+                ) : (
+                  <p className="mt-2 rounded-lg bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
+                    🔒 Bloqueado -- emite el RxH (paso 1) primero.
+                  </p>
+                )
               ) : null}
             </div>
 
@@ -369,19 +387,25 @@ export default async function PlanillaDetalleColaboradorPage({
                 <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">Todavía no se sube.</p>
               )}
               {puedeGestionar ? (
-                <form action={subirEvidenciaPagoAction} className="mt-2 flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
-                  <input
-                    name="archivo"
-                    type="file"
-                    required
-                    accept="application/pdf,image/png,image/jpeg"
-                    className="block text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-300 dark:file:bg-slate-800 dark:file:text-slate-200"
-                  />
-                  <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700" pendingText="Subiendo...">
-                    {detalle.EVIDENCIA_PAGO_PATH ? "Reemplazar" : "Subir"}
-                  </SubmitButton>
-                </form>
+                detalle.RXH_FIRMADO_PATH ? (
+                  <form action={subirEvidenciaPagoAction} className="mt-2 flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+                    <input
+                      name="archivo"
+                      type="file"
+                      required
+                      accept="application/pdf,image/png,image/jpeg"
+                      className="block text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-300 dark:file:bg-slate-800 dark:file:text-slate-200"
+                    />
+                    <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700" pendingText="Subiendo...">
+                      {detalle.EVIDENCIA_PAGO_PATH ? "Reemplazar" : "Subir"}
+                    </SubmitButton>
+                  </form>
+                ) : (
+                  <p className="mt-2 rounded-lg bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
+                    🔒 Bloqueado -- sube el RxH firmado (paso 2) primero.
+                  </p>
+                )
               ) : null}
             </div>
           </div>
