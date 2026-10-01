@@ -1087,6 +1087,16 @@ export interface PlanillaDetalleListadoRow extends RowDataPacket {
   RXH_FIRMADO_PATH: string | null;
   EVIDENCIA_PAGO_PATH: string | null;
   FECHA_CONFIRMACION_COLABORADOR: string | null;
+  TIPO_REFERENCIA: string | null;
+}
+
+export interface ArrastrePendienteRow extends RowDataPacket {
+  ID_ARRASTRE: number;
+  ID_CONTRATO: number;
+  ANIO_DESTINO: number;
+  MES_DESTINO: number;
+  MONTO: string;
+  FECHA_CREACION: string;
 }
 
 export interface PlanillaDetalleRow extends RowDataPacket {

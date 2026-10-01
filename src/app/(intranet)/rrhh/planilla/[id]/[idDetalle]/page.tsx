@@ -15,6 +15,7 @@ import {
   subirRxhFirmadoAction,
   subirEvidenciaPagoAction,
   confirmarRecepcionBoletaAction,
+  aplazarAlMesSiguienteAction,
 } from "@/lib/actions/rrhh-planilla";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import SubmitButton from "@/components/ui/SubmitButton";
@@ -313,9 +314,29 @@ export default async function PlanillaDetalleColaboradorPage({
               </SubmitButton>
             </form>
           ) : (
-            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
-              🔒 Bloqueado -- primero hay que emitir {esPlanilla ? "la boleta" : "el RxH"} (paso 1) más arriba.
-            </p>
+            <>
+              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
+                🔒 Bloqueado -- primero hay que emitir {esPlanilla ? "la boleta" : "el RxH"} (paso 1) más arriba.
+              </p>
+              {detalle.TIPO_REFERENCIA === "RRHH_CONTRATO_PERIODO_PAGO" ? (
+                <div className="mt-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    ¿Este mes ya se cerró para los demás? En vez de reabrirlo, puedes aplazar a {detalle.NOMBRES} al mes
+                    siguiente.
+                  </p>
+                  <form action={aplazarAlMesSiguienteAction} className="mt-1">
+                    <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+                    <ConfirmSubmitButton
+                      mensaje={`¿Aplazar a ${detalle.NOMBRES} ${detalle.APELLIDOS} al mes siguiente? Se borra este registro de aquí y su monto (${formatearMonto(detalle.MONTO_BRUTO)}) se sumará al periodo del mes siguiente cuando se genere.`}
+                      pendingText="Aplazando..."
+                      className="text-xs font-medium text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
+                    >
+                      Pagar en la siguiente planilla
+                    </ConfirmSubmitButton>
+                  </form>
+                </div>
+              ) : null}
+            </>
           )}
         </section>
       ) : null}

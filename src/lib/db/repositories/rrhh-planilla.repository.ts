@@ -161,3 +161,17 @@ export async function subirEvidenciaPago(idPlanillaDetalle: number, path: string
 export async function confirmarRecepcionBoleta(idPlanillaDetalle: number, idUsuario: number): Promise<void> {
   await callProcedure("SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION", [idPlanillaDetalle, idUsuario]);
 }
+
+export async function aplazarDetalle(
+  idPlanillaDetalle: number,
+  anioDestino: number,
+  mesDestino: number,
+  idUsuario: number,
+): Promise<{ aplazado: boolean }> {
+  const resultado = await callProcedureWithOut<{ p_aplazado: number }>(
+    "SP_RRHH_PLANILLA_DETALLE_APLAZAR",
+    [idPlanillaDetalle, anioDestino, mesDestino, idUsuario],
+    ["p_aplazado"],
+  );
+  return { aplazado: resultado.p_aplazado === 1 };
+}

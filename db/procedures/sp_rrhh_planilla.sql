@@ -34,6 +34,7 @@ DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_ELIMINAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_SUBIR_RXH_FIRMADO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_SUBIR_EVIDENCIA_PAGO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION;
+DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_APLAZAR;
 
 DELIMITER $$
 
@@ -238,7 +239,8 @@ BEGIN
            d.CALCULO_AUTOMATICO, d.AFP_ESSALUD_PAGADO,
            d.ID_ESTADO_EMISION, ee.CODIGO AS ESTADO_EMISION_CODIGO, ee.DESCRIPCION AS ESTADO_EMISION_DESCRIPCION,
            d.DOCUMENTO_PATH, d.FECHA_EMISION,
-           d.RXH_FIRMADO_PATH, d.EVIDENCIA_PAGO_PATH, d.FECHA_CONFIRMACION_COLABORADOR
+           d.RXH_FIRMADO_PATH, d.EVIDENCIA_PAGO_PATH, d.FECHA_CONFIRMACION_COLABORADOR,
+           d.TIPO_REFERENCIA
       FROM RRHH_PLANILLA_DETALLE d
       JOIN RRHH_CONTRATO c ON c.ID_CONTRATO = d.ID_CONTRATO
       JOIN USUARIO u ON u.ID_USUARIO = c.ID_USUARIO
@@ -450,6 +452,46 @@ BEGIN
        AND c.ID_USUARIO = p_id_usuario
        AND ee.CODIGO = 'EMITIDA'
        AND d.FECHA_CONFIRMACION_COLABORADOR IS NULL;
+END$$
+
+-- Aplaza un detalle que se quedo sin emitir: borra el detalle de este
+-- mes y deja su monto bruto como arrastre pendiente para el periodo
+-- destino (normalmente el mes siguiente) del mismo contrato -- ver
+-- 049_rrhh_contrato_arrastre_pendiente.sql y asegurarPeriodoDelMes
+-- (TypeScript), que lo suma y lo consume al generar ese periodo. No-op
+-- silencioso si ya esta EMITIDA (no se puede aplazar algo ya cerrado) o
+-- si el detalle es de un LOCADOR POR_HORA (TIPO_REFERENCIA NULL, no usa
+-- periodo de pago -- ahi no aplica "aplazar", las horas se cargan mes a
+-- mes directamente).
+CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_APLAZAR(
+    IN p_id_planilla_detalle INT UNSIGNED,
+    IN p_anio_destino SMALLINT UNSIGNED,
+    IN p_mes_destino TINYINT UNSIGNED,
+    IN p_id_usuario INT UNSIGNED,
+    OUT p_aplazado TINYINT
+)
+BEGIN
+    DECLARE v_id_contrato INT UNSIGNED;
+    DECLARE v_monto DECIMAL(12,2);
+
+    SET p_aplazado = 0;
+
+    SELECT d.ID_CONTRATO, d.MONTO_BRUTO INTO v_id_contrato, v_monto
+      FROM RRHH_PLANILLA_DETALLE d
+      JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+     WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle
+       AND ee.CODIGO != 'EMITIDA'
+       AND d.TIPO_REFERENCIA = 'RRHH_CONTRATO_PERIODO_PAGO'
+     LIMIT 1;
+
+    IF v_id_contrato IS NOT NULL THEN
+        INSERT INTO RRHH_CONTRATO_ARRASTRE_PENDIENTE (ID_CONTRATO, ANIO_DESTINO, MES_DESTINO, MONTO, USUARIO_CREACION)
+        VALUES (v_id_contrato, p_anio_destino, p_mes_destino, v_monto, p_id_usuario);
+
+        DELETE FROM RRHH_PLANILLA_DETALLE WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
+
+        SET p_aplazado = 1;
+    END IF;
 END$$
 
 -- Cierra el header solo si ya no queda ningun detalle PENDIENTE -- no-op

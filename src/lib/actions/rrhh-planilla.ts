@@ -25,6 +25,7 @@ import {
   subirRxhFirmado,
   subirEvidenciaPago,
   confirmarRecepcionBoleta,
+  aplazarDetalle,
 } from "@/lib/db/repositories/rrhh-planilla.repository";
 import {
   crearParametro,
@@ -46,6 +47,7 @@ import { listarAplicaciones } from "@/lib/db/repositories/aplicacion.repository"
 import { crearNotificacion } from "@/lib/db/repositories/notificacion.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { actualizarSuspension4ta } from "@/lib/db/repositories/rrhh-empleado.repository";
+import { listarArrastresPendientes, eliminarArrastre } from "@/lib/db/repositories/rrhh-contrato-arrastre.repository";
 import type { PlanillaContratoElegibleRow, PlanillaDetalleRow } from "@/types/db";
 
 const PLANILLA_APP_CODIGO = "RRHH_PLANILLA";
@@ -90,10 +92,25 @@ async function asegurarPeriodoDelMes(
   const montoSugerido = esPlanilla ? conceptos.reduce((suma, c) => suma + Number(c.MONTO), 0) : Number(contrato.TARIFA ?? 0);
   if (!montoSugerido) return null;
 
+  // Arrastres pendientes (ver SP_RRHH_PLANILLA_DETALLE_APLAZAR): un monto
+  // bruto de un mes anterior que se aplazo, a sumar en el periodo del mes
+  // en que efectivamente cae -- se consumen (se borran) al aplicarlos aca.
+  const arrastres = await listarArrastresPendientes(contrato.ID_CONTRATO);
+
   for (const pendiente of pendientes) {
     const factor = factorProrateoDelMes(pendiente.anio, pendiente.mes, contrato.FECHA_INICIO, contrato.FECHA_FIN);
-    const monto = Math.round(montoSugerido * factor * 100) / 100;
+    let monto = Math.round(montoSugerido * factor * 100) / 100;
+
+    const arrastresDelPeriodo = arrastres.filter((a) => a.ANIO_DESTINO === pendiente.anio && a.MES_DESTINO === pendiente.mes);
+    if (arrastresDelPeriodo.length > 0) {
+      monto = Math.round((monto + arrastresDelPeriodo.reduce((suma, a) => suma + Number(a.MONTO), 0)) * 100) / 100;
+    }
+
     await agregarPeriodoPago(contrato.ID_CONTRATO, pendiente.etiqueta, monto, idUsuario);
+
+    for (const a of arrastresDelPeriodo) {
+      await eliminarArrastre(a.ID_ARRASTRE);
+    }
   }
 
   const periodosActualizados = await listarPeriodosPago(contrato.ID_CONTRATO);
@@ -818,4 +835,31 @@ export async function subirSuspension4taAction(formData: FormData): Promise<void
   revalidatePath("/rrhh/planilla/suspension-4ta");
   revalidatePath(origen);
   refresh();
+}
+
+// "Pagar en la siguiente planilla": para un detalle que se quedo sin
+// emitir (ej. un mes que ya se cerro para todos los demas) -- en vez de
+// reabrir ese mes puntual, se borra este detalle y su monto bruto se
+// suma automaticamente al periodo del mes siguiente del mismo contrato
+// cuando ese mes se genere (ver asegurarPeriodoDelMes). Solo para
+// contratos con periodo de pago (PLANILLA/LOCADOR con tarifa) -- no
+// aplica a LOCADOR POR_HORA, ver guard en el SP.
+export async function aplazarAlMesSiguienteAction(formData: FormData): Promise<void> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPlanillaDetalle = Number(formData.get("idPlanillaDetalle"));
+  if (!idPlanillaDetalle) return;
+
+  const detalle = await obtenerDetalle(idPlanillaDetalle);
+  if (!detalle) return;
+
+  const sesion = await requireSession();
+  const mesSiguiente = detalle.MES === 12 ? 1 : detalle.MES + 1;
+  const anioSiguiente = detalle.MES === 12 ? detalle.ANIO + 1 : detalle.ANIO;
+
+  await aplazarDetalle(idPlanillaDetalle, anioSiguiente, mesSiguiente, sesion.idUsuario);
+
+  revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}`);
+  revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${idPlanillaDetalle}`);
+  redirect(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}`);
 }

@@ -2,7 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermiso } from "@/lib/auth/require-permiso";
 import { obtenerPlanillaMensual, listarDetalle } from "@/lib/db/repositories/rrhh-planilla.repository";
-import { marcarPagadoDetalleAction, marcarPagadoMasivoAction, emitirPlanillaMensualAction, generarPlanillaMensualAction } from "@/lib/actions/rrhh-planilla";
+import {
+  marcarPagadoDetalleAction,
+  marcarPagadoMasivoAction,
+  emitirPlanillaMensualAction,
+  generarPlanillaMensualAction,
+  aplazarAlMesSiguienteAction,
+} from "@/lib/actions/rrhh-planilla";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import SubmitButton from "@/components/ui/SubmitButton";
 import PasosPlanillaMensual from "@/components/rrhh/PasosPlanillaMensual";
@@ -193,12 +199,26 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
                         </SubmitButton>
                       </form>
                     ) : (
-                      <span
-                        title="Bloqueado -- primero hay que emitir"
-                        className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400"
-                      >
-                        🔒 Emitir primero
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span
+                          title="Bloqueado -- primero hay que emitir"
+                          className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400"
+                        >
+                          🔒 Emitir primero
+                        </span>
+                        {f.TIPO_REFERENCIA === "RRHH_CONTRATO_PERIODO_PAGO" ? (
+                          <form action={aplazarAlMesSiguienteAction}>
+                            <input type="hidden" name="idPlanillaDetalle" value={f.ID_PLANILLA_DETALLE} />
+                            <ConfirmSubmitButton
+                              mensaje={`¿Aplazar a ${f.NOMBRES} ${f.APELLIDOS} al mes siguiente? Se borra este registro de aquí y su monto (${formatearMonto(f.MONTO_BRUTO)}) se sumará al periodo del mes siguiente cuando se genere.`}
+                              pendingText="Aplazando..."
+                              className="text-xs text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
+                            >
+                              Pagar en la siguiente planilla
+                            </ConfirmSubmitButton>
+                          </form>
+                        ) : null}
+                      </div>
                     )}
                   </td>
                 </tr>
