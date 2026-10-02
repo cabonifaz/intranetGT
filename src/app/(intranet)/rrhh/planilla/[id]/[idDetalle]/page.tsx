@@ -24,6 +24,7 @@ import PasosDetallePlanilla from "@/components/rrhh/PasosDetallePlanilla";
 import CampoMontoBrutoDetalle from "@/components/rrhh/CampoMontoBrutoDetalle";
 import Suspension4taForm from "@/components/rrhh/Suspension4taForm";
 import { diasHastaVencimiento } from "@/components/ui/IconoAlertaVencimiento";
+import { obtenerParametrosVigentes } from "@/lib/rrhh/planilla/parametros";
 
 const DIAS_ALERTA_SUSPENSION_4TA = 30;
 
@@ -73,6 +74,15 @@ export default async function PlanillaDetalleColaboradorPage({
   // retencion, es porque se calculo ANTES de que se suba/renueve la
   // suspension -- falta Recalcular para que se refleje.
   const necesitaRecalculoPorSuspension = !esPlanilla && !emitida && tieneSuspension && Number(detalle.MONTO_RETENCION_RENTA ?? 0) > 0;
+
+  // La retencion de Renta 4ta (y por lo tanto la suspension) solo aplica
+  // si el bruto supera el umbral configurado en parametros -- por debajo,
+  // no hay retencion con o sin suspension, asi que avisar de la
+  // suspension ahi seria ruido sin sentido (ver calcularRetencionRenta4ta).
+  // Si no hay parametros vigentes no se puede saber con certeza, asi que
+  // por seguridad se avisa igual.
+  const parametros = !esPlanilla ? await obtenerParametrosVigentes() : null;
+  const superaUmbralRenta4ta = !parametros || Number(detalle.MONTO_BRUTO) > parametros.umbralRenta4ta;
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -136,7 +146,7 @@ export default async function PlanillaDetalleColaboradorPage({
       ) : null}
 
       {!esPlanilla ? (
-        !tieneSuspension ? (
+        !tieneSuspension && superaUmbralRenta4ta ? (
           <div className="animate-pulse rounded-xl border-2 border-red-400 bg-red-50 p-4 dark:border-red-700 dark:bg-red-950/40">
             <p className="text-sm font-bold text-red-800 dark:text-red-300">
               ⚠ Sin suspensión de Renta 4ta vigente
@@ -163,6 +173,11 @@ export default async function PlanillaDetalleColaboradorPage({
               <Suspension4taForm idUsuario={detalle.ID_USUARIO} origen={`/rrhh/planilla/${idPlanillaMensual}/${idPlanillaDetalle}`} />
             ) : null}
           </div>
+        ) : !tieneSuspension ? (
+          <p className="text-xs text-slate-400 dark:text-slate-500">
+            Sin suspensión de Renta 4ta, pero el bruto no supera el umbral -- no corresponde retención este mes, no hace falta
+            subirla todavía.
+          </p>
         ) : null
       ) : null}
 
