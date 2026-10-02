@@ -26,6 +26,7 @@ import {
   subirEvidenciaPago,
   confirmarRecepcionBoleta,
   aplazarDetalle,
+  reiniciarPlanillaMensual,
 } from "@/lib/db/repositories/rrhh-planilla.repository";
 import {
   crearParametro,
@@ -268,9 +269,24 @@ export async function generarPlanillaMensual(anio: number, mes: number, idUsuari
     const [contratos, detalleExistente] = await Promise.all([listarContratosElegibles(), listarDetalle(idPlanillaMensual)]);
     const yaProcesados = new Set(detalleExistente.map((d) => d.ID_CONTRATO));
 
+    // Un colaborador no puede tener 2 registros de planilla el mismo mes
+    // (duplicaria su pago) -- si tiene mas de un contrato vigente este
+    // mes (ej. dos contratos solapados por error), no se genera NINGUNO
+    // hasta que se resuelva cual es el correcto. Ver
+    // diagnosticarGeneracionPlanilla, que explica el conflicto en la UI.
+    const vigentesEsteMes = contratos.filter((c) => esVigenteEnMes(c, inicioMes, finMes));
+    const contratosVigentesPorUsuario = new Map<number, number>();
+    for (const c of vigentesEsteMes) {
+      contratosVigentesPorUsuario.set(c.ID_USUARIO, (contratosVigentesPorUsuario.get(c.ID_USUARIO) ?? 0) + 1);
+    }
+    const usuariosConConflicto = new Set(
+      [...contratosVigentesPorUsuario.entries()].filter(([, n]) => n > 1).map(([idUsuario]) => idUsuario),
+    );
+
     for (const contrato of contratos) {
       if (yaProcesados.has(contrato.ID_CONTRATO)) continue;
       if (!esVigenteEnMes(contrato, inicioMes, finMes)) continue;
+      if (usuariosConConflicto.has(contrato.ID_USUARIO)) continue;
 
       if (contrato.TIPO_CONTRATO_CODIGO === "LOCADOR" && contrato.TIPO_PAGO_LOCADOR_CODIGO === "POR_HORA") {
         await procesarLocadorPorHora(idPlanillaMensual, contrato, periodo, anio, mes, parametros, idUsuario);
@@ -654,6 +670,47 @@ export async function reabrirPlanillaMensualAction(
   return { ok: true };
 }
 
+// Estado devuelto por reiniciarPlanillaMensualAction -- mismo patron
+// {ok,error,codigo} que reabrirPlanillaMensualAction.
+export interface ReiniciarPlanillaState {
+  ok: boolean;
+  error?: string;
+  codigo?: string;
+}
+
+// Borra TODOS los detalles del mes de una sola vez para empezar de cero
+// (ej. quedaron duplicados por el bug de 2 contratos solapados, ya
+// corregido en generarPlanillaMensual) -- bloqueado si cualquiera ya
+// esta EMITIDA. Los periodos de pago no se tocan, "Generar planilla del
+// mes" los vuelve a usar tal cual al regenerar.
+export async function reiniciarPlanillaMensualAction(
+  _prevState: ReiniciarPlanillaState,
+  formData: FormData,
+): Promise<ReiniciarPlanillaState> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPlanillaMensual = Number(formData.get("idPlanillaMensual"));
+  if (!idPlanillaMensual) return { ok: false, error: "Planilla inválida.", codigo: "PLAN-REINICIAR-01" };
+
+  const planilla = await obtenerPlanillaMensual(idPlanillaMensual);
+  if (!planilla) return { ok: false, error: "No se encontró la planilla.", codigo: "PLAN-REINICIAR-02" };
+
+  const { reiniciado } = await reiniciarPlanillaMensual(idPlanillaMensual);
+  if (!reiniciado) {
+    return {
+      ok: false,
+      error: "Ya hay al menos un colaborador emitido este mes -- no se puede reiniciar todo. Corrige el detalle puntual si hace falta.",
+      codigo: "PLAN-REINICIAR-03",
+    };
+  }
+
+  revalidatePath(`/rrhh/planilla/${idPlanillaMensual}`);
+  revalidatePath("/rrhh/planilla");
+  refresh();
+
+  return { ok: true };
+}
+
 export async function eliminarDetalleAction(formData: FormData): Promise<void> {
   await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
 
@@ -673,7 +730,7 @@ export async function eliminarDetalleAction(formData: FormData): Promise<void> {
 // (multiples inputs con el mismo name, formData.getAll) desde el
 // formulario de /rrhh/planilla/parametros.
 export async function crearVersionParametrosAction(formData: FormData): Promise<void> {
-  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ADMIN");
+  const sesion = await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
 
   const anio = Number(formData.get("anio"));
   const fechaVigenciaDesde = String(formData.get("fechaVigenciaDesde") ?? "").trim();

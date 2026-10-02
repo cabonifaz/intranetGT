@@ -13,6 +13,7 @@ import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import SubmitButton from "@/components/ui/SubmitButton";
 import PasosPlanillaMensual from "@/components/rrhh/PasosPlanillaMensual";
 import ReabrirPlanillaBoton from "@/components/rrhh/ReabrirPlanillaBoton";
+import ReiniciarPlanillaBoton from "@/components/rrhh/ReiniciarPlanillaBoton";
 import DiagnosticoPlanillaMensual from "@/components/rrhh/DiagnosticoPlanillaMensual";
 import PasosDetallePlanilla from "@/components/rrhh/PasosDetallePlanilla";
 import { diagnosticarGeneracionPlanilla } from "@/lib/rrhh/planilla/diagnostico";
@@ -101,6 +102,7 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
             </form>
           ) : null}
           {emitida ? <ReabrirPlanillaBoton idPlanillaMensual={idPlanillaMensual} /> : null}
+          {!emitida && filas.length > 0 && totalEmitidos === 0 ? <ReiniciarPlanillaBoton idPlanillaMensual={idPlanillaMensual} /> : null}
         </div>
       </div>
 

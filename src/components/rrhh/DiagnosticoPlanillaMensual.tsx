@@ -9,12 +9,13 @@ function formatearFecha(fecha: string): string {
 // todos (o a nadie) -- antes solo se sugeria "revisa que haya parametros
 // vigentes" sin decir que faltaba puntualmente. Ver diagnosticarGeneracionPlanilla.
 export default function DiagnosticoPlanillaMensual({ diagnostico }: { diagnostico: DiagnosticoGeneracionPlanilla }) {
-  const { parametros, colaboradoresSinGenerar } = diagnostico;
+  const { parametros, colaboradoresSinGenerar, colaboradoresConConflicto } = diagnostico;
   const hayAlgoQueAvisar =
     !parametros.hayParametrosVigentes ||
     !parametros.tieneTramosRenta5ta ||
     parametros.fondosAfpSinComision.length > 0 ||
-    colaboradoresSinGenerar.length > 0;
+    colaboradoresSinGenerar.length > 0 ||
+    colaboradoresConConflicto.length > 0;
 
   if (!hayAlgoQueAvisar) return null;
 
@@ -70,6 +71,33 @@ export default function DiagnosticoPlanillaMensual({ diagnostico }: { diagnostic
             {colaboradoresSinGenerar.map((c) => (
               <li key={c.idContrato}>
                 <span className="font-medium">{c.nombreCompleto}</span> -- {c.motivo}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {colaboradoresConConflicto.length > 0 ? (
+        <div className="mt-3 rounded-lg border-2 border-red-400 bg-red-50 p-3 dark:border-red-700 dark:bg-red-950/40">
+          <p className="text-sm font-bold text-red-800 dark:text-red-300">
+            🔒 {colaboradoresConConflicto.length} colaborador{colaboradoresConConflicto.length === 1 ? "" : "es"} con más de un
+            contrato vigente este mes -- no se genera nada para {colaboradoresConConflicto.length === 1 ? "esta persona" : "estas personas"}{" "}
+            hasta que se revise cuál es el correcto (duplicaría el pago):
+          </p>
+          <ul className="mt-2 space-y-2 text-xs text-red-700 dark:text-red-400">
+            {colaboradoresConConflicto.map((c) => (
+              <li key={c.idUsuario}>
+                <span className="font-medium">{c.nombreCompleto}</span>
+                <ul className="ml-4 list-disc">
+                  {c.contratos.map((ct) => (
+                    <li key={ct.idContrato}>
+                      <Link href={`/rrhh/contratos/${ct.idContrato}`} className="underline">
+                        Contrato #{ct.idContrato}
+                      </Link>{" "}
+                      ({ct.tipoContratoCodigo}) -- {formatearFecha(ct.fechaInicio)} a {ct.fechaFin ? formatearFecha(ct.fechaFin) : "indefinido"}
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ul>

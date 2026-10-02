@@ -150,6 +150,15 @@ export async function eliminarDetalle(idPlanillaDetalle: number): Promise<void> 
   await callProcedure("SP_RRHH_PLANILLA_DETALLE_ELIMINAR", [idPlanillaDetalle]);
 }
 
+export async function reiniciarPlanillaMensual(idPlanillaMensual: number): Promise<{ reiniciado: boolean }> {
+  const resultado = await callProcedureWithOut<{ p_reiniciado: number }>(
+    "SP_RRHH_PLANILLA_MENSUAL_REINICIAR",
+    [idPlanillaMensual],
+    ["p_reiniciado"],
+  );
+  return { reiniciado: resultado.p_reiniciado === 1 };
+}
+
 export async function subirRxhFirmado(idPlanillaDetalle: number, path: string): Promise<void> {
   await callProcedure("SP_RRHH_PLANILLA_DETALLE_SUBIR_RXH_FIRMADO", [idPlanillaDetalle, path]);
 }

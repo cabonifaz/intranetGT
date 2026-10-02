@@ -31,6 +31,7 @@ DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_MARCAR_PAGADO_MASIVO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_EMITIR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_REGENERAR_DOCUMENTO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_ELIMINAR;
+DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_MENSUAL_REINICIAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_SUBIR_RXH_FIRMADO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_SUBIR_EVIDENCIA_PAGO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION;
@@ -578,6 +579,44 @@ BEGIN
          WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
         DELETE FROM RRHH_PLANILLA_DETALLE_HORAS WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
         DELETE FROM RRHH_PLANILLA_DETALLE WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
+    END IF;
+END$$
+
+-- Borra TODOS los detalles de la planilla del mes de una sola vez, para
+-- empezar de cero (ej. quedo con datos duplicados/incorrectos de un bug
+-- ya corregido) -- mismo guard y cascada que SP_RRHH_PLANILLA_DETALLE_
+-- ELIMINAR, pero no-op TOTAL si cualquiera de los detalles ya esta
+-- EMITIDA (no se reinicia a medias: o se puede limpiar todo, o no se
+-- toca nada). Los periodos de pago (RRHH_CONTRATO_PERIODO_PAGO) NO se
+-- borran -- son el origen del monto, "Generar planilla del mes" los
+-- vuelve a usar tal cual al regenerar.
+CREATE PROCEDURE SP_RRHH_PLANILLA_MENSUAL_REINICIAR(
+    IN p_id_planilla_mensual INT UNSIGNED,
+    OUT p_reiniciado TINYINT
+)
+BEGIN
+    DECLARE v_hay_emitidos INT;
+
+    SET p_reiniciado = 0;
+
+    SELECT COUNT(*) INTO v_hay_emitidos
+      FROM RRHH_PLANILLA_DETALLE d
+      JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+     WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual AND ee.CODIGO = 'EMITIDA';
+
+    IF v_hay_emitidos = 0 THEN
+        UPDATE RRHH_PRESTAMO_CUOTA pc
+          JOIN RRHH_PLANILLA_DETALLE d ON d.ID_PLANILLA_DETALLE = pc.ID_PLANILLA_DETALLE
+           SET pc.ID_PLANILLA_DETALLE = NULL, pc.MONTO_DESCONTADO_SOLES = NULL
+         WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
+
+        DELETE pdh FROM RRHH_PLANILLA_DETALLE_HORAS pdh
+          JOIN RRHH_PLANILLA_DETALLE d ON d.ID_PLANILLA_DETALLE = pdh.ID_PLANILLA_DETALLE
+         WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
+
+        DELETE FROM RRHH_PLANILLA_DETALLE WHERE ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
+
+        SET p_reiniciado = 1;
     END IF;
 END$$
 

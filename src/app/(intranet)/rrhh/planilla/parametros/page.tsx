@@ -10,7 +10,7 @@ function formatearFecha(fecha: string): string {
 }
 
 export default async function ParametrosPlanillaPage() {
-  await requirePermiso("RRHH_PLANILLA", "ADMIN");
+  await requirePermiso("RRHH_PLANILLA", "ESCRITURA");
 
   const [versiones, afpFondos] = await Promise.all([listarVersionesParametro(), listarMaestros("AFP_FONDO")]);
   const vigente = versiones[0] ?? null;

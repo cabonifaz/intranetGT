@@ -27,9 +27,16 @@ export interface ColaboradorSinGenerar {
   motivo: string;
 }
 
+export interface ColaboradorConContratosEnConflicto {
+  idUsuario: number;
+  nombreCompleto: string;
+  contratos: { idContrato: number; tipoContratoCodigo: string; fechaInicio: string; fechaFin: string | null }[];
+}
+
 export interface DiagnosticoGeneracionPlanilla {
   parametros: DiagnosticoParametros;
   colaboradoresSinGenerar: ColaboradorSinGenerar[];
+  colaboradoresConConflicto: ColaboradorConContratosEnConflicto[];
 }
 
 function esVigenteEnMes(contrato: PlanillaContratoElegibleRow, inicioMes: string, finMes: string): boolean {
@@ -55,7 +62,36 @@ export async function diagnosticarGeneracionPlanilla(
     listarMaestros("AFP_FONDO"),
   ]);
 
-  const vigentesEsteMes = contratos.filter((c) => esVigenteEnMes(c, inicioMes, finMes) && !contratosYaEnPlanilla.has(c.ID_CONTRATO));
+  const vigentesEsteMesTodos = contratos.filter((c) => esVigenteEnMes(c, inicioMes, finMes));
+
+  // Un colaborador no puede tener mas de un contrato vigente generando
+  // planilla el mismo mes (duplicaria su pago) -- si tiene 2+, se separan
+  // en su propia categoria y se excluyen del resto del diagnostico (y de
+  // la generacion real, ver generarPlanillaMensual) hasta que alguien
+  // revise cual de los contratos es el correcto.
+  const contratosPorUsuario = new Map<number, PlanillaContratoElegibleRow[]>();
+  for (const c of vigentesEsteMesTodos) {
+    const lista = contratosPorUsuario.get(c.ID_USUARIO) ?? [];
+    lista.push(c);
+    contratosPorUsuario.set(c.ID_USUARIO, lista);
+  }
+  const colaboradoresConConflicto: ColaboradorConContratosEnConflicto[] = [...contratosPorUsuario.values()]
+    .filter((lista) => lista.length > 1)
+    .map((lista) => ({
+      idUsuario: lista[0].ID_USUARIO,
+      nombreCompleto: `${lista[0].NOMBRES} ${lista[0].APELLIDOS}`,
+      contratos: lista.map((c) => ({
+        idContrato: c.ID_CONTRATO,
+        tipoContratoCodigo: c.TIPO_CONTRATO_CODIGO,
+        fechaInicio: c.FECHA_INICIO,
+        fechaFin: c.FECHA_FIN,
+      })),
+    }));
+  const idsUsuarioConConflicto = new Set(colaboradoresConConflicto.map((c) => c.idUsuario));
+
+  const vigentesEsteMes = vigentesEsteMesTodos.filter(
+    (c) => !contratosYaEnPlanilla.has(c.ID_CONTRATO) && !idsUsuarioConConflicto.has(c.ID_USUARIO),
+  );
 
   const descripcionPorCodigoFondo = new Map(fondosAfp.map((f) => [f.CODIGO, f.DESCRIPCION]));
   const fondosAfpSinComision: string[] = [];
@@ -139,5 +175,6 @@ export async function diagnosticarGeneracionPlanilla(
       fondosAfpSinComision,
     },
     colaboradoresSinGenerar,
+    colaboradoresConConflicto,
   };
 }
