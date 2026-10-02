@@ -20,7 +20,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   const archivo = await leerArchivo(detalle.DOCUMENTO_PATH);
-  const prefijo = detalle.TIPO_CONTRATO_CODIGO === "LOCADOR" ? "rxh" : "boleta";
+  const prefijo = detalle.TIPO_CONTRATO_CODIGO === "LOCADOR" ? "orden-servicio" : "boleta";
 
   return new NextResponse(new Uint8Array(archivo), {
     headers: {

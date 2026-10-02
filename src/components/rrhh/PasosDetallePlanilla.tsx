@@ -2,7 +2,7 @@
 // (que es el avance del MES completo): esto es el checklist de UN
 // colaborador, para ver de un vistazo que le falta sin entrar al
 // detalle. Los pasos difieren por regimen:
-//   - Locador: emitido -> RxH firmado subido -> evidencia de pago subida.
+//   - Locador: orden emitida -> RxH firmado subido -> evidencia de pago subida.
 //   - Planilla: emitida -> aportes AFP/EsSalud pagados -> colaborador
 //     confirmo que recibio su boleta.
 // Sin estado ni hooks -- funciona en Server Components.
@@ -32,7 +32,7 @@ export default function PasosDetallePlanilla({
 }: PasosDetallePlanillaProps) {
   const pasos: Paso[] = esLocador
     ? [
-        { etiqueta: "Emitido", hecho: emitida },
+        { etiqueta: "Orden emitida", hecho: emitida },
         { etiqueta: "RxH firmado", hecho: rxhFirmadoSubido },
         { etiqueta: "Evidencia de pago", hecho: evidenciaPagoSubida },
       ]

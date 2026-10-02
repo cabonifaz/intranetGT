@@ -83,11 +83,14 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
           >
             Descargar resumen
           </a>
-          <form action={marcarPagadoMasivoAction} title={noEmitidos.length > 0 ? "Solo afecta a los ya emitidos -- los pendientes quedan bloqueados" : undefined}>
+          <form
+            action={marcarPagadoMasivoAction}
+            title="Solo afecta a los de Planilla ya emitidos -- Locador no tiene aportes de AFP/EsSalud, y los pendientes quedan bloqueados"
+          >
             <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />
             <input type="hidden" name="pagado" value="1" />
             <SubmitButton className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
-              Marcar todos como pagados
+              Marcar aportes pagados (Planilla)
             </SubmitButton>
           </form>
           {!emitida && filas.length > 0 ? (
@@ -134,8 +137,9 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
             paso 1 (Emitir)
           </p>
           <p className="mt-1 text-red-700 dark:text-red-400">
-            No pueden avanzar a los siguientes pasos (marcar aportes pagados, subir RxH firmado, subir evidencia de pago) hasta que
-            se emita {noEmitidos.length === 1 ? "su boleta/RxH" : "cada boleta/RxH"}: {noEmitidos.map((f) => `${f.NOMBRES} ${f.APELLIDOS}`).join(", ")}.
+            No pueden avanzar a los siguientes pasos de su checklist (aportes AFP/EsSalud si es Planilla, o RxH firmado y
+            evidencia de pago si es Locador) hasta que se emita {noEmitidos.length === 1 ? "su boleta/orden de servicio" : "cada boleta/orden de servicio"}:{" "}
+            {noEmitidos.map((f) => `${f.NOMBRES} ${f.APELLIDOS}`).join(", ")}.
           </p>
         </div>
       ) : null}
@@ -150,7 +154,7 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
               <th className="px-4 py-2 text-right">Descuentos</th>
               <th className="px-4 py-2 text-right">Neto</th>
               <th className="px-4 py-2">Proceso de pago</th>
-              <th className="px-4 py-2">Aportes pagados</th>
+              <th className="px-4 py-2">Aportes AFP/EsSalud</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -185,7 +189,24 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
                     />
                   </td>
                   <td className="px-4 py-2">
-                    {f.ESTADO_EMISION_CODIGO === "EMITIDA" ? (
+                    {f.TIPO_CONTRATO_CODIGO === "LOCADOR" ? (
+                      f.ESTADO_EMISION_CODIGO !== "EMITIDA" && f.TIPO_REFERENCIA === "RRHH_CONTRATO_PERIODO_PAGO" ? (
+                        <form action={aplazarAlMesSiguienteAction}>
+                          <input type="hidden" name="idPlanillaDetalle" value={f.ID_PLANILLA_DETALLE} />
+                          <ConfirmSubmitButton
+                            mensaje={`¿Aplazar a ${f.NOMBRES} ${f.APELLIDOS} al mes siguiente? Se borra este registro de aquí y su monto (${formatearMonto(f.MONTO_BRUTO)}) se sumará al periodo del mes siguiente cuando se genere.`}
+                            pendingText="Aplazando..."
+                            className="text-xs text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
+                          >
+                            Pagar en la siguiente planilla
+                          </ConfirmSubmitButton>
+                        </form>
+                      ) : (
+                        <span className="text-xs text-slate-400 dark:text-slate-500" title="Locador no tiene aportes de AFP/EsSalud">
+                          No aplica
+                        </span>
+                      )
+                    ) : f.ESTADO_EMISION_CODIGO === "EMITIDA" ? (
                       <form action={marcarPagadoDetalleAction}>
                         <input type="hidden" name="idPlanillaDetalle" value={f.ID_PLANILLA_DETALLE} />
                         <input type="hidden" name="idPlanillaMensual" value={idPlanillaMensual} />

@@ -23,6 +23,7 @@ import NotaAyuda from "@/components/ui/NotaAyuda";
 import PasosDetallePlanilla from "@/components/rrhh/PasosDetallePlanilla";
 import CampoMontoBrutoDetalle from "@/components/rrhh/CampoMontoBrutoDetalle";
 import Suspension4taForm from "@/components/rrhh/Suspension4taForm";
+import DeshacerEmisionBoton from "@/components/rrhh/DeshacerEmisionBoton";
 import { diasHastaVencimiento } from "@/components/ui/IconoAlertaVencimiento";
 import { obtenerParametrosVigentes } from "@/lib/rrhh/planilla/parametros";
 
@@ -84,6 +85,16 @@ export default async function PlanillaDetalleColaboradorPage({
   const parametros = !esPlanilla ? await obtenerParametrosVigentes() : null;
   const superaUmbralRenta4ta = !parametros || Number(detalle.MONTO_BRUTO) > parametros.umbralRenta4ta;
 
+  // Deshacer un click accidental en "Emitir" solo tiene sentido si nada
+  // posterior asumio todavia que la emision era definitiva -- mismo
+  // guard que SP_RRHH_PLANILLA_DETALLE_DESHACER_EMISION.
+  const puedeDeshacerEmision =
+    emitida &&
+    !detalle.AFP_ESSALUD_PAGADO &&
+    !detalle.RXH_FIRMADO_PATH &&
+    !detalle.EVIDENCIA_PAGO_PATH &&
+    !detalle.FECHA_CONFIRMACION_COLABORADOR;
+
   return (
     <div className="max-w-3xl space-y-6">
       <div>
@@ -96,29 +107,39 @@ export default async function PlanillaDetalleColaboradorPage({
               {detalle.NOMBRES} {detalle.APELLIDOS}
             </h1>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              {detalle.CARGO} -- {esPlanilla ? "Boleta de pago (Planilla)" : `Recibo por honorarios (Locador -- ${detalle.TIPO_PAGO_LOCADOR_DESCRIPCION ?? "-"})`}
+              {detalle.CARGO} -- {esPlanilla ? "Boleta de pago (Planilla)" : `Orden de servicio (Locador -- ${detalle.TIPO_PAGO_LOCADOR_DESCRIPCION ?? "-"})`}
             </p>
           </div>
           {emitida ? (
-            <div className="flex items-center gap-2">
-              <a
-                href={`/api/rrhh/planilla/${idPlanillaDetalle}/documento`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-              >
-                {esPlanilla ? "Ver boleta" : "Ver RxH"}
-              </a>
-              {puedeGestionar ? (
-                <form action={regenerarDocumentoDetalleAction}>
-                  <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
-                  <ConfirmSubmitButton
-                    mensaje={`¿Regenerar ${esPlanilla ? "la boleta" : "el RxH"} con los datos y formato actuales? Se reemplaza el PDF ya emitido, sin cambiar montos ni estado.`}
-                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                  >
-                    Regenerar {esPlanilla ? "boleta" : "RxH"}
-                  </ConfirmSubmitButton>
-                </form>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={`/api/rrhh/planilla/${idPlanillaDetalle}/documento`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                >
+                  {esPlanilla ? "Ver boleta" : "Ver orden de servicio"}
+                </a>
+                {puedeGestionar ? (
+                  <form action={regenerarDocumentoDetalleAction}>
+                    <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+                    <ConfirmSubmitButton
+                      mensaje={`¿Regenerar ${esPlanilla ? "la boleta" : "la orden de servicio"} con los datos y formato actuales? Se reemplaza el PDF ya emitido, sin cambiar montos ni estado.`}
+                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      Regenerar {esPlanilla ? "boleta" : "orden"}
+                    </ConfirmSubmitButton>
+                  </form>
+                ) : null}
+                {puedeGestionar && puedeDeshacerEmision ? (
+                  <DeshacerEmisionBoton idPlanillaDetalle={detalle.ID_PLANILLA_DETALLE} esPlanilla={esPlanilla} />
+                ) : null}
+              </div>
+              {puedeGestionar && !puedeDeshacerEmision ? (
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  Ya no se puede deshacer la emisión -- hay un paso posterior completado.
+                </p>
               ) : null}
             </div>
           ) : null}
@@ -296,7 +317,7 @@ export default async function PlanillaDetalleColaboradorPage({
               <form action={emitirDetalleAction}>
                 <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
                 <ConfirmSubmitButton
-                  mensaje={`¿Emitir ${esPlanilla ? "la boleta de pago" : "el recibo por honorarios"}? Ya no se podran editar los montos.`}
+                  mensaje={`¿Emitir ${esPlanilla ? "la boleta de pago" : "la orden de servicio"}? Ya no se podran editar los montos.`}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                 >
                   Emitir
@@ -307,11 +328,12 @@ export default async function PlanillaDetalleColaboradorPage({
         ) : null}
       </section>
 
-      {puedeGestionar ? (
+      {puedeGestionar && esPlanilla ? (
         <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Aportes (AFP/EsSalud) a SUNAT</h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Independiente de si ya se pago el neto al colaborador -- marca cuando la empresa ya remitio estos aportes.
+            Independiente de si ya se pago el neto al colaborador -- marca cuando la empresa ya remitio estos aportes. No
+            aplica a Locador: no tiene aportes de AFP/EsSalud, son exclusivos del regimen de Planilla.
           </p>
           {emitida ? (
             <form action={marcarPagadoDetalleAction} className="mt-3">
@@ -329,30 +351,28 @@ export default async function PlanillaDetalleColaboradorPage({
               </SubmitButton>
             </form>
           ) : (
-            <>
-              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
-                🔒 Bloqueado -- primero hay que emitir {esPlanilla ? "la boleta" : "el RxH"} (paso 1) más arriba.
-              </p>
-              {detalle.TIPO_REFERENCIA === "RRHH_CONTRATO_PERIODO_PAGO" ? (
-                <div className="mt-2">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    ¿Este mes ya se cerró para los demás? En vez de reabrirlo, puedes aplazar a {detalle.NOMBRES} al mes
-                    siguiente.
-                  </p>
-                  <form action={aplazarAlMesSiguienteAction} className="mt-1">
-                    <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
-                    <ConfirmSubmitButton
-                      mensaje={`¿Aplazar a ${detalle.NOMBRES} ${detalle.APELLIDOS} al mes siguiente? Se borra este registro de aquí y su monto (${formatearMonto(detalle.MONTO_BRUTO)}) se sumará al periodo del mes siguiente cuando se genere.`}
-                      pendingText="Aplazando..."
-                      className="text-xs font-medium text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
-                    >
-                      Pagar en la siguiente planilla
-                    </ConfirmSubmitButton>
-                  </form>
-                </div>
-              ) : null}
-            </>
+            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
+              🔒 Bloqueado -- primero hay que emitir la boleta (paso 1) más arriba.
+            </p>
           )}
+        </section>
+      ) : null}
+
+      {puedeGestionar && !emitida && detalle.TIPO_REFERENCIA === "RRHH_CONTRATO_PERIODO_PAGO" ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            ¿Este mes ya se cerró para los demás? En vez de reabrirlo, puedes aplazar a {detalle.NOMBRES} al mes siguiente.
+          </p>
+          <form action={aplazarAlMesSiguienteAction} className="mt-1">
+            <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+            <ConfirmSubmitButton
+              mensaje={`¿Aplazar a ${detalle.NOMBRES} ${detalle.APELLIDOS} al mes siguiente? Se borra este registro de aquí y su monto (${formatearMonto(detalle.MONTO_BRUTO)}) se sumará al periodo del mes siguiente cuando se genere.`}
+              pendingText="Aplazando..."
+              className="text-xs font-medium text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
+            >
+              Pagar en la siguiente planilla
+            </ConfirmSubmitButton>
+          </form>
         </section>
       ) : null}
 
@@ -360,13 +380,14 @@ export default async function PlanillaDetalleColaboradorPage({
         <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-white">RxH firmado y evidencia de pago</h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            El recibo por honorarios que el colaborador firmo, y el comprobante de que se le hizo la transferencia --
-            independiente de marcar pagados los aportes a SUNAT.
+            La empresa no emite el RxH -- solo le envía a {detalle.NOMBRES} la orden de servicio con el monto. El RxH real lo
+            emite {detalle.NOMBRES} ante SUNAT y lo sube aquí firmado, junto con el comprobante de que se le hizo la
+            transferencia.
           </p>
 
           {!emitida ? (
             <p className="mt-3 rounded-lg border-2 border-red-400 bg-red-50 px-3 py-2 text-sm font-bold text-red-800 dark:border-red-700 dark:bg-red-950/40 dark:text-red-300">
-              🔒 Debes emitir el RxH (paso 1) antes de poder subir el RxH firmado o la evidencia de pago.
+              🔒 Debes emitir la orden de servicio (paso 1) antes de poder subir el RxH firmado o la evidencia de pago.
             </p>
           ) : null}
 
@@ -402,7 +423,7 @@ export default async function PlanillaDetalleColaboradorPage({
                   </form>
                 ) : (
                   <p className="mt-2 rounded-lg bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
-                    🔒 Bloqueado -- emite el RxH (paso 1) primero.
+                    🔒 Bloqueado -- emite la orden de servicio (paso 1) primero.
                   </p>
                 )
               ) : null}

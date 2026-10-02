@@ -146,6 +146,15 @@ export async function regenerarDocumentoDetalle(idPlanillaDetalle: number, docum
   await callProcedure("SP_RRHH_PLANILLA_DETALLE_REGENERAR_DOCUMENTO", [idPlanillaDetalle, documentoPath]);
 }
 
+export async function deshacerEmisionDetalle(idPlanillaDetalle: number): Promise<{ deshecho: boolean }> {
+  const resultado = await callProcedureWithOut<{ p_deshecho: number }>(
+    "SP_RRHH_PLANILLA_DETALLE_DESHACER_EMISION",
+    [idPlanillaDetalle],
+    ["p_deshecho"],
+  );
+  return { deshecho: resultado.p_deshecho === 1 };
+}
+
 export async function eliminarDetalle(idPlanillaDetalle: number): Promise<void> {
   await callProcedure("SP_RRHH_PLANILLA_DETALLE_ELIMINAR", [idPlanillaDetalle]);
 }

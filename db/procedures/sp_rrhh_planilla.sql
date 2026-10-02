@@ -36,6 +36,7 @@ DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_SUBIR_RXH_FIRMADO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_SUBIR_EVIDENCIA_PAGO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_APLAZAR;
+DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_DESHACER_EMISION;
 
 DELIMITER $$
 
@@ -324,6 +325,9 @@ END$$
 -- alerta en el detalle). Decision 2026-10-01: antes era independiente de
 -- la emision (el pago de aportes a SUNAT no depende de la boleta), pero
 -- ahora el checklist se exige en orden estricto para todos los pasos.
+-- Decision 2026-10-02: solo aplica a PLANILLA -- un LOCADOR no tiene
+-- aportes de AFP/EsSalud (son exclusivos del regimen dependiente), asi
+-- que un contrato LOCADOR queda afuera aunque este EMITIDA.
 CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_MARCAR_PAGADO(
     IN p_id_planilla_detalle INT UNSIGNED,
     IN p_pagado TINYINT,
@@ -332,12 +336,15 @@ CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_MARCAR_PAGADO(
 BEGIN
     UPDATE RRHH_PLANILLA_DETALLE d
       JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+      JOIN RRHH_CONTRATO c ON c.ID_CONTRATO = d.ID_CONTRATO
+      JOIN MAESTRO_MAESTRO tc ON tc.ID_MAESTRO = c.ID_TIPO_CONTRATO
        SET d.AFP_ESSALUD_PAGADO = p_pagado, d.FECHA_MARCADO_PAGADO = NOW(), d.USUARIO_MARCADO_PAGADO = p_id_usuario
-     WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle AND ee.CODIGO = 'EMITIDA';
+     WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle AND ee.CODIGO = 'EMITIDA' AND tc.CODIGO != 'LOCADOR';
 END$$
 
 -- Mismo guard que la version individual -- los detalles todavia no
--- emitidos quedan afuera (no-op para esas filas), el resto se marca.
+-- emitidos o de un LOCADOR quedan afuera (no-op para esas filas), el
+-- resto se marca.
 CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_MARCAR_PAGADO_MASIVO(
     IN p_id_planilla_mensual INT UNSIGNED,
     IN p_pagado TINYINT,
@@ -346,8 +353,10 @@ CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_MARCAR_PAGADO_MASIVO(
 BEGIN
     UPDATE RRHH_PLANILLA_DETALLE d
       JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+      JOIN RRHH_CONTRATO c ON c.ID_CONTRATO = d.ID_CONTRATO
+      JOIN MAESTRO_MAESTRO tc ON tc.ID_MAESTRO = c.ID_TIPO_CONTRATO
        SET d.AFP_ESSALUD_PAGADO = p_pagado, d.FECHA_MARCADO_PAGADO = NOW(), d.USUARIO_MARCADO_PAGADO = p_id_usuario
-     WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual AND ee.CODIGO = 'EMITIDA';
+     WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual AND ee.CODIGO = 'EMITIDA' AND tc.CODIGO != 'LOCADOR';
 END$$
 
 -- Se llama despues de que la app ya genero y guardo el PDF (mismo orden
@@ -383,6 +392,53 @@ BEGIN
         UPDATE RRHH_PRESTAMO_CUOTA
            SET ID_ESTADO_CUOTA = v_id_cuota_descontada, FECHA_DESCUENTO = NOW()
          WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
+    END IF;
+END$$
+
+-- Deshace una emision por error (click accidental) y vuelve el detalle a
+-- PENDIENTE -- distinto de "Regenerar" (que reemplaza el PDF sin tocar el
+-- estado). Bloqueado (no-op silencioso) si ya avanzo algun paso
+-- posterior que asumio que la emision era definitiva: aportes AFP/EsSalud
+-- marcados pagados, RxH firmado o evidencia de pago ya subidos (Locador),
+-- o el colaborador ya confirmo que recibio su boleta (Planilla). Revierte
+-- tambien las cuotas de prestamo que esta emision habia dejado DESCONTADA
+-- (vuelven a PENDIENTE, siguen reservadas para este detalle -- si se
+-- vuelve a emitir, se marcan DESCONTADA otra vez).
+CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_DESHACER_EMISION(
+    IN p_id_planilla_detalle INT UNSIGNED,
+    OUT p_deshecho TINYINT
+)
+BEGIN
+    DECLARE v_id_pendiente INT UNSIGNED;
+    DECLARE v_id_cuota_pendiente INT UNSIGNED;
+    DECLARE v_id_cuota_descontada INT UNSIGNED;
+    DECLARE v_puede_deshacer INT;
+
+    SET v_id_pendiente = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_EMISION_PLANILLA_DETALLE' AND CODIGO = 'PENDIENTE' LIMIT 1);
+    SET v_id_cuota_pendiente = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_CUOTA_PRESTAMO' AND CODIGO = 'PENDIENTE' LIMIT 1);
+    SET v_id_cuota_descontada = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_CUOTA_PRESTAMO' AND CODIGO = 'DESCONTADA' LIMIT 1);
+    SET p_deshecho = 0;
+
+    SELECT COUNT(*) INTO v_puede_deshacer
+      FROM RRHH_PLANILLA_DETALLE d
+      JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+     WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle
+       AND ee.CODIGO = 'EMITIDA'
+       AND d.AFP_ESSALUD_PAGADO = 0
+       AND d.RXH_FIRMADO_PATH IS NULL
+       AND d.EVIDENCIA_PAGO_PATH IS NULL
+       AND d.FECHA_CONFIRMACION_COLABORADOR IS NULL;
+
+    IF v_puede_deshacer = 1 THEN
+        UPDATE RRHH_PLANILLA_DETALLE
+           SET ID_ESTADO_EMISION = v_id_pendiente, DOCUMENTO_PATH = NULL, FECHA_EMISION = NULL, USUARIO_EMISION = NULL
+         WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle;
+
+        UPDATE RRHH_PRESTAMO_CUOTA
+           SET ID_ESTADO_CUOTA = v_id_cuota_pendiente, FECHA_DESCUENTO = NULL
+         WHERE ID_PLANILLA_DETALLE = p_id_planilla_detalle AND ID_ESTADO_CUOTA = v_id_cuota_descontada;
+
+        SET p_deshecho = 1;
     END IF;
 END$$
 

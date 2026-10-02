@@ -21,6 +21,7 @@ import {
   marcarPagadoMasivo,
   emitirDetalle,
   regenerarDocumentoDetalle,
+  deshacerEmisionDetalle,
   eliminarDetalle,
   subirRxhFirmado,
   subirEvidenciaPago,
@@ -539,8 +540,10 @@ async function notificarDocumentoEmitido(detalle: PlanillaDetalleRow): Promise<v
 
     await crearNotificacion({
       idCategoria,
-      titulo: esPlanilla ? "Ya está tu boleta de pago" : "Ya está tu recibo por honorarios",
-      mensaje: `Se emitió tu ${esPlanilla ? "boleta de pago" : "recibo por honorarios"} de ${detalle.PERIODO}. Descárgala y confirma que la recibiste.`,
+      titulo: esPlanilla ? "Ya está tu boleta de pago" : "Ya está tu orden de servicio",
+      mensaje: esPlanilla
+        ? `Se emitió tu boleta de pago de ${detalle.PERIODO}. Descárgala y confirma que la recibiste.`
+        : `Se emitió tu orden de servicio de ${detalle.PERIODO}. Descárgala, emite tu Recibo por Honorarios (RxH) ante SUNAT por ese monto, y sube aquí el RxH firmado junto con la evidencia de pago.`,
       idAplicacionOrigen,
       urlDestino: `/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${detalle.ID_PLANILLA_DETALLE}`,
       idUsuarioEmisor: null,
@@ -595,6 +598,47 @@ export async function emitirDetalleAction(formData: FormData): Promise<void> {
   revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${idPlanillaDetalle}`);
   revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}`);
   refresh();
+}
+
+// Estado devuelto por deshacerEmisionDetalleAction -- mismo patron
+// {ok,error,codigo} que reabrirPlanillaMensualAction/reiniciarPlanillaMensualAction.
+export interface DeshacerEmisionState {
+  ok: boolean;
+  error?: string;
+  codigo?: string;
+}
+
+// Deshace una emision por un click accidental, volviendo el detalle a
+// PENDIENTE (vuelve a ser editable, "Emitir" vuelve a estar disponible).
+// Bloqueado si ya avanzo algun paso posterior que asumio la emision como
+// definitiva -- ver SP_RRHH_PLANILLA_DETALLE_DESHACER_EMISION.
+export async function deshacerEmisionDetalleAction(
+  _prevState: DeshacerEmisionState,
+  formData: FormData,
+): Promise<DeshacerEmisionState> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPlanillaDetalle = Number(formData.get("idPlanillaDetalle"));
+  if (!idPlanillaDetalle) return { ok: false, error: "Detalle inválido.", codigo: "PLAN-DESHACER-01" };
+
+  const detalle = await obtenerDetalle(idPlanillaDetalle);
+  if (!detalle) return { ok: false, error: "No se encontró el detalle.", codigo: "PLAN-DESHACER-02" };
+
+  const { deshecho } = await deshacerEmisionDetalle(idPlanillaDetalle);
+  if (!deshecho) {
+    return {
+      ok: false,
+      error:
+        "No se puede deshacer -- ya hay un paso posterior completado (aportes pagados, RxH firmado, evidencia de pago, o confirmación del colaborador).",
+      codigo: "PLAN-DESHACER-03",
+    };
+  }
+
+  revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${idPlanillaDetalle}`);
+  revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}`);
+  refresh();
+
+  return { ok: true };
 }
 
 // Emite todos los detalles PENDIENTE de la planilla y recien entonces

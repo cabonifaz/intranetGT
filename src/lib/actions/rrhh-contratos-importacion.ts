@@ -13,6 +13,7 @@ import {
 import { obtenerEmpleado, upsertEmpleado } from "@/lib/db/repositories/rrhh-empleado.repository";
 import { extraerSolicitudContrato, type DatosExtraidosSolicitud } from "@/lib/rrhh/contratos/extraer-solicitud-contrato";
 import { guardarArchivo } from "@/lib/storage/local-storage";
+import { CARGO_PENDIENTE_REVISION } from "@/lib/rrhh/contratos/constantes";
 
 const TAMANO_MAX_BYTES = 15 * 1024 * 1024;
 const TIPOS_PERMITIDOS: Record<string, { mime: "application/pdf" | "image/png" | "image/jpeg"; extension: string }> = {
@@ -105,7 +106,7 @@ export async function subirSolicitudContratoAction(formData: FormData): Promise<
   const monedas = await listarMaestros("MONEDA");
   const idMoneda = datos.monedaCodigo ? (monedas.find((m) => m.CODIGO === datos.monedaCodigo)?.ID_MAESTRO ?? null) : null;
 
-  const cargo = datos.cargo ?? "(completar en revision)";
+  const cargo = datos.cargo ?? CARGO_PENDIENTE_REVISION;
   const fechaInicio = datos.fechaInicio ?? hoyIso();
 
   const advertencias = [...datos.advertencias];
@@ -188,6 +189,9 @@ export async function confirmarImportacionContratoAction(formData: FormData): Pr
   const nroDocumentoForm = String(formData.get("nroDocumento") ?? "").trim() || null;
 
   if (!idContrato || !idUsuario || !idTipoContrato || !cargo || !fechaInicio) return;
+  // Nunca confirmar con el texto de relleno sin editar -- apareceria
+  // literal en la boleta/orden de servicio emitida (ver CARGO_PENDIENTE_REVISION).
+  if (cargo === CARGO_PENDIENTE_REVISION) return;
 
   // Mismo criterio que crearContratoAction: el documento de identidad
   // (tipo + numero) es obligatorio para que un contrato quede activo --

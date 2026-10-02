@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { confirmarImportacionContratoAction } from "@/lib/actions/rrhh-contratos-importacion";
+import { CARGO_PENDIENTE_REVISION } from "@/lib/rrhh/contratos/constantes";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
 import type { ContratoImportacionRow, EmpleadoDirectorioRow } from "@/types/db";
 import { tieneIdentidadCompleta } from "@/lib/rrhh/identidad";
@@ -30,6 +31,8 @@ export default function RevisarImportacionContratoForm({
   const [idTipoPagoLocador, setIdTipoPagoLocador] = useState<number | "">(importacion.ID_TIPO_PAGO_LOCADOR ?? "");
   const [idMoneda, setIdMoneda] = useState<number | "">(importacion.ID_MONEDA ?? "");
   const [idUsuarioSel, setIdUsuarioSel] = useState(String(importacion.ID_USUARIO));
+  const cargoEraPlaceholder = importacion.CARGO === CARGO_PENDIENTE_REVISION;
+  const [cargo, setCargo] = useState(cargoEraPlaceholder ? "" : importacion.CARGO);
 
   const personaSel = colaboradores.find((u) => String(u.ID_USUARIO) === idUsuarioSel) ?? null;
   const identidadCompleta = tieneIdentidadCompleta(personaSel);
@@ -104,7 +107,26 @@ export default function RevisarImportacionContratoForm({
         ) : null}
       </div>
 
-      <Campo name="cargo" label="Cargo" defaultValue={importacion.CARGO} />
+      <div>
+        <label htmlFor="cargo" className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
+          Cargo / Servicio prestado
+        </label>
+        <input
+          id="cargo"
+          name="cargo"
+          required
+          value={cargo}
+          onChange={(e) => setCargo(e.target.value)}
+          placeholder={cargoEraPlaceholder ? "No se pudo leer el cargo -- escríbelo aquí" : undefined}
+          className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+        />
+        {cargoEraPlaceholder ? (
+          <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+            ⚠ No se pudo leer el cargo/servicio de la solicitud -- este texto aparece literal en la boleta/orden de servicio
+            si no lo completas.
+          </p>
+        ) : null}
+      </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Campo name="fechaInicio" label="Fecha de inicio" type="date" defaultValue={importacion.FECHA_INICIO?.slice(0, 10)} />
