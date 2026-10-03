@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermiso } from "@/lib/auth/require-permiso";
+import { obtenerPermisosUsuario } from "@/lib/db/repositories/permiso.repository";
+import { tienePermiso } from "@/lib/rbac/permissions";
 import { obtenerPlanillaMensual, listarDetalle } from "@/lib/db/repositories/rrhh-planilla.repository";
 import {
   marcarPagadoDetalleAction,
@@ -14,6 +16,7 @@ import SubmitButton from "@/components/ui/SubmitButton";
 import PasosPlanillaMensual from "@/components/rrhh/PasosPlanillaMensual";
 import ReabrirPlanillaBoton from "@/components/rrhh/ReabrirPlanillaBoton";
 import ReiniciarPlanillaBoton from "@/components/rrhh/ReiniciarPlanillaBoton";
+import ReiniciarPlanillaTotalBoton from "@/components/rrhh/ReiniciarPlanillaTotalBoton";
 import DiagnosticoPlanillaMensual from "@/components/rrhh/DiagnosticoPlanillaMensual";
 import PasosDetallePlanilla from "@/components/rrhh/PasosDetallePlanilla";
 import { diagnosticarGeneracionPlanilla } from "@/lib/rrhh/planilla/diagnostico";
@@ -27,7 +30,9 @@ function etiquetaRegimen(tipoContratoCodigo: string, tipoPagoLocadorDescripcion:
 }
 
 export default async function PlanillaMensualDetallePage({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermiso("RRHH_PLANILLA", "LECTURA");
+  const sesion = await requirePermiso("RRHH_PLANILLA", "LECTURA");
+  const permisos = await obtenerPermisosUsuario(sesion.idUsuario);
+  const esAdminPlanilla = tienePermiso(permisos, "RRHH_PLANILLA", "ADMIN");
   const { id } = await params;
   const idPlanillaMensual = Number(id);
 
@@ -106,6 +111,7 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
           ) : null}
           {emitida ? <ReabrirPlanillaBoton idPlanillaMensual={idPlanillaMensual} /> : null}
           {!emitida && filas.length > 0 && totalEmitidos === 0 ? <ReiniciarPlanillaBoton idPlanillaMensual={idPlanillaMensual} /> : null}
+          {esAdminPlanilla && filas.length > 0 && totalEmitidos > 0 ? <ReiniciarPlanillaTotalBoton idPlanillaMensual={idPlanillaMensual} /> : null}
         </div>
       </div>
 

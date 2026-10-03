@@ -28,6 +28,7 @@ import {
   confirmarRecepcionBoleta,
   aplazarDetalle,
   reiniciarPlanillaMensual,
+  reiniciarPlanillaMensualTotal,
 } from "@/lib/db/repositories/rrhh-planilla.repository";
 import {
   crearParametro,
@@ -745,6 +746,51 @@ export async function reiniciarPlanillaMensualAction(
       ok: false,
       error: "Ya hay al menos un colaborador emitido este mes -- no se puede reiniciar todo. Corrige el detalle puntual si hace falta.",
       codigo: "PLAN-REINICIAR-03",
+    };
+  }
+
+  revalidatePath(`/rrhh/planilla/${idPlanillaMensual}`);
+  revalidatePath("/rrhh/planilla");
+  refresh();
+
+  return { ok: true };
+}
+
+// Estado devuelto por reiniciarPlanillaMensualTotalAction -- mismo
+// patron {ok,error,codigo} que reiniciarPlanillaMensualAction.
+export interface ReiniciarPlanillaTotalState {
+  ok: boolean;
+  error?: string;
+  codigo?: string;
+}
+
+// Version ADMIN de "reiniciar": a diferencia de reiniciarPlanillaMensualAction
+// (que se niega si hay algun emitido), esta SI borra el mes completo
+// aunque ya haya boletas/ordenes de servicio emitidas -- "empezar de 0"
+// de verdad, incluyendo RxH. Requiere permiso ADMIN (no solo ESCRITURA)
+// sobre RRHH_PLANILLA porque es mucho mas destructivo -- bloqueado igual
+// si algun detalle ya tiene algo irreversible en el mundo real (aportes
+// pagados, RxH firmado, evidencia de pago, confirmacion del colaborador),
+// ver SP_RRHH_PLANILLA_MENSUAL_REINICIAR_TOTAL.
+export async function reiniciarPlanillaMensualTotalAction(
+  _prevState: ReiniciarPlanillaTotalState,
+  formData: FormData,
+): Promise<ReiniciarPlanillaTotalState> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ADMIN");
+
+  const idPlanillaMensual = Number(formData.get("idPlanillaMensual"));
+  if (!idPlanillaMensual) return { ok: false, error: "Planilla inválida.", codigo: "PLAN-REINICIAR-TOTAL-01" };
+
+  const planilla = await obtenerPlanillaMensual(idPlanillaMensual);
+  if (!planilla) return { ok: false, error: "No se encontró la planilla.", codigo: "PLAN-REINICIAR-TOTAL-02" };
+
+  const { reiniciado } = await reiniciarPlanillaMensualTotal(idPlanillaMensual);
+  if (!reiniciado) {
+    return {
+      ok: false,
+      error:
+        "Ya hay algun colaborador con un paso irreversible (aportes pagados, RxH firmado, evidencia de pago, o confirmación del colaborador) -- deshaz ese detalle puntual primero.",
+      codigo: "PLAN-REINICIAR-TOTAL-03",
     };
   }
 

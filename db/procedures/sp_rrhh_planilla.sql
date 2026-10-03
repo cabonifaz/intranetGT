@@ -37,6 +37,7 @@ DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_SUBIR_EVIDENCIA_PAGO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_APLAZAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_DESHACER_EMISION;
+DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_MENSUAL_REINICIAR_TOTAL;
 
 DELIMITER $$
 
@@ -671,6 +672,55 @@ BEGIN
          WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
 
         DELETE FROM RRHH_PLANILLA_DETALLE WHERE ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
+
+        SET p_reiniciado = 1;
+    END IF;
+END$$
+
+-- Version ADMIN de REINICIAR: a diferencia de esa (que se niega si HAY
+-- algun emitido), esta SI borra el mes completo aunque ya haya boletas/
+-- ordenes de servicio emitidas -- "empezar de 0" de verdad. El limite no
+-- es la emision en si (un PDF emitido por error se puede regenerar
+-- despues sin problema), sino que no haya pasado algo YA IRREVERSIBLE en
+-- el mundo real: aportes AFP/EsSalud remitidos a SUNAT, RxH firmado o
+-- evidencia de pago ya subidos, o el colaborador ya confirmo que recibio
+-- su boleta. Si cualquier detalle del mes tiene algo de eso, no-op
+-- silencioso -- hay que deshacer ese detalle puntual primero (ver
+-- SP_RRHH_PLANILLA_DETALLE_DESHACER_EMISION), que tiene el mismo guard.
+-- Si el header ya estaba EMITIDA, vuelve a BORRADOR (queda vacio, listo
+-- para "Generar planilla del mes" desde cero).
+CREATE PROCEDURE SP_RRHH_PLANILLA_MENSUAL_REINICIAR_TOTAL(
+    IN p_id_planilla_mensual INT UNSIGNED,
+    OUT p_reiniciado TINYINT
+)
+BEGIN
+    DECLARE v_hay_avance_irreversible INT;
+    DECLARE v_id_borrador INT UNSIGNED;
+
+    SET p_reiniciado = 0;
+
+    SELECT COUNT(*) INTO v_hay_avance_irreversible
+      FROM RRHH_PLANILLA_DETALLE d
+     WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual
+       AND (d.AFP_ESSALUD_PAGADO = 1 OR d.RXH_FIRMADO_PATH IS NOT NULL OR d.EVIDENCIA_PAGO_PATH IS NOT NULL
+            OR d.FECHA_CONFIRMACION_COLABORADOR IS NOT NULL);
+
+    IF v_hay_avance_irreversible = 0 THEN
+        UPDATE RRHH_PRESTAMO_CUOTA pc
+          JOIN RRHH_PLANILLA_DETALLE d ON d.ID_PLANILLA_DETALLE = pc.ID_PLANILLA_DETALLE
+           SET pc.ID_PLANILLA_DETALLE = NULL, pc.MONTO_DESCONTADO_SOLES = NULL,
+               pc.ID_ESTADO_CUOTA = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_CUOTA_PRESTAMO' AND CODIGO = 'PENDIENTE' LIMIT 1),
+               pc.FECHA_DESCUENTO = NULL
+         WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
+
+        DELETE pdh FROM RRHH_PLANILLA_DETALLE_HORAS pdh
+          JOIN RRHH_PLANILLA_DETALLE d ON d.ID_PLANILLA_DETALLE = pdh.ID_PLANILLA_DETALLE
+         WHERE d.ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
+
+        DELETE FROM RRHH_PLANILLA_DETALLE WHERE ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
+
+        SET v_id_borrador = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'ESTADO_PLANILLA_MENSUAL' AND CODIGO = 'BORRADOR' LIMIT 1);
+        UPDATE RRHH_PLANILLA_MENSUAL SET ID_ESTADO_PLANILLA = v_id_borrador WHERE ID_PLANILLA_MENSUAL = p_id_planilla_mensual;
 
         SET p_reiniciado = 1;
     END IF;
