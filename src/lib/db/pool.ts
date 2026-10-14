@@ -5,7 +5,7 @@ declare global {
 }
 
 function createPool(): mysql.Pool {
-  return mysql.createPool({
+  const pool = mysql.createPool({
     host: process.env.DB_HOST ?? "localhost",
     port: Number(process.env.DB_PORT ?? 3306),
     user: process.env.DB_USER,
@@ -38,6 +38,29 @@ function createPool(): mysql.Pool {
     // colgar el request varios segundos esperando el timeout por defecto.
     connectTimeout: 10_000,
   });
+
+  // El servidor de BD es compartido con otros proyectos -- su time_zone
+  // GLOBAL puede cambiar por fuera de nuestro control (ej. otro proyecto
+  // lo ajusta a su conveniencia) y eso rompe en silencio toda la logica
+  // de sesion/expiracion de esta app, que asume UTC en todos lados
+  // (Date.now(), el "exp" del JWT, comparaciones de FECHA_EXPIRACION,
+  // etc.). Fijar el time_zone de CADA conexion nueva del pool a UTC hace
+  // que NOW()/CURDATE()/CURTIME() en los procedimientos siempre devuelvan
+  // UTC real, sin depender de la config global del servidor.
+  pool.on("connection", (connection) => {
+    // El tipado de mysql2/promise marca este evento con la conexion
+    // "promise" (query() devuelve Promise), pero en runtime el pool
+    // interno emite la conexion "core" (callback-style) -- por eso el
+    // cast: no hay overload de Promise que acepte esto tal cual.
+    (connection as unknown as { query: (sql: string, callback: (err: Error | null) => void) => void }).query(
+      "SET time_zone = '+00:00'",
+      (err) => {
+        if (err) console.error("No se pudo fijar time_zone=+00:00 en una conexion nueva del pool:", err);
+      },
+    );
+  });
+
+  return pool;
 }
 
 // Reutiliza el pool entre hot-reloads en dev (Next.js recarga modulos).
