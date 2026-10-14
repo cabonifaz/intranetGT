@@ -34,7 +34,16 @@ export default function HitoFilaAcciones({ hito, idProyecto, nombreProyecto }: H
     setModo("ninguno");
   }
 
-  const puedeFacturar = hito.ESTADO_HITO_CODIGO === "PLANEADO";
+  // Un proyecto con REQUIERE_CONFORMIDAD_FACTURACION=1 exige que el hito
+  // tenga su conformidad FIRMADA antes de poder facturarlo -- el SP ya lo
+  // bloquea (no-op silencioso), esto solo refleja el motivo en la UI en
+  // vez de dejar el boton sin explicacion (ver guard en
+  // SP_PROYECTO_HITO_MARCAR_FACTURADO).
+  const bloqueadoPorConformidad =
+    hito.ESTADO_HITO_CODIGO === "PLANEADO" &&
+    hito.REQUIERE_CONFORMIDAD_FACTURACION === 1 &&
+    hito.ESTADO_CONFORMIDAD_CODIGO !== "FIRMADA";
+  const puedeFacturar = hito.ESTADO_HITO_CODIGO === "PLANEADO" && !bloqueadoPorConformidad;
   const puedeCobrar = hito.ESTADO_HITO_CODIGO === "PLANEADO" || hito.ESTADO_HITO_CODIGO === "FACTURADO";
   const puedeDeshacerCobro = hito.ESTADO_HITO_CODIGO === "COBRADO";
   const puedeAnular = hito.ESTADO_HITO_CODIGO === "PLANEADO";
@@ -110,6 +119,13 @@ export default function HitoFilaAcciones({ hito, idProyecto, nombreProyecto }: H
         >
           Marcar facturado
         </button>
+      ) : bloqueadoPorConformidad ? (
+        <span
+          title="Este proyecto requiere la conformidad firmada antes de facturar este hito"
+          className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400"
+        >
+          🔒 Requiere conformidad
+        </span>
       ) : null}
       {puedeCobrar ? (
         <button

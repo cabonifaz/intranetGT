@@ -51,6 +51,7 @@ CREATE PROCEDURE SP_PROYECTO_CREAR(
     IN p_costo_presupuestado DECIMAL(14,2),
     IN p_ingreso_esperado DECIMAL(14,2),
     IN p_id_moneda INT UNSIGNED,
+    IN p_requiere_conformidad_facturacion TINYINT,
     IN p_id_usuario_creacion INT UNSIGNED,
     OUT p_id_proyecto INT UNSIGNED
 )
@@ -63,10 +64,10 @@ BEGIN
     SET v_id_cliente = IF(p_es_interno = 1, NULL, p_id_cliente);
 
     INSERT INTO PROYECTO (
-        ID_TIPO_PROYECTO, NOMBRE, ID_CLIENTE, ES_INTERNO, DESCRIPCION, FECHA_INICIO, FECHA_FIN_ESTIMADA,
+        ID_TIPO_PROYECTO, NOMBRE, ID_CLIENTE, ES_INTERNO, REQUIERE_CONFORMIDAD_FACTURACION, DESCRIPCION, FECHA_INICIO, FECHA_FIN_ESTIMADA,
         COSTO_PRESUPUESTADO, INGRESO_ESPERADO, ID_MONEDA, ID_ESTADO_PROYECTO, ID_ESTADO, USUARIO_CREACION
     ) VALUES (
-        p_id_tipo_proyecto, p_nombre, v_id_cliente, p_es_interno, p_descripcion, p_fecha_inicio, p_fecha_fin_estimada,
+        p_id_tipo_proyecto, p_nombre, v_id_cliente, p_es_interno, p_requiere_conformidad_facturacion, p_descripcion, p_fecha_inicio, p_fecha_fin_estimada,
         p_costo_presupuestado, p_ingreso_esperado, p_id_moneda, v_id_en_curso, v_id_activo, p_id_usuario_creacion
     );
 
@@ -96,7 +97,7 @@ BEGIN
     DECLARE v_id_moneda_usd INT UNSIGNED;
     SET v_id_moneda_usd = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'MONEDA' AND CODIGO = 'USD' LIMIT 1);
 
-    SELECT p.ID_PROYECTO, p.NOMBRE, p.ID_CLIENTE, p.ES_INTERNO, cl.RAZON_SOCIAL AS CLIENTE_RAZON_SOCIAL,
+    SELECT p.ID_PROYECTO, p.NOMBRE, p.ID_CLIENTE, p.ES_INTERNO, p.REQUIERE_CONFORMIDAD_FACTURACION, cl.RAZON_SOCIAL AS CLIENTE_RAZON_SOCIAL,
            p.FECHA_INICIO, p.FECHA_FIN_ESTIMADA,
            p.COSTO_PRESUPUESTADO, p.INGRESO_ESPERADO,
            p.ID_TIPO_PROYECTO, tp.CODIGO AS TIPO_PROYECTO_CODIGO, tp.DESCRIPCION AS TIPO_PROYECTO_DESCRIPCION,
@@ -205,7 +206,7 @@ BEGIN
     DECLARE v_id_moneda_usd INT UNSIGNED;
     SET v_id_moneda_usd = (SELECT ID_MAESTRO FROM MAESTRO_MAESTRO WHERE TIPO_MAESTRO = 'MONEDA' AND CODIGO = 'USD' LIMIT 1);
 
-    SELECT p.ID_PROYECTO, p.NOMBRE, p.ID_CLIENTE, p.ES_INTERNO, cl.RAZON_SOCIAL AS CLIENTE_RAZON_SOCIAL,
+    SELECT p.ID_PROYECTO, p.NOMBRE, p.ID_CLIENTE, p.ES_INTERNO, p.REQUIERE_CONFORMIDAD_FACTURACION, cl.RAZON_SOCIAL AS CLIENTE_RAZON_SOCIAL,
            p.DESCRIPCION, p.FECHA_INICIO, p.FECHA_FIN_ESTIMADA,
            p.COSTO_PRESUPUESTADO, p.INGRESO_ESPERADO,
            p.ID_TIPO_PROYECTO, tp.CODIGO AS TIPO_PROYECTO_CODIGO, tp.DESCRIPCION AS TIPO_PROYECTO_DESCRIPCION,
@@ -397,6 +398,7 @@ CREATE PROCEDURE SP_PROYECTO_ACTUALIZAR(
     IN p_fecha_fin_estimada DATE,
     IN p_costo_presupuestado DECIMAL(14,2),
     IN p_ingreso_esperado DECIMAL(14,2),
+    IN p_requiere_conformidad_facturacion TINYINT,
     IN p_id_usuario_modificacion INT UNSIGNED
 )
 BEGIN
@@ -411,6 +413,7 @@ BEGIN
            FECHA_FIN_ESTIMADA = p_fecha_fin_estimada,
            COSTO_PRESUPUESTADO = p_costo_presupuestado,
            INGRESO_ESPERADO = p_ingreso_esperado,
+           REQUIERE_CONFORMIDAD_FACTURACION = p_requiere_conformidad_facturacion,
            USUARIO_MODIFICACION = p_id_usuario_modificacion
      WHERE ID_PROYECTO = p_id_proyecto;
 END$$
@@ -710,10 +713,14 @@ BEGIN
     SELECT h.ID_HITO, h.ID_PROYECTO, h.NOMBRE, h.PORCENTAJE, h.MONTO, h.FECHA_ESTIMADA, h.ORDEN,
            h.NRO_FACTURA, h.FECHA_FACTURADO, h.ID_INGRESO,
            h.ID_TIPO_HITO, th.CODIGO AS TIPO_HITO_CODIGO, th.DESCRIPCION AS TIPO_HITO_DESCRIPCION,
-           h.ID_ESTADO_HITO, eh.CODIGO AS ESTADO_HITO_CODIGO, eh.DESCRIPCION AS ESTADO_HITO_DESCRIPCION
+           h.ID_ESTADO_HITO, eh.CODIGO AS ESTADO_HITO_CODIGO, eh.DESCRIPCION AS ESTADO_HITO_DESCRIPCION,
+           py.REQUIERE_CONFORMIDAD_FACTURACION, pc.ID_CONFORMIDAD, ec.CODIGO AS ESTADO_CONFORMIDAD_CODIGO
       FROM PROYECTO_HITO h
+      JOIN PROYECTO py ON py.ID_PROYECTO = h.ID_PROYECTO
       JOIN MAESTRO_MAESTRO th ON th.ID_MAESTRO = h.ID_TIPO_HITO
       JOIN MAESTRO_MAESTRO eh ON eh.ID_MAESTRO = h.ID_ESTADO_HITO
+      LEFT JOIN PROYECTO_CONFORMIDAD pc ON pc.ID_HITO = h.ID_HITO
+      LEFT JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = pc.ID_ESTADO_CONFORMIDAD
      WHERE h.ID_PROYECTO = p_id_proyecto
      ORDER BY h.ORDEN, h.ID_HITO;
 END$$
@@ -727,11 +734,14 @@ BEGIN
     SELECT h.ID_HITO, h.ID_PROYECTO, py.NOMBRE AS PROYECTO_NOMBRE, h.NOMBRE, h.PORCENTAJE, h.MONTO, h.FECHA_ESTIMADA, h.ORDEN,
            h.NRO_FACTURA, h.FECHA_FACTURADO, h.ID_INGRESO,
            h.ID_TIPO_HITO, th.CODIGO AS TIPO_HITO_CODIGO, th.DESCRIPCION AS TIPO_HITO_DESCRIPCION,
-           h.ID_ESTADO_HITO, eh.CODIGO AS ESTADO_HITO_CODIGO, eh.DESCRIPCION AS ESTADO_HITO_DESCRIPCION
+           h.ID_ESTADO_HITO, eh.CODIGO AS ESTADO_HITO_CODIGO, eh.DESCRIPCION AS ESTADO_HITO_DESCRIPCION,
+           py.REQUIERE_CONFORMIDAD_FACTURACION, pc.ID_CONFORMIDAD, ec.CODIGO AS ESTADO_CONFORMIDAD_CODIGO
       FROM PROYECTO_HITO h
       JOIN PROYECTO py ON py.ID_PROYECTO = h.ID_PROYECTO
       JOIN MAESTRO_MAESTRO th ON th.ID_MAESTRO = h.ID_TIPO_HITO
       JOIN MAESTRO_MAESTRO eh ON eh.ID_MAESTRO = h.ID_ESTADO_HITO
+      LEFT JOIN PROYECTO_CONFORMIDAD pc ON pc.ID_HITO = h.ID_HITO
+      LEFT JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = pc.ID_ESTADO_CONFORMIDAD
      WHERE eh.CODIGO IN ('PLANEADO', 'FACTURADO')
      ORDER BY h.FECHA_ESTIMADA IS NULL, h.FECHA_ESTIMADA;
 END$$
@@ -758,7 +768,11 @@ BEGIN
      ORDER BY h.FECHA_FACTURADO;
 END$$
 
--- Guard: solo se puede marcar facturado un item que sigue PLANEADO.
+-- Guard: solo se puede marcar facturado un item que sigue PLANEADO, Y
+-- si el proyecto exige conformidad (REQUIERE_CONFORMIDAD_FACTURACION=1)
+-- su PROYECTO_CONFORMIDAD debe estar FIRMADA -- no-op silencioso si no
+-- (la UI explica el bloqueo, ver HitoFilaAcciones.tsx). Si el proyecto
+-- no exige conformidad, se comporta exactamente igual que antes.
 CREATE PROCEDURE SP_PROYECTO_HITO_MARCAR_FACTURADO(
     IN p_id_hito INT UNSIGNED,
     IN p_nro_factura VARCHAR(30),
@@ -770,8 +784,18 @@ BEGIN
 
     UPDATE PROYECTO_HITO h
       JOIN MAESTRO_MAESTRO eh ON eh.ID_MAESTRO = h.ID_ESTADO_HITO
+      JOIN PROYECTO p ON p.ID_PROYECTO = h.ID_PROYECTO
        SET h.ID_ESTADO_HITO = v_id_facturado, h.NRO_FACTURA = p_nro_factura, h.FECHA_FACTURADO = p_fecha_facturado
-     WHERE h.ID_HITO = p_id_hito AND eh.CODIGO = 'PLANEADO';
+     WHERE h.ID_HITO = p_id_hito
+       AND eh.CODIGO = 'PLANEADO'
+       AND (
+             p.REQUIERE_CONFORMIDAD_FACTURACION = 0
+             OR EXISTS (
+                 SELECT 1 FROM PROYECTO_CONFORMIDAD pc
+                   JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = pc.ID_ESTADO_CONFORMIDAD
+                  WHERE pc.ID_HITO = h.ID_HITO AND ec.CODIGO = 'FIRMADA'
+             )
+           );
 END$$
 
 -- Se llama despues de agregarIngresoProyecto (que ya crea el

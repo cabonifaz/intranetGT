@@ -25,6 +25,7 @@ interface CrearProyectoParams {
   costoPresupuestado: number;
   ingresoEsperado: number;
   idMoneda: number;
+  requiereConformidadFacturacion: boolean;
   idUsuarioCreacion: number;
 }
 
@@ -42,6 +43,7 @@ export async function crearProyecto(params: CrearProyectoParams): Promise<{ id_p
       params.costoPresupuestado,
       params.ingresoEsperado,
       params.idMoneda,
+      params.requiereConformidadFacturacion ? 1 : 0,
       params.idUsuarioCreacion,
     ],
     ["id_proyecto"],
@@ -66,6 +68,7 @@ interface ActualizarProyectoParams {
   fechaFinEstimada: string | null;
   costoPresupuestado: number;
   ingresoEsperado: number;
+  requiereConformidadFacturacion: boolean;
   idUsuarioModificacion: number;
 }
 
@@ -79,6 +82,7 @@ export async function actualizarProyecto(params: ActualizarProyectoParams): Prom
     params.fechaFinEstimada,
     params.costoPresupuestado,
     params.ingresoEsperado,
+    params.requiereConformidadFacturacion ? 1 : 0,
     params.idUsuarioModificacion,
   ]);
 }

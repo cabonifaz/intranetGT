@@ -44,6 +44,7 @@ export async function crearProyectoAction(formData: FormData): Promise<void> {
   const ingresoEsperadoRaw = String(formData.get("ingresoEsperado") ?? "").trim();
   const ingresoEsperado = ingresoEsperadoRaw ? Number(ingresoEsperadoRaw) : 0;
   const idMoneda = Number(formData.get("idMoneda"));
+  const requiereConformidadFacturacion = formData.get("requiereConformidadFacturacion") === "1";
 
   if (!idTipoProyecto || !nombre || !fechaInicio || !idMoneda) return;
   if (!esInterno && !idCliente) return;
@@ -59,6 +60,7 @@ export async function crearProyectoAction(formData: FormData): Promise<void> {
     costoPresupuestado,
     ingresoEsperado,
     idMoneda,
+    requiereConformidadFacturacion,
     idUsuarioCreacion: sesion.idUsuario,
   });
 
@@ -79,6 +81,7 @@ export async function actualizarProyectoAction(formData: FormData): Promise<void
   const costoPresupuestado = costoPresupuestadoRaw ? Number(costoPresupuestadoRaw) : 0;
   const ingresoEsperadoRaw = String(formData.get("ingresoEsperado") ?? "").trim();
   const ingresoEsperado = ingresoEsperadoRaw ? Number(ingresoEsperadoRaw) : 0;
+  const requiereConformidadFacturacion = formData.get("requiereConformidadFacturacion") === "1";
 
   if (!idProyecto || !nombre) return;
   if (!esInterno && !idCliente) return;
@@ -92,6 +95,7 @@ export async function actualizarProyectoAction(formData: FormData): Promise<void
     fechaFinEstimada,
     costoPresupuestado,
     ingresoEsperado,
+    requiereConformidadFacturacion,
     idUsuarioModificacion: sesion.idUsuario,
   });
   revalidatePath(`/facturacion/proyectos/${idProyecto}`);

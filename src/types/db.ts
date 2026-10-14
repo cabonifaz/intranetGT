@@ -768,6 +768,7 @@ export interface ProyectoListadoRow extends RowDataPacket, ProyectoCosteoBase {
   NOMBRE: string;
   ID_CLIENTE: number | null;
   ES_INTERNO: number;
+  REQUIERE_CONFORMIDAD_FACTURACION: number;
   CLIENTE_RAZON_SOCIAL: string | null;
   FECHA_INICIO: string;
   FECHA_FIN_ESTIMADA: string | null;
@@ -789,6 +790,7 @@ export interface ProyectoDetalleRow extends RowDataPacket, ProyectoCosteoBase {
   NOMBRE: string;
   ID_CLIENTE: number | null;
   ES_INTERNO: number;
+  REQUIERE_CONFORMIDAD_FACTURACION: number;
   CLIENTE_RAZON_SOCIAL: string | null;
   DESCRIPCION: string | null;
   FECHA_INICIO: string;
@@ -919,10 +921,69 @@ export interface ProyectoHitoRow extends RowDataPacket {
   ID_ESTADO_HITO: number;
   ESTADO_HITO_CODIGO: EstadoHitoFacturacionCodigo;
   ESTADO_HITO_DESCRIPCION: string;
+  REQUIERE_CONFORMIDAD_FACTURACION: number;
+  ID_CONFORMIDAD: number | null;
+  ESTADO_CONFORMIDAD_CODIGO: EstadoConformidadCodigo | null;
 }
 
 export interface ProyectoHitoPendienteRow extends ProyectoHitoRow {
   PROYECTO_NOMBRE: string;
+}
+
+export type EstadoConformidadCodigo = "BORRADOR" | "EMITIDA" | "FIRMADA" | "ANULADA";
+
+// Detalle completo de una conformidad (SP_PROYECTO_CONFORMIDAD_OBTENER /
+// _OBTENER_POR_HITO / _OBTENER_POR_TOKEN -- mismo shape, solo cambia el
+// WHERE), con los datos del hito/proyecto/cliente ya resueltos para no
+// tener que pedirlos aparte (PDF, pantalla de edicion, pagina publica).
+export interface ProyectoConformidadRow extends RowDataPacket {
+  ID_CONFORMIDAD: number;
+  ID_HITO: number;
+  ID_PROYECTO: number;
+  TITULO: string;
+  ID_ESTADO_CONFORMIDAD: number;
+  ESTADO_CONFORMIDAD_CODIGO: EstadoConformidadCodigo;
+  ESTADO_CONFORMIDAD_DESCRIPCION: string;
+  DOCUMENTO_PATH: string | null;
+  DOCUMENTO_FIRMADO_PATH: string | null;
+  FIRMA_PNG_PATH: string | null;
+  FECHA_EMISION: string | null;
+  FECHA_FIRMA: string | null;
+  USUARIO_FIRMA_REGISTRO: number | null;
+  TOKEN_FIRMA: string | null;
+  TOKEN_EXPIRA: string | null;
+  MOTIVO_ANULACION: string | null;
+  FECHA_ANULACION: string | null;
+  HITO_NOMBRE: string;
+  HITO_MONTO: string;
+  PROYECTO_NOMBRE: string;
+  ID_MONEDA: number;
+  MONEDA_CODIGO: MonedaCodigo;
+  ID_CLIENTE: number | null;
+  CLIENTE_RAZON_SOCIAL: string | null;
+  CLIENTE_RUC: string | null;
+  TOTAL_ITEMS: number;
+}
+
+// Para la matriz de cumplimiento del proyecto (SP_PROYECTO_CONFORMIDAD_LISTAR_POR_PROYECTO)
+// -- una fila por hito, con o sin conformidad todavia (LEFT JOIN).
+export interface ProyectoConformidadMatrizRow extends RowDataPacket {
+  ID_HITO: number;
+  HITO_NOMBRE: string;
+  ORDEN: number;
+  ID_CONFORMIDAD: number | null;
+  ID_ESTADO_CONFORMIDAD: number | null;
+  ESTADO_CONFORMIDAD_CODIGO: EstadoConformidadCodigo | null;
+  FECHA_EMISION: string | null;
+  FECHA_FIRMA: string | null;
+  TOTAL_ITEMS: number;
+}
+
+export interface ProyectoConformidadItemRow extends RowDataPacket {
+  ID_ITEM: number;
+  ID_CONFORMIDAD: number;
+  ORDEN: number;
+  DESCRIPCION: string;
 }
 
 // Cross-proyecto (SP_PROYECTO_HITO_LISTAR_IGV_PENDIENTE) -- para la

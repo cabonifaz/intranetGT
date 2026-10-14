@@ -30,12 +30,16 @@ import {
   eliminarCostoManoObraAction,
   agregarHitoProyectoAction,
 } from "@/lib/actions/proyectos";
+import { crearConformidadAction } from "@/lib/actions/proyecto-conformidad";
+import { listarConformidadesProyecto } from "@/lib/db/repositories/proyecto-conformidad.repository";
 import { calcularCosteo } from "@/lib/proyectos/costeo";
 import { calcularImpuestosItem, calcularImpuestosProyecto } from "@/lib/proyectos/impuestos";
 import BarraProgreso from "@/components/facturacion/BarraProgreso";
 import ComparativoCostoIngreso from "@/components/facturacion/ComparativoCostoIngreso";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 import HitoFilaAcciones from "@/components/facturacion/HitoFilaAcciones";
+import PasosConformidad from "@/components/facturacion/PasosConformidad";
+import MatrizConformidadesProyecto from "@/components/facturacion/MatrizConformidadesProyecto";
 import SelectorClienteProyecto from "@/components/facturacion/SelectorClienteProyecto";
 import AgregarCostoManoObraForm from "@/components/facturacion/AgregarCostoManoObraForm";
 import PagarCostoManoObraFila from "@/components/facturacion/PagarCostoManoObraFila";
@@ -91,6 +95,7 @@ export default async function DetalleProyectoPage({
     tcLaboral,
     tcVenta,
     tcPrestamo,
+    conformidades,
   ] = await Promise.all([
     listarIngresosProyecto(idProyecto),
     listarCostosManoObra(idProyecto),
@@ -114,6 +119,7 @@ export default async function DetalleProyectoPage({
     obtenerTipoCambioVigente("LABORAL"),
     obtenerTipoCambioVigente("VENTA"),
     obtenerTipoCambioVigente("PRESTAMO"),
+    listarConformidadesProyecto(idProyecto),
   ]);
 
   const costeo = calcularCosteo(proyecto);
@@ -392,6 +398,17 @@ export default async function DetalleProyectoPage({
             <Campo name="costoPresupuestado" label="Costo presupuestado" type="number" defaultValue={proyecto.COSTO_PRESUPUESTADO} />
             <Campo name="ingresoEsperado" label="Ingreso esperado" type="number" defaultValue={proyecto.INGRESO_ESPERADO} />
           </div>
+          <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+            <input
+              type="checkbox"
+              name="requiereConformidadFacturacion"
+              value="1"
+              defaultChecked={proyecto.REQUIERE_CONFORMIDAD_FACTURACION === 1}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700"
+            />
+            Este proyecto factura por entregables con conformidad firmada (bloquea &quot;Marcar facturado&quot; hasta que
+            la conformidad del hito esté firmada).
+          </label>
           <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
             Guardar
           </SubmitButton>
@@ -441,12 +458,14 @@ export default async function DetalleProyectoPage({
                 <th className="px-2 py-2 text-right">Monto (sin IGV)</th>
                 <th className="px-2 py-2 text-right">Detraccion (12%, en soles)</th>
                 <th className="px-2 py-2">Estado</th>
+                {proyecto.REQUIERE_CONFORMIDAD_FACTURACION === 1 ? <th className="px-2 py-2">Conformidad</th> : null}
                 <th className="px-2 py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {hitos.map((h) => {
                 const impuestosHito = calcularImpuestosItem(Number(h.MONTO), proyecto.MONEDA_CODIGO, tcVenta ? Number(tcVenta) : null);
+                const conformidadHito = conformidades.find((c) => c.ID_HITO === h.ID_HITO) ?? null;
                 return (
                 <tr key={h.ID_HITO}>
                   <td className="px-2 py-2 text-slate-700 dark:text-slate-200">
@@ -486,6 +505,36 @@ export default async function DetalleProyectoPage({
                       {h.ESTADO_HITO_DESCRIPCION}
                     </span>
                   </td>
+                  {proyecto.REQUIERE_CONFORMIDAD_FACTURACION === 1 ? (
+                    <td className="px-2 py-2">
+                      {conformidadHito?.ID_CONFORMIDAD ? (
+                        <Link
+                          href={`/facturacion/proyectos/${proyecto.ID_PROYECTO}/conformidades/${conformidadHito.ID_CONFORMIDAD}`}
+                          className="inline-flex items-center hover:underline"
+                        >
+                          <PasosConformidad
+                            compact
+                            totalItems={conformidadHito.TOTAL_ITEMS}
+                            estadoCodigo={conformidadHito.ESTADO_CONFORMIDAD_CODIGO}
+                            fechaEmision={conformidadHito.FECHA_EMISION}
+                            fechaFirma={conformidadHito.FECHA_FIRMA}
+                          />
+                        </Link>
+                      ) : (
+                        <form action={crearConformidadAction}>
+                          <input type="hidden" name="idHito" value={h.ID_HITO} />
+                          <input type="hidden" name="idProyecto" value={proyecto.ID_PROYECTO} />
+                          <input type="hidden" name="titulo" value={`Conformidad - ${h.NOMBRE}`} />
+                          <SubmitButton
+                            className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                            pendingText="Generando..."
+                          >
+                            Generar conformidad
+                          </SubmitButton>
+                        </form>
+                      )}
+                    </td>
+                  ) : null}
                   <td className="px-2 py-2">
                     <HitoFilaAcciones hito={h} idProyecto={proyecto.ID_PROYECTO} nombreProyecto={proyecto.NOMBRE} />
                   </td>
@@ -494,7 +543,7 @@ export default async function DetalleProyectoPage({
               })}
               {hitos.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-2 py-6 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={proyecto.REQUIERE_CONFORMIDAD_FACTURACION === 1 ? 7 : 6} className="px-2 py-6 text-center text-slate-400 dark:text-slate-500">
                     Aun no hay items en el plan de facturacion.
                   </td>
                 </tr>
@@ -503,6 +552,10 @@ export default async function DetalleProyectoPage({
           </table>
         </div>
       </section>
+
+      {proyecto.REQUIERE_CONFORMIDAD_FACTURACION === 1 ? (
+        <MatrizConformidadesProyecto idProyecto={proyecto.ID_PROYECTO} conformidades={conformidades} />
+      ) : null}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Ingresos</h2>

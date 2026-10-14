@@ -51,6 +51,12 @@ export default function NuevoProyectoForm({ tiposProyecto, monedas, clientes }: 
         />
       </div>
 
+      <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <input type="checkbox" name="requiereConformidadFacturacion" value="1" className="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700" />
+        Este proyecto factura por entregables con conformidad firmada (bloquea &quot;Marcar facturado&quot; hasta que la
+        conformidad del hito esté firmada).
+      </label>
+
       <SubmitButton className="w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700" pendingText="Creando...">
         Crear proyecto
       </SubmitButton>
