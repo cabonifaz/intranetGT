@@ -38,10 +38,13 @@ export default function HitoFilaAcciones({ hito, idProyecto, nombreProyecto }: H
   // tenga su conformidad FIRMADA antes de poder facturarlo -- el SP ya lo
   // bloquea (no-op silencioso), esto solo refleja el motivo en la UI en
   // vez de dejar el boton sin explicacion (ver guard en
-  // SP_PROYECTO_HITO_MARCAR_FACTURADO).
+  // SP_PROYECTO_HITO_MARCAR_FACTURADO). Un ADELANTO nunca entra en esto:
+  // se cobra antes de cualquier entregable, no hay nada que el cliente
+  // pueda dar por recibido todavia.
   const bloqueadoPorConformidad =
     hito.ESTADO_HITO_CODIGO === "PLANEADO" &&
     hito.REQUIERE_CONFORMIDAD_FACTURACION === 1 &&
+    hito.TIPO_HITO_CODIGO !== "ADELANTO" &&
     hito.ESTADO_CONFORMIDAD_CODIGO !== "FIRMADA";
   const puedeFacturar = hito.ESTADO_HITO_CODIGO === "PLANEADO" && !bloqueadoPorConformidad;
   const puedeCobrar = hito.ESTADO_HITO_CODIGO === "PLANEADO" || hito.ESTADO_HITO_CODIGO === "FACTURADO";

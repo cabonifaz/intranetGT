@@ -507,7 +507,11 @@ export default async function DetalleProyectoPage({
                   </td>
                   {proyecto.REQUIERE_CONFORMIDAD_FACTURACION === 1 ? (
                     <td className="px-2 py-2">
-                      {conformidadHito?.ID_CONFORMIDAD ? (
+                      {h.TIPO_HITO_CODIGO === "ADELANTO" ? (
+                        <span className="text-xs text-slate-400 dark:text-slate-500" title="Un adelanto se cobra antes de cualquier entregable -- no requiere conformidad">
+                          No aplica (Adelanto)
+                        </span>
+                      ) : conformidadHito?.ID_CONFORMIDAD ? (
                         <Link
                           href={`/facturacion/proyectos/${proyecto.ID_PROYECTO}/conformidades/${conformidadHito.ID_CONFORMIDAD}`}
                           className="inline-flex items-center hover:underline"

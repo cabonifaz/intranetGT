@@ -121,7 +121,10 @@ BEGIN
 END$$
 
 -- Para la matriz de cumplimiento del proyecto: una fila por cada hito
--- (LEFT JOIN -- puede no tener conformidad todavia).
+-- (LEFT JOIN -- puede no tener conformidad todavia). Excluye los
+-- ADELANTO: se cobran antes de cualquier entregable, no hay nada que el
+-- cliente pueda dar por recibido todavia, asi que nunca necesitan
+-- conformidad (mismo criterio en SP_PROYECTO_HITO_MARCAR_FACTURADO).
 CREATE PROCEDURE SP_PROYECTO_CONFORMIDAD_LISTAR_POR_PROYECTO(
     IN p_id_proyecto INT UNSIGNED
 )
@@ -131,9 +134,10 @@ BEGIN
            c.FECHA_EMISION, c.FECHA_FIRMA,
            (SELECT COUNT(*) FROM PROYECTO_CONFORMIDAD_ITEM i WHERE i.ID_CONFORMIDAD = c.ID_CONFORMIDAD) AS TOTAL_ITEMS
       FROM PROYECTO_HITO h
+      JOIN MAESTRO_MAESTRO th ON th.ID_MAESTRO = h.ID_TIPO_HITO
       LEFT JOIN PROYECTO_CONFORMIDAD c ON c.ID_HITO = h.ID_HITO
       LEFT JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = c.ID_ESTADO_CONFORMIDAD
-     WHERE h.ID_PROYECTO = p_id_proyecto
+     WHERE h.ID_PROYECTO = p_id_proyecto AND th.CODIGO != 'ADELANTO'
      ORDER BY h.ORDEN, h.ID_HITO;
 END$$
 

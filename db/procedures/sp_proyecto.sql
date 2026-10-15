@@ -772,7 +772,11 @@ END$$
 -- si el proyecto exige conformidad (REQUIERE_CONFORMIDAD_FACTURACION=1)
 -- su PROYECTO_CONFORMIDAD debe estar FIRMADA -- no-op silencioso si no
 -- (la UI explica el bloqueo, ver HitoFilaAcciones.tsx). Si el proyecto
--- no exige conformidad, se comporta exactamente igual que antes.
+-- no exige conformidad, se comporta exactamente igual que antes. Un
+-- ADELANTO nunca exige conformidad: se cobra por adelantado, antes de
+-- cualquier entregable, asi que no hay nada que el cliente pueda dar por
+-- recibido todavia (ver tambien SP_PROYECTO_CONFORMIDAD_LISTAR_POR_PROYECTO,
+-- que ya excluye los ADELANTO de la matriz).
 CREATE PROCEDURE SP_PROYECTO_HITO_MARCAR_FACTURADO(
     IN p_id_hito INT UNSIGNED,
     IN p_nro_factura VARCHAR(30),
@@ -784,12 +788,14 @@ BEGIN
 
     UPDATE PROYECTO_HITO h
       JOIN MAESTRO_MAESTRO eh ON eh.ID_MAESTRO = h.ID_ESTADO_HITO
+      JOIN MAESTRO_MAESTRO th ON th.ID_MAESTRO = h.ID_TIPO_HITO
       JOIN PROYECTO p ON p.ID_PROYECTO = h.ID_PROYECTO
        SET h.ID_ESTADO_HITO = v_id_facturado, h.NRO_FACTURA = p_nro_factura, h.FECHA_FACTURADO = p_fecha_facturado
      WHERE h.ID_HITO = p_id_hito
        AND eh.CODIGO = 'PLANEADO'
        AND (
              p.REQUIERE_CONFORMIDAD_FACTURACION = 0
+             OR th.CODIGO = 'ADELANTO'
              OR EXISTS (
                  SELECT 1 FROM PROYECTO_CONFORMIDAD pc
                    JOIN MAESTRO_MAESTRO ec ON ec.ID_MAESTRO = pc.ID_ESTADO_CONFORMIDAD
