@@ -24,6 +24,7 @@ import PasosDetallePlanilla from "@/components/rrhh/PasosDetallePlanilla";
 import CampoMontoBrutoDetalle from "@/components/rrhh/CampoMontoBrutoDetalle";
 import Suspension4taForm from "@/components/rrhh/Suspension4taForm";
 import DeshacerEmisionBoton from "@/components/rrhh/DeshacerEmisionBoton";
+import GenerarLinkRecepcionBoletaButton from "@/components/rrhh/GenerarLinkRecepcionBoletaButton";
 import { diasHastaVencimiento } from "@/components/ui/IconoAlertaVencimiento";
 import { obtenerParametrosVigentes } from "@/lib/rrhh/planilla/parametros";
 
@@ -478,25 +479,37 @@ export default async function PlanillaDetalleColaboradorPage({
               ✓ {esPropio ? "Confirmaste" : `${detalle.NOMBRES} confirmó`} haber recibido la boleta el{" "}
               {formatearFecha(detalle.FECHA_CONFIRMACION_COLABORADOR)}.
             </p>
-          ) : esPropio && emitida ? (
-            <>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Si ya descargaste y revisaste tu boleta de arriba, confirma que la recibiste.
-              </p>
-              <form action={confirmarRecepcionBoletaAction} className="mt-3">
-                <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
-                <SubmitButton
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                  pendingText="Confirmando..."
-                >
-                  Confirmar recepción de mi boleta
-                </SubmitButton>
-              </form>
-            </>
           ) : (
-            <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-              {emitida ? "El colaborador todavía no confirma que la recibió." : "Pendiente de emitir."}
-            </p>
+            <>
+              {esPropio && emitida ? (
+                <>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Si ya descargaste y revisaste tu boleta de arriba, confirma que la recibiste.
+                  </p>
+                  <form action={confirmarRecepcionBoletaAction} className="mt-3">
+                    <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
+                    <SubmitButton
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                      pendingText="Confirmando..."
+                    >
+                      Confirmar recepción de mi boleta
+                    </SubmitButton>
+                  </form>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+                  {emitida ? "El colaborador todavía no confirma que la recibió." : "Pendiente de emitir."}
+                </p>
+              )}
+              {puedeGestionar && emitida ? (
+                <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+                  <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                    ¿El colaborador no usa el intranet seguido? Compártele este link para que confirme sin iniciar sesión.
+                  </p>
+                  <GenerarLinkRecepcionBoletaButton idPlanillaDetalle={detalle.ID_PLANILLA_DETALLE} />
+                </div>
+              ) : null}
+            </>
           )}
         </section>
       ) : null}

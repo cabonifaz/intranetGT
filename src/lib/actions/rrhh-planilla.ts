@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { headers } from "next/headers";
 import { revalidatePath, refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermiso } from "@/lib/auth/require-permiso";
@@ -29,6 +31,7 @@ import {
   aplazarDetalle,
   reiniciarPlanillaMensual,
   reiniciarPlanillaMensualTotal,
+  generarLinkRecepcionBoleta,
 } from "@/lib/db/repositories/rrhh-planilla.repository";
 import {
   crearParametro,
@@ -951,6 +954,50 @@ export async function confirmarRecepcionBoletaAction(formData: FormData): Promis
 
   revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${idPlanillaDetalle}`);
   refresh();
+}
+
+const DIAS_VIGENCIA_LINK_RECEPCION_BOLETA = 7;
+
+// Estado devuelto por generarLinkRecepcionBoletaAction -- mismo patron
+// que generarLinkPrestamoAction/generarLinkConformidadAction.
+export interface GenerarLinkRecepcionBoletaState {
+  ok: boolean;
+  error?: string;
+  url?: string;
+}
+
+// Alternativa a confirmarRecepcionBoletaAction para quien no entra
+// seguido al intranet: genera un link publico (token de 7 dias) para que
+// el colaborador confirme la recepcion de su boleta sin iniciar sesion,
+// mismo mecanismo que Prestamos/Conformidad. Solo tiene sentido en
+// Planilla, EMITIDA y todavia sin confirmar -- el SP no-opea en
+// cualquier otro caso.
+export async function generarLinkRecepcionBoletaAction(
+  _prevState: GenerarLinkRecepcionBoletaState,
+  formData: FormData,
+): Promise<GenerarLinkRecepcionBoletaState> {
+  await requirePermiso(PLANILLA_APP_CODIGO, "ESCRITURA");
+
+  const idPlanillaDetalle = Number(formData.get("idPlanillaDetalle"));
+  if (!idPlanillaDetalle) return { ok: false, error: "Detalle inválido." };
+
+  const detalle = await obtenerDetalle(idPlanillaDetalle);
+  if (!detalle || detalle.TIPO_CONTRATO_CODIGO === "LOCADOR" || detalle.ESTADO_EMISION_CODIGO !== "EMITIDA" || detalle.FECHA_CONFIRMACION_COLABORADOR) {
+    return { ok: false, error: "Solo se puede generar el link mientras la boleta está emitida y sin confirmar todavía." };
+  }
+
+  const token = randomUUID();
+  const expira = new Date(Date.now() + DIAS_VIGENCIA_LINK_RECEPCION_BOLETA * 24 * 60 * 60 * 1000);
+  await generarLinkRecepcionBoleta(idPlanillaDetalle, token, expira);
+
+  const listaHeaders = await headers();
+  const host = listaHeaders.get("host");
+  const protocolo = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${idPlanillaDetalle}`);
+  refresh();
+
+  return { ok: true, url: `${protocolo}://${host}/boletas/firmar/${token}` };
 }
 
 // Registra/renueva la suspension de Renta 4ta de un locador -- fecha y

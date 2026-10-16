@@ -1216,6 +1216,24 @@ export interface PlanillaDetalleRow extends RowDataPacket {
   FECHA_CONFIRMACION_COLABORADOR: string | null;
 }
 
+// Shape liviano para la pagina publica de confirmacion de recepcion de
+// boleta (sin sesion, via token) -- no expone cuenta bancaria ni otros
+// datos sensibles que si trae PlanillaDetalleRow (pensado para RRHH).
+export interface PlanillaDetallePublicoRow extends RowDataPacket {
+  ID_PLANILLA_DETALLE: number;
+  PERIODO: string;
+  ID_USUARIO: number;
+  NOMBRES: string;
+  APELLIDOS: string;
+  CARGO: string;
+  MONTO_NETO: string;
+  DOCUMENTO_PATH: string | null;
+  FECHA_CONFIRMACION_COLABORADOR: string | null;
+  ID_ESTADO_EMISION: number;
+  ESTADO_EMISION_CODIGO: EstadoEmisionPlanillaDetalleCodigo;
+  TOKEN_EXPIRA: string | null;
+}
+
 export interface PlanillaDetalleHorasRow extends RowDataPacket {
   ID_CONTRATO_HORAS: number;
   PERIODO: string;

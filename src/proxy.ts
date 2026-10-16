@@ -46,8 +46,11 @@ export const config = {
     // conformidades/firmar y api/conformidades/publico: mismo mecanismo,
     // para que el cliente firme su conformidad de entregable sin iniciar
     // sesion, ver src/app/conformidades/firmar/[token]/page.tsx.
+    // boletas/firmar y api/boletas/publico: mismo mecanismo, para que el
+    // colaborador confirme la recepcion de su boleta sin iniciar sesion,
+    // ver src/app/boletas/firmar/[token]/page.tsx.
     // api/cron/* lo llama un cron externo (sin cookie de sesion), se
     // autentica con CRON_SECRET dentro de cada route handler.
-    "/((?!login|api/auth|contratos/firmar|api/contratos/publico|prestamos/firmar|api/prestamos/publico|conformidades/firmar|api/conformidades/publico|api/cron|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp|gif|ico)).*)",
+    "/((?!login|api/auth|contratos/firmar|api/contratos/publico|prestamos/firmar|api/prestamos/publico|conformidades/firmar|api/conformidades/publico|boletas/firmar|api/boletas/publico|api/cron|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp|gif|ico)).*)",
   ],
 };

@@ -36,6 +36,8 @@ DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_SUBIR_RXH_FIRMADO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_SUBIR_EVIDENCIA_PAGO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_APLAZAR;
+DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_GENERAR_LINK_RECEPCION;
+DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_OBTENER_POR_TOKEN;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_DETALLE_DESHACER_EMISION;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_MENSUAL_REINICIAR_TOTAL;
 
@@ -497,6 +499,12 @@ END$$
 -- silencioso si el que llama no es el dueño del detalle (chequeado aca
 -- ademas de en la capa de acciones, por si se llama distinto) o si
 -- todavia no esta EMITIDA (no hay nada que "recibir" de un borrador).
+-- Usa este mismo SP tanto la confirmacion dentro del intranet (con
+-- sesion, p_id_usuario = el usuario logueado) como la del link publico
+-- con token (p_id_usuario resuelto por SP_RRHH_PLANILLA_DETALLE_OBTENER_POR_TOKEN,
+-- nunca NULL porque el dueño del contrato siempre es conocido) -- limpia
+-- el token en cualquiera de los dos casos, para que un link ya usado o
+-- una confirmacion hecha por otra via no quede "vigente" sin sentido.
 CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION(
     IN p_id_planilla_detalle INT UNSIGNED,
     IN p_id_usuario INT UNSIGNED
@@ -505,11 +513,53 @@ BEGIN
     UPDATE RRHH_PLANILLA_DETALLE d
       JOIN RRHH_CONTRATO c ON c.ID_CONTRATO = d.ID_CONTRATO
       JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
-       SET d.FECHA_CONFIRMACION_COLABORADOR = NOW()
+       SET d.FECHA_CONFIRMACION_COLABORADOR = NOW(), d.TOKEN_FIRMA = NULL, d.TOKEN_EXPIRA = NULL
      WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle
        AND c.ID_USUARIO = p_id_usuario
        AND ee.CODIGO = 'EMITIDA'
        AND d.FECHA_CONFIRMACION_COLABORADOR IS NULL;
+END$$
+
+-- Genera (o regenera) el link publico para que el colaborador confirme
+-- la recepcion de su boleta sin iniciar sesion -- mismo mecanismo que
+-- SP_RRHH_PRESTAMO_GENERAR_LINK. Solo tiene sentido en Planilla (un
+-- Locador no "recibe boleta", tiene su propio flujo de RxH firmado) y
+-- mientras siga EMITIDA y sin confirmar todavia.
+CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_GENERAR_LINK_RECEPCION(
+    IN p_id_planilla_detalle INT UNSIGNED,
+    IN p_token CHAR(36),
+    IN p_token_expira DATETIME
+)
+BEGIN
+    UPDATE RRHH_PLANILLA_DETALLE d
+      JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+      JOIN RRHH_CONTRATO c ON c.ID_CONTRATO = d.ID_CONTRATO
+      JOIN MAESTRO_MAESTRO tc ON tc.ID_MAESTRO = c.ID_TIPO_CONTRATO
+       SET d.TOKEN_FIRMA = p_token, d.TOKEN_EXPIRA = p_token_expira
+     WHERE d.ID_PLANILLA_DETALLE = p_id_planilla_detalle
+       AND ee.CODIGO = 'EMITIDA'
+       AND tc.CODIGO != 'LOCADOR'
+       AND d.FECHA_CONFIRMACION_COLABORADOR IS NULL;
+END$$
+
+-- Para la pagina publica de confirmacion (sin sesion) -- shape liviano,
+-- solo lo necesario para mostrar un resumen y confirmar (no expone
+-- cuenta bancaria, suspension 4ta, etc. como si expone SP_RRHH_PLANILLA_DETALLE_OBTENER,
+-- pensado para la vista interna de RRHH).
+CREATE PROCEDURE SP_RRHH_PLANILLA_DETALLE_OBTENER_POR_TOKEN(
+    IN p_token CHAR(36)
+)
+BEGIN
+    SELECT d.ID_PLANILLA_DETALLE, pm.PERIODO, u.ID_USUARIO, u.NOMBRES, u.APELLIDOS, c.CARGO,
+           d.MONTO_NETO, d.DOCUMENTO_PATH, d.FECHA_CONFIRMACION_COLABORADOR,
+           d.ID_ESTADO_EMISION, ee.CODIGO AS ESTADO_EMISION_CODIGO,
+           d.TOKEN_EXPIRA
+      FROM RRHH_PLANILLA_DETALLE d
+      JOIN RRHH_PLANILLA_MENSUAL pm ON pm.ID_PLANILLA_MENSUAL = d.ID_PLANILLA_MENSUAL
+      JOIN RRHH_CONTRATO c ON c.ID_CONTRATO = d.ID_CONTRATO
+      JOIN USUARIO u ON u.ID_USUARIO = c.ID_USUARIO
+      JOIN MAESTRO_MAESTRO ee ON ee.ID_MAESTRO = d.ID_ESTADO_EMISION
+     WHERE d.TOKEN_FIRMA = p_token;
 END$$
 
 -- Aplaza un detalle que se quedo sin emitir: borra el detalle de este

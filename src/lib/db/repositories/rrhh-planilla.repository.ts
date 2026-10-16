@@ -3,6 +3,7 @@ import type {
   PlanillaMensualRow,
   PlanillaDetalleListadoRow,
   PlanillaDetalleRow,
+  PlanillaDetallePublicoRow,
   PlanillaDetalleHorasRow,
   PlanillaContratoElegibleRow,
   PlanillaContratoHorasDelPeriodoRow,
@@ -187,6 +188,15 @@ export async function subirEvidenciaPago(idPlanillaDetalle: number, path: string
 
 export async function confirmarRecepcionBoleta(idPlanillaDetalle: number, idUsuario: number): Promise<void> {
   await callProcedure("SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION", [idPlanillaDetalle, idUsuario]);
+}
+
+export async function generarLinkRecepcionBoleta(idPlanillaDetalle: number, token: string, tokenExpira: Date): Promise<void> {
+  await callProcedure("SP_RRHH_PLANILLA_DETALLE_GENERAR_LINK_RECEPCION", [idPlanillaDetalle, token, tokenExpira]);
+}
+
+export async function obtenerDetallePorToken(token: string): Promise<PlanillaDetallePublicoRow | null> {
+  const rows = await callProcedure<PlanillaDetallePublicoRow>("SP_RRHH_PLANILLA_DETALLE_OBTENER_POR_TOKEN", [token]);
+  return rows[0] ?? null;
 }
 
 export async function aplazarDetalle(
