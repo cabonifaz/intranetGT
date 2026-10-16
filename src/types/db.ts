@@ -1214,6 +1214,7 @@ export interface PlanillaDetalleRow extends RowDataPacket {
   EVIDENCIA_PAGO_PATH: string | null;
   FECHA_EVIDENCIA_PAGO_SUBIDA: string | null;
   FECHA_CONFIRMACION_COLABORADOR: string | null;
+  FIRMA_PNG_PATH: string | null;
 }
 
 // Shape liviano para la pagina publica de confirmacion de recepcion de
@@ -1226,6 +1227,9 @@ export interface PlanillaDetallePublicoRow extends RowDataPacket {
   NOMBRES: string;
   APELLIDOS: string;
   CARGO: string;
+  NRO_CUENTA: string | null;
+  CCI: string | null;
+  BANCO: string | null;
   MONTO_NETO: string;
   DOCUMENTO_PATH: string | null;
   FECHA_CONFIRMACION_COLABORADOR: string | null;

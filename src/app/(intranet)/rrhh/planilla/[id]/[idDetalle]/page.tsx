@@ -14,7 +14,6 @@ import {
   regenerarDocumentoDetalleAction,
   subirRxhFirmadoAction,
   subirEvidenciaPagoAction,
-  confirmarRecepcionBoletaAction,
   aplazarAlMesSiguienteAction,
 } from "@/lib/actions/rrhh-planilla";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
@@ -25,6 +24,7 @@ import CampoMontoBrutoDetalle from "@/components/rrhh/CampoMontoBrutoDetalle";
 import Suspension4taForm from "@/components/rrhh/Suspension4taForm";
 import DeshacerEmisionBoton from "@/components/rrhh/DeshacerEmisionBoton";
 import GenerarLinkRecepcionBoletaButton from "@/components/rrhh/GenerarLinkRecepcionBoletaButton";
+import ConfirmarRecepcionBoletaForm from "@/components/rrhh/ConfirmarRecepcionBoletaForm";
 import { diasHastaVencimiento } from "@/components/ui/IconoAlertaVencimiento";
 import { obtenerParametrosVigentes } from "@/lib/rrhh/planilla/parametros";
 
@@ -475,26 +475,30 @@ export default async function PlanillaDetalleColaboradorPage({
         <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Recepción de la boleta</h2>
           {detalle.FECHA_CONFIRMACION_COLABORADOR ? (
-            <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-400">
-              ✓ {esPropio ? "Confirmaste" : `${detalle.NOMBRES} confirmó`} haber recibido la boleta el{" "}
-              {formatearFecha(detalle.FECHA_CONFIRMACION_COLABORADOR)}.
-            </p>
+            <>
+              <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-400">
+                ✓ {esPropio ? "Confirmaste" : `${detalle.NOMBRES} confirmó`} haber recibido la boleta el{" "}
+                {formatearFecha(detalle.FECHA_CONFIRMACION_COLABORADOR)}.
+              </p>
+              {detalle.FIRMA_PNG_PATH ? (
+                <a
+                  href={`/api/rrhh/planilla/${idPlanillaDetalle}/firma-recepcion`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-block text-sm text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Ver firma de aceptación
+                </a>
+              ) : null}
+            </>
           ) : (
             <>
               {esPropio && emitida ? (
                 <>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Si ya descargaste y revisaste tu boleta de arriba, confirma que la recibiste.
+                    Si ya descargaste y revisaste tu boleta de arriba, confirma que la recibiste firmando abajo.
                   </p>
-                  <form action={confirmarRecepcionBoletaAction} className="mt-3">
-                    <input type="hidden" name="idPlanillaDetalle" value={detalle.ID_PLANILLA_DETALLE} />
-                    <SubmitButton
-                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                      pendingText="Confirmando..."
-                    >
-                      Confirmar recepción de mi boleta
-                    </SubmitButton>
-                  </form>
+                  <ConfirmarRecepcionBoletaForm idPlanillaDetalle={detalle.ID_PLANILLA_DETALLE} />
                 </>
               ) : (
                 <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">

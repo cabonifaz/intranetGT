@@ -936,21 +936,29 @@ export async function subirEvidenciaPagoAction(formData: FormData): Promise<void
   refresh();
 }
 
-// El propio colaborador (Planilla) confirma que recibio su boleta --
-// requireSession en vez de requirePermiso: no necesita acceso a
-// RRHH_PLANILLA, solo ser el dueño del detalle (chequeado tambien en el
-// SP). No-op silencioso si no es el suyo, si no esta EMITIDA, o si ya
-// habia confirmado.
+function decodificarFirmaPng(dataUrl: string): Buffer {
+  const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
+  return Buffer.from(base64, "base64");
+}
+
+// El propio colaborador (Planilla) confirma que recibio su boleta, con
+// su firma como aceptacion -- requireSession en vez de requirePermiso:
+// no necesita acceso a RRHH_PLANILLA, solo ser el dueño del detalle
+// (chequeado tambien en el SP). No-op silencioso si no es el suyo, si no
+// esta EMITIDA, si ya habia confirmado, o si falta la firma.
 export async function confirmarRecepcionBoletaAction(formData: FormData): Promise<void> {
   const sesion = await requireSession();
 
   const idPlanillaDetalle = Number(formData.get("idPlanillaDetalle"));
-  if (!idPlanillaDetalle) return;
+  const firmaPngDataUrl = String(formData.get("firmaPngDataUrl") ?? "");
+  if (!idPlanillaDetalle || !firmaPngDataUrl) return;
 
   const detalle = await obtenerDetalle(idPlanillaDetalle);
   if (!detalle || detalle.ID_USUARIO !== sesion.idUsuario) return;
 
-  await confirmarRecepcionBoleta(idPlanillaDetalle, sesion.idUsuario);
+  const firmaPngPath = `rrhh/planilla/recepcion-firmada/${idPlanillaDetalle}.png`;
+  await guardarArchivo(firmaPngPath, decodificarFirmaPng(firmaPngDataUrl));
+  await confirmarRecepcionBoleta(idPlanillaDetalle, sesion.idUsuario, firmaPngPath);
 
   revalidatePath(`/rrhh/planilla/${detalle.ID_PLANILLA_MENSUAL}/${idPlanillaDetalle}`);
   refresh();

@@ -186,8 +186,8 @@ export async function subirEvidenciaPago(idPlanillaDetalle: number, path: string
   await callProcedure("SP_RRHH_PLANILLA_DETALLE_SUBIR_EVIDENCIA_PAGO", [idPlanillaDetalle, path]);
 }
 
-export async function confirmarRecepcionBoleta(idPlanillaDetalle: number, idUsuario: number): Promise<void> {
-  await callProcedure("SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION", [idPlanillaDetalle, idUsuario]);
+export async function confirmarRecepcionBoleta(idPlanillaDetalle: number, idUsuario: number, firmaPngPath: string): Promise<void> {
+  await callProcedure("SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION", [idPlanillaDetalle, idUsuario, firmaPngPath]);
 }
 
 export async function generarLinkRecepcionBoleta(idPlanillaDetalle: number, token: string, tokenExpira: Date): Promise<void> {

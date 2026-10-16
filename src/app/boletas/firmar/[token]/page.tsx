@@ -52,6 +52,12 @@ export default async function ConfirmarRecepcionBoletaPage({ params }: { params:
             <dt className="text-slate-500 dark:text-slate-400">Neto a pagar</dt>
             <dd className="text-slate-800 dark:text-slate-200">{formatearMonto(detalle.MONTO_NETO)}</dd>
           </div>
+          <div className="sm:col-span-2">
+            <dt className="text-slate-500 dark:text-slate-400">Cuenta de depósito</dt>
+            <dd className="text-slate-800 dark:text-slate-200">
+              {detalle.NRO_CUENTA ?? "-"} {detalle.CCI ? `· CCI: ${detalle.CCI}` : ""} {detalle.BANCO ? `· ${detalle.BANCO}` : ""}
+            </dd>
+          </div>
         </dl>
 
         {detalle.DOCUMENTO_PATH ? (

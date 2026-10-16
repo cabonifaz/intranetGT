@@ -1,19 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import FirmaInput, { type FirmaInputHandle } from "./FirmaInput";
 
-// Mas simple que FirmarPrestamoForm/FirmarConformidadForm -- aca no hay
-// firma que dibujar, solo un acuse de recibo con un clic.
+// Copia del patron de FirmarPrestamoForm/FirmarConformidadForm -- aca la
+// firma es la aceptacion de haber recibido la boleta (no hay checkbox de
+// "he leido", es una boleta no un contrato con clausulas).
 export default function ConfirmarRecepcionBoletaPublico({ token }: { token: string }) {
+  const firmaRef = useRef<FirmaInputHandle>(null);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmado, setConfirmado] = useState(false);
 
   async function confirmar() {
     setError(null);
+
+    const firmaPngDataUrl = firmaRef.current?.obtenerPngDataUrl();
+    if (!firmaPngDataUrl) {
+      setError("Falta tu firma.");
+      return;
+    }
+
     setEnviando(true);
     try {
-      const response = await fetch(`/api/boletas/publico/${token}/confirmar`, { method: "POST" });
+      const response = await fetch(`/api/boletas/publico/${token}/confirmar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firmaPngDataUrl }),
+      });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         setError(data.error ?? "No se pudo confirmar la recepción.");
@@ -37,10 +51,14 @@ export default function ConfirmarRecepcionBoletaPublico({ token }: { token: stri
   }
 
   return (
-    <div className="mt-6 space-y-3 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+    <div className="mt-6 space-y-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+      <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Tu firma, como aceptación</h2>
+      <FirmaInput ref={firmaRef} />
+
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">{error}</p>
       ) : null}
+
       <button
         type="button"
         onClick={confirmar}
