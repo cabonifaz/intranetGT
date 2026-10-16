@@ -197,7 +197,14 @@ export async function generarBoletaPdf(datos: DatosBoletaPdf): Promise<Uint8Arra
     dibujarTextoDerecha(pagina, "MONTO", x + anchoTabla - 8, yy - 14, negrita, 8.5, rgb(1, 1, 1));
     yy -= altoEncabezadoTabla;
 
-    for (let i = 0; i < filasCuerpo - 1; i++) {
+    // filasCuerpo YA es la cantidad de filas de concepto (altoCuerpoTabla
+    // reserva una fila extra aparte para el total, ver mas arriba) -- un
+    // "- 1" aca se comia silenciosamente la ULTIMA fila de concepto de
+    // cualquier lado con 3 o mas items (su monto seguia sumado en el
+    // total, pero el renglon nunca se dibujaba -- asi paso con la cuota
+    // de prestamo de boletas con AFP + Renta + prestamo, ej. caso real
+    // de Priscilla Rachumi, boleta #13).
+    for (let i = 0; i < filasCuerpo; i++) {
       const fila = filasConcepto[i];
       if (fila) dibujarFilaConcepto(pagina, x, yy - 14, anchoTabla, fila[0], formatearMoneda(fila[1]), fonts);
       pagina.drawLine({ start: { x, y: yy - altoFila }, end: { x: x + anchoTabla, y: yy - altoFila }, thickness: 0.5, color: COLOR_BORDE });
