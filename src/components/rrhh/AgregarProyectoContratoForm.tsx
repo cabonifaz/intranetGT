@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { agregarProyectoContratoAction } from "@/lib/actions/rrhh";
+import { useActionState, useState } from "react";
+import { agregarProyectoContratoAction, type AgregarProyectoContratoState } from "@/lib/actions/rrhh";
 import type { ProyectoListadoRow } from "@/types/db";
 import type { MaestroRow } from "@/lib/db/repositories/maestro.repository";
 import { ComboBusqueda } from "@/components/ui/ComboBusqueda";
@@ -14,13 +14,18 @@ interface AgregarProyectoContratoFormProps {
   monedas: MaestroRow[];
 }
 
+const ESTADO_INICIAL: AgregarProyectoContratoState = { ok: false };
+
 // Al elegir el proyecto, la moneda se precarga con la moneda propia de
 // ESE proyecto (editable) -- evita el caso mas comun de caer en el no-op
 // silencioso de SP_RRHH_CONTRATO_PROYECTO_AGREGAR (moneda distinta a la
-// del proyecto sin TC), que antes quedaba sin ningun mensaje visible.
+// del proyecto sin TC). El no-op (de la accion o del SP) ahora siempre
+// muestra un mensaje -- antes no avisaba nada en pantalla y la unica
+// pista de que algo fallo era que la fila nunca aparecia en la lista.
 export default function AgregarProyectoContratoForm({ idContrato, proyectosGlobales, monedas }: AgregarProyectoContratoFormProps) {
   const [proyectoSeleccionado, setProyectoSeleccionado] = useState<ProyectoListadoRow | null>(null);
   const [idMonedaDefault, setIdMonedaDefault] = useState("");
+  const [state, formAction] = useActionState(agregarProyectoContratoAction, ESTADO_INICIAL);
 
   function alElegirProyecto(valor: string) {
     const proyecto = proyectosGlobales.find((pg) => String(pg.ID_PROYECTO) === valor) ?? null;
@@ -30,7 +35,7 @@ export default function AgregarProyectoContratoForm({ idContrato, proyectosGloba
 
   return (
     <>
-      <form action={agregarProyectoContratoAction} className="mt-3 flex flex-wrap items-end gap-2">
+      <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2">
         <input type="hidden" name="idContrato" value={idContrato} />
         <div>
           <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Proyecto / servicio</label>
@@ -77,6 +82,13 @@ export default function AgregarProyectoContratoForm({ idContrato, proyectosGloba
           Agregar proyecto
         </SubmitButton>
       </form>
+      {state.error ? (
+        <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-400">{state.error}</p>
+      ) : state.ok ? (
+        <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+          Proyecto agregado.
+        </p>
+      ) : null}
       <NotaAyuda>
         La moneda se precarga con la del proyecto elegido ({proyectoSeleccionado?.MONEDA_CODIGO ?? "se elige al elegir el proyecto"}).
         El TC es obligatorio solo si cambias a una moneda distinta -- si falta, el proyecto no se agrega y no se avisa en

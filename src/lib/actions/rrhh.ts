@@ -353,7 +353,20 @@ export async function eliminarConceptoContratoAction(formData: FormData): Promis
   refresh();
 }
 
-export async function agregarProyectoContratoAction(formData: FormData): Promise<void> {
+// Mismo patron {ok,error} que EmitirConformidadState -- el no-op
+// silencioso del SP (moneda distinta a la del proyecto sin TC, o
+// proyecto ya con asignacion manual) y el no-op de esta misma accion
+// (falta seleccionar algo de una lista) antes no tenian ningun aviso en
+// pantalla, solo la fila nunca aparecia -- confuso para quien lo usa.
+export interface AgregarProyectoContratoState {
+  ok: boolean;
+  error?: string;
+}
+
+export async function agregarProyectoContratoAction(
+  _prevState: AgregarProyectoContratoState,
+  formData: FormData,
+): Promise<AgregarProyectoContratoState> {
   await requirePermiso(CONTRATOS_APP_CODIGO, "ESCRITURA");
 
   const idContrato = Number(formData.get("idContrato"));
@@ -363,11 +376,23 @@ export async function agregarProyectoContratoAction(formData: FormData): Promise
   const tipoCambioRaw = String(formData.get("tipoCambio") ?? "").trim();
   const tipoCambio = tipoCambioRaw ? Number(tipoCambioRaw) : null;
 
-  if (!idContrato || !idProyecto || !tarifaHora || !idMoneda) return;
+  if (!idContrato) return { ok: false, error: "Contrato invalido." };
+  if (!idProyecto) return { ok: false, error: "Elige el proyecto de la lista (haz clic en una opcion, no solo escribas el nombre)." };
+  if (!tarifaHora) return { ok: false, error: "Ingresa la tarifa por hora." };
+  if (!idMoneda) return { ok: false, error: "Elige la moneda de la lista (haz clic en una opcion, no solo escribas el nombre)." };
 
-  await agregarProyectoContrato(idContrato, idProyecto, tarifaHora, idMoneda, tipoCambio);
+  const resultado = await agregarProyectoContrato(idContrato, idProyecto, tarifaHora, idMoneda, tipoCambio);
+  if (!resultado.id_contrato_proyecto) {
+    return {
+      ok: false,
+      error:
+        "No se agrego: o el proyecto ya tiene una asignacion manual para este contrato, o la moneda elegida es distinta a la del proyecto y falta el tipo de cambio.",
+    };
+  }
+
   revalidatePath(`/rrhh/contratos/${idContrato}`);
   refresh();
+  return { ok: true };
 }
 
 export async function eliminarProyectoContratoAction(formData: FormData): Promise<void> {
