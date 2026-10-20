@@ -27,11 +27,11 @@ import FinanciarConPrestamoFila from "@/components/facturacion/FinanciarConPrest
 import SubmitButton from "@/components/ui/SubmitButton";
 import NotaAyuda from "@/components/ui/NotaAyuda";
 import PasosContratacion, { etapaDesdeEstado, type RegimenPasos } from "@/components/rrhh/PasosContratacion";
+import AgregarProyectoContratoForm from "@/components/rrhh/AgregarProyectoContratoForm";
 import {
   renovarContratoAction,
   agregarConceptoContratoAction,
   eliminarConceptoContratoAction,
-  agregarProyectoContratoAction,
   eliminarProyectoContratoAction,
   registrarHorasContratoAction,
   eliminarHorasContratoAction,
@@ -393,52 +393,7 @@ export default async function DetalleContratoPage({
             ) : null}
           </ul>
 
-          <form action={agregarProyectoContratoAction} className="mt-3 flex flex-wrap items-end gap-2">
-            <input type="hidden" name="idContrato" value={idContrato} />
-            <div>
-              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Proyecto / servicio</label>
-              <div className="w-56">
-                <ComboBusqueda
-                  name="idProyecto"
-                  placeholder="-- selecciona --"
-                  opciones={proyectosGlobales.map((pg) => ({ value: String(pg.ID_PROYECTO), label: pg.NOMBRE }))}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Tarifa/hora</label>
-              <input type="number" step="0.01" name="tarifaHora" required className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Moneda</label>
-              <div className="w-32">
-                <ComboBusqueda
-                  name="idMoneda"
-                  placeholder="-- selecciona --"
-                  opciones={monedas.map((m) => ({ value: String(m.ID_MAESTRO), label: m.DESCRIPCION }))}
-                />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="tipoCambioProyecto" className="mb-1 block text-xs text-slate-500 dark:text-slate-400">
-                TC (opcional)
-              </label>
-              <input
-                id="tipoCambioProyecto"
-                type="number"
-                step="0.0001"
-                name="tipoCambio"
-                placeholder="Ej. 3.75"
-                className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-              />
-            </div>
-            <SubmitButton className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700" pendingText="Agregando...">
-              Agregar proyecto
-            </SubmitButton>
-          </form>
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            El TC es obligatorio solo si la moneda elegida es distinta a la del proyecto.
-          </p>
+          <AgregarProyectoContratoForm idContrato={idContrato} proyectosGlobales={proyectosGlobales} monedas={monedas} />
 
           <h2 className="mt-6 text-sm font-semibold text-slate-800 dark:text-white">Horas registradas</h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">

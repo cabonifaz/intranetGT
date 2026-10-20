@@ -145,22 +145,22 @@ export async function eliminarConceptoContrato(idContratoConcepto: number): Prom
 
 // --- Proyectos con tarifa/hora (locador por hora) ---
 
+// No-op silencioso (mismo criterio que SP_PROYECTO_COSTO_MANO_OBRA_AGREGAR)
+// si el proyecto ya tiene una asignacion manual para este contrato, o si
+// la moneda elegida difiere de la del proyecto y falta el tipo de
+// cambio -- nunca lanza, devuelve id_contrato_proyecto NULL.
 export async function agregarProyectoContrato(
   idContrato: number,
   idProyecto: number,
   tarifaHora: number,
   idMoneda: number,
   tipoCambio: number | null,
-): Promise<{ id_contrato_proyecto: number }> {
-  const resultado = await callProcedureWithOut<{ id_contrato_proyecto: number | null }>(
+): Promise<{ id_contrato_proyecto: number | null }> {
+  return callProcedureWithOut<{ id_contrato_proyecto: number | null }>(
     "SP_RRHH_CONTRATO_PROYECTO_AGREGAR",
     [idContrato, idProyecto, tarifaHora, idMoneda, tipoCambio],
     ["id_contrato_proyecto"],
   );
-  if (!resultado.id_contrato_proyecto) {
-    throw new Error("No se pudo agregar el proyecto: falta elegir el proyecto o ya tiene una asignacion manual.");
-  }
-  return resultado as { id_contrato_proyecto: number };
 }
 
 export async function listarProyectosContrato(idContrato: number): Promise<ContratoProyectoRow[]> {
