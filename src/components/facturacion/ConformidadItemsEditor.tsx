@@ -43,6 +43,9 @@ export default function ConformidadItemsEditor({
                   name="descripcion"
                   required
                   defaultValue={item.DESCRIPCION}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
                 <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700" pendingText="Guardando...">
@@ -93,6 +96,9 @@ export default function ConformidadItemsEditor({
           name="descripcion"
           required
           placeholder="Ej. Entrega del módulo de reportes"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
         />
         <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700" pendingText="Agregando...">

@@ -1044,6 +1044,9 @@ function Campo({
         defaultValue={defaultValue}
         min={min}
         max={max}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
         className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
       />
     </div>

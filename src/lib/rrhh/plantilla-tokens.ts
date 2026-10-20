@@ -48,8 +48,14 @@ function dosDigitos(n: number): string {
 // "2025-05-21" -> "21/05/2025" -- formato usado en los acuerdos de
 // locador (a diferencia de los contratos de planilla, que usan fecha
 // larga en el cierre).
+// Acepta tanto "YYYY-MM-DD" (columnas DATE) como "YYYY-MM-DD HH:MM:SS"
+// (columnas DATETIME, ej. PROYECTO_CONFORMIDAD.FECHA_EMISION) -- se queda
+// solo con los primeros 10 caracteres antes de armar la fecha local,
+// porque concatenar "T00:00:00" a un DATETIME que ya trae su propia hora
+// arma un string invalido y devuelve "NaN/NaN/NaN" (encontrado en el PDF
+// firmado de una Conformidad real en produccion).
 export function formatearFechaCorta(fechaIso: string): string {
-  const fecha = new Date(`${fechaIso}T00:00:00`);
+  const fecha = new Date(`${fechaIso.slice(0, 10)}T00:00:00`);
   return `${dosDigitos(fecha.getDate())}/${dosDigitos(fecha.getMonth() + 1)}/${fecha.getFullYear()}`;
 }
 
