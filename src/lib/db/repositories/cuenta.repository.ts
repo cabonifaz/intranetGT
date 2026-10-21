@@ -16,6 +16,27 @@ export async function obtenerIdTipoMovimientoEgreso(): Promise<number> {
   return egreso.ID_MAESTRO;
 }
 
+// Usado por Impuestos al "Presentar" una declaracion que genero saldo a
+// favor de IGV/Renta -- el saldo entra como INGRESO a la cuenta IGV_FAVOR/
+// RENTA_FAVOR correspondiente.
+export async function obtenerIdTipoMovimientoIngreso(): Promise<number> {
+  const tipos = await listarMaestros("TIPO_MOVIMIENTO_CUENTA");
+  const ingreso = tipos.find((t) => t.CODIGO === "INGRESO");
+  if (!ingreso) throw new Error("No se encontro el catalogo TIPO_MOVIMIENTO_CUENTA=INGRESO");
+  return ingreso.ID_MAESTRO;
+}
+
+// Usado por Impuestos para encontrar la cuenta IGV_FAVOR o RENTA_FAVOR
+// (siempre deberia haber una sola activa de cada tipo -- son saldos
+// unicos a nivel empresa, no cuentas bancarias por banco).
+export async function obtenerCuentaPorTipo(codigoTipoCuenta: string): Promise<CuentaListadoRow | null> {
+  const tipos = await listarMaestros("TIPO_CUENTA");
+  const tipo = tipos.find((t) => t.CODIGO === codigoTipoCuenta);
+  if (!tipo) return null;
+  const cuentas = await listarCuentas(tipo.ID_MAESTRO, true);
+  return cuentas[0] ?? null;
+}
+
 interface CrearCuentaParams {
   idTipoCuenta: number;
   idBanco: number | null;

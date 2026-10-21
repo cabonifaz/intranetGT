@@ -1437,3 +1437,70 @@ export interface ContratoImportacionPendienteRow extends RowDataPacket {
   FECHA_CARGA: string;
   CARGADO_POR: string;
 }
+
+// --- Impuestos (declaraciones tributarias) ---
+
+export type TipoDeclaracionTributariaCodigo = "IGV_RENTA_MENSUAL" | "DJ_ANUAL_RENTA";
+export type EstadoDeclaracionTributariaCodigo = "BORRADOR" | "PRESENTADA" | "PAGADA" | "ANULADA";
+
+export interface DeclaracionTributariaListadoRow extends RowDataPacket {
+  ID_DECLARACION: number;
+  ID_TIPO_DECLARACION: number;
+  TIPO_DECLARACION_CODIGO: TipoDeclaracionTributariaCodigo;
+  TIPO_DECLARACION_DESCRIPCION: string;
+  ANIO: number;
+  MES: number;
+  FECHA_VENCIMIENTO: string;
+  MONTO_TOTAL_A_PAGAR: string;
+  ID_ESTADO_DECLARACION: number;
+  ESTADO_DECLARACION_CODIGO: EstadoDeclaracionTributariaCodigo;
+  ESTADO_DECLARACION_DESCRIPCION: string;
+  FECHA_PRESENTACION: string | null;
+  FECHA_PAGO: string | null;
+}
+
+export interface DeclaracionTributariaDetalleRow extends RowDataPacket {
+  ID_DECLARACION: number;
+  ID_TIPO_DECLARACION: number;
+  TIPO_DECLARACION_CODIGO: TipoDeclaracionTributariaCodigo;
+  TIPO_DECLARACION_DESCRIPCION: string;
+  ANIO: number;
+  MES: number;
+  FECHA_VENCIMIENTO: string;
+  ID_ESTADO_DECLARACION: number;
+  ESTADO_DECLARACION_CODIGO: EstadoDeclaracionTributariaCodigo;
+  ESTADO_DECLARACION_DESCRIPCION: string;
+  VENTAS_GRAVADAS: string | null;
+  COMPRAS_GRAVADAS: string | null;
+  IGV_VENTAS: string | null;
+  IGV_COMPRAS: string | null;
+  IGV_RESULTANTE: string | null;
+  PAGO_A_CUENTA_RENTA: string | null;
+  IMPUESTO_CALCULADO_RENTA: string | null;
+  PAGOS_A_CUENTA_ACUMULADOS: string | null;
+  SALDO_RENTA: string | null;
+  MONTO_TOTAL_A_PAGAR: string;
+  DOCUMENTO_PATH: string | null;
+  NOTAS: string | null;
+  MOTIVO_ANULACION: string | null;
+  FECHA_PRESENTACION: string | null;
+  FECHA_PAGO: string | null;
+  ID_CUENTA_PAGO: number | null;
+  CUENTA_PAGO_NOMBRE: string | null;
+  ID_MOVIMIENTO_PAGO: number | null;
+  ID_MOVIMIENTO_CREDITO: number | null;
+  USUARIO_CREACION: number | null;
+  FECHA_CREACION: string;
+  USUARIO_MODIFICACION: number | null;
+  FECHA_MODIFICACION: string | null;
+}
+
+export interface DeclaracionTributariaPendienteRow extends RowDataPacket {
+  ID_DECLARACION: number;
+  TIPO_DECLARACION_DESCRIPCION: string;
+  ANIO: number;
+  MES: number;
+  FECHA_VENCIMIENTO: string;
+  MONTO_TOTAL_A_PAGAR: string;
+  ESTADO_DECLARACION_CODIGO: EstadoDeclaracionTributariaCodigo;
+}

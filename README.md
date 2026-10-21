@@ -14,6 +14,7 @@ Diseño completo (modelo de datos, RBAC, SSO, roadmap por fases) en `.claude/pla
 - **Modulo de Compras** (`/facturacion/compras`, area FACTURACION): proveedores, compras con pagos parciales, y pagos a contratos de RRHH (haberes/honorarios) organizados por contrato — ver seccion "Pasivos y Compras (Facturacion)".
 - **Modulo de Proyectos y Servicios** (`/facturacion/proyectos`, area FACTURACION): costeo y margen por proyecto/servicio, juntando mano de obra (horas de locador + asignacion manual), compras vinculadas e ingresos, con dashboard de costo/margen a hoy vs al cierre (presupuesto) — ver seccion "Proyectos y Servicios (Facturacion)".
 - **Modulo de Pagos Recurrentes** (`/facturacion/pagos-recurrentes`, area FACTURACION): cronograma de gastos que se repiten periodo tras periodo (alquiler, internet, software, seguros...), monto fijo o variable, con cualquier frecuencia (mensual, trimestral, anual...), alertas de vencimiento y opcionalmente linkeados a un proyecto — ver seccion "Pagos Recurrentes (Facturacion)".
+- **Modulo de Impuestos** (`/facturacion/impuestos`, area FACTURACION): carga manual de las declaraciones mensuales de IGV/Renta (PDT 621) y de la Declaracion Jurada Anual de Renta, con constancia de SUNAT como respaldo, ciclo BORRADOR → PRESENTADA → PAGADA, acreditacion automatica del saldo a favor en Cuentas (IGV_FAVOR/RENTA_FAVOR) al presentar, y alertas de vencimiento (presentacion o pago) — ver seccion "Impuestos (Facturacion)".
 
 ## Requisitos
 
@@ -142,6 +143,12 @@ La app corre en un servicio de Railway (contenedor efimero: el filesystem se rei
   ```
 - Copia `CRON_SECRET` (la misma variable que usa el servicio principal) a las variables de entorno de este servicio de cron, para que `$CRON_SECRET` se resuelva.
 - Railway solo ejecuta el start command cuando toca el schedule (no queda corriendo entre medio), asi que no consume recursos fuera de esos segundos al dia.
+
+**3. Cron Job para `/api/cron/vencimiento-declaraciones-impuestos`** (alertas de Impuestos -- declaracion por presentar o monto por pagar a punto de vencer):
+- Mismo patron que el cron de arriba: **New → Empty Service**, **Cron Schedule** `0 8 * * *`, `CRON_SECRET` copiado, y como **Start Command**:
+  ```
+  curl -s -H "x-cron-secret: $CRON_SECRET" https://TU-SERVICIO.up.railway.app/api/cron/vencimiento-declaraciones-impuestos
+  ```
 
 ## Regla de sesion
 
@@ -288,6 +295,15 @@ Antes de este modulo, el sistema se documentaba a si mismo como "no es un motor 
   - **Boton "Actualizar TC ahora"** (`actualizarTipoCambioSunatAction`, pide `ADMIN`): vuelve a consultar la API aunque el sync automatico del dia ya haya corrido, y fija las 4 categorias de nuevo con el TC Venta obtenido -- para cuando SUNAT actualiza su tasa a media manana, o si el sync automatico fallo temprano y nadie mas visito Facturacion despues. A diferencia del sync automatico, esta version SI sobreescribe la fila de `TIPO_CAMBIO_SUNAT_DIA` de hoy (`SP_TIPO_CAMBIO_SUNAT_ACTUALIZAR_DIA`, `INSERT ... ON DUPLICATE KEY UPDATE`, a diferencia del `GUARDAR_DIA` no-op del sync automatico) y agrega una fila nueva al historico de cada categoria atribuida al usuario que lo presiono (no `NULL` como el sync automatico).
   - **Cada punto de captura del sistema que ya tenia un campo "Tipo de cambio" ahora lo precarga** con `obtenerTipoCambioVigente(codigo)` (repositorio nuevo, atajo sobre `SP_TIPO_CAMBIO_LISTAR_CATEGORIAS`): "Nueva compra" (`COMPRA`), "Mano de obra (asignacion manual)" e "Ingresos" en el detalle de un proyecto (`LABORAL`/`VENTA`), y las 4 instancias de `FinanciarConPrestamoFila` (`PRESTAMO`). Sigue siendo obligatorio solo cuando la moneda elegida difiere de la del proyecto (mismo guard no-op silencioso de antes) -- el precargado solo ahorra tener que escribirlo, no cambia cuando se exige.
   - **Ingresos de Proyecto ganan moneda propia** (`033_ingreso_moneda.sql`, cierra el hueco que quedo pendiente en el fix de monedas mezcladas anterior): `PROYECTO_INGRESO` ya no asume implicitamente la moneda del proyecto -- gana `ID_MONEDA`/`TIPO_CAMBIO` igual que `COMPRA`/`PROYECTO_COSTO_MANO_OBRA`/`PASIVO`, con backfill de la moneda del proyecto para las filas existentes. `SP_PROYECTO_INGRESO_AGREGAR` acepta `p_id_moneda` opcional (`NULL` = usa la moneda del proyecto, asi "Cobrar" un item del plan de facturacion -- que siempre cobra en la moneda del proyecto -- no tiene que resolverla por su cuenta). `INGRESO_REAL` y la fila `INGRESO` del ledger de Movimientos ya convierten con el mismo patron `CASE`/`TIPO_CAMBIO` que `COSTO_COMPRAS`/`COSTO_MANO_OBRA_MANUAL`.
+
+## Impuestos (Facturacion)
+
+- **`/facturacion/impuestos`** (app nueva `IMPUESTOS_EMPRESA`, area FACTURACION, mismos niveles de permiso que Cuentas/Pasivos): carga manual de la declaracion mensual de IGV + pago a cuenta de Renta (PDT 621) y de la Declaracion Jurada Anual de Renta -- no se parsea ningun PDT/Excel, se digitan los montos y se sube la constancia de SUNAT como respaldo (`DECLARACION_TRIBUTARIA`, `053_declaracion_tributaria.sql`).
+- **Una fila = un periodo tributario**: `ANIO` + `MES` (`MES=0` para la DJ anual -- nunca `NULL`, porque un `UNIQUE` con `NULL` no bloquea duplicados en MySQL), `UNIQUE (ID_TIPO_DECLARACION, ANIO, MES)`. `SP_DECLARACION_TRIBUTARIA_CREAR` es idempotente por periodo (si ya existe, devuelve esa misma fila en vez de duplicar).
+- **Ciclo BORRADOR → PRESENTADA → PAGADA (o ANULADA)**, mismo criterio de guards "no-op silencioso" del resto del sistema: los montos solo se editan mientras BORRADOR; presentar/marcar pagada/anular tienen cada uno su propio guard de estado en el SP. Eliminar (borrado real) solo aplica a un BORRADOR -- una vez presentada queda como historial, se anula en vez de borrarse.
+- **Al presentar, si el periodo genero saldo a favor** (`IGV_RESULTANTE < 0` en la mensual, `SALDO_RENTA < 0` en la DJ anual), se acredita solo a la cuenta `IGV_FAVOR`/`RENTA_FAVOR` existente en Cuentas -- mismo patron de dos pasos sin transaccion anidada que ya usa `pagarCuotaAction` (Pasivos): la capa de aplicacion llama primero `SP_CUENTA_MOVIMIENTO_REGISTRAR` (abre su propia transaccion) y con el `ID_MOVIMIENTO` resultante llama `SP_DECLARACION_TRIBUTARIA_PRESENTAR`. Si esa cuenta de Cuentas todavia no existe, igual se puede presentar -- se avisa en pantalla que no se acredito nada.
+- **Si queda un monto por pagar** (`MONTO_TOTAL_A_PAGAR > 0`, calculado por el usuario, no por el sistema), "Registrar pago" hace el mismo patron de dos pasos contra una cuenta BANCARIA (EGRESO + `SP_DECLARACION_TRIBUTARIA_MARCAR_PAGADA`), idempotente si se reintenta.
+- **Alertas de vencimiento** (`src/app/api/cron/vencimiento-declaraciones-impuestos/route.ts`, mismo patron que `contratos-por-vencer`): notifica a `FACTURACION_JEFATURA`/`FACTURACION_ASISTENTE` 7 dias antes del vencimiento tanto si falta presentar (sigue BORRADOR) como si falta pagar (PRESENTADA con monto pendiente) -- SUNAT usa la misma fecha de cronograma para ambas cosas. Requiere su propio Cron Job en Railway, ver seccion "Deploy en Railway".
 
 ## Contactos externos del Directorio
 
