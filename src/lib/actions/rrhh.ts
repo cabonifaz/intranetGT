@@ -21,6 +21,7 @@ import {
   listarConceptosContrato,
   agregarProyectoContrato,
   eliminarProyectoContrato,
+  listarProyectosContrato,
   registrarHorasContrato,
   eliminarHorasContrato,
   marcarHorasPagadas,
@@ -256,6 +257,19 @@ export async function generarLinkContratoAction(
   const idContrato = Number(formData.get("idContrato"));
   if (!idContrato) {
     return { ok: false, error: "Contrato invalido." };
+  }
+
+  // Bloqueo real (no solo ocultar el boton en pantalla): un locador
+  // POR_HORA sin ningun proyecto con tarifa agregado generaria un
+  // documento con "Periodo"/"Proyecto"/"Pago x hora" vacios -- reportado
+  // en produccion (contrato de Denis Alcantara), el admin no se dio
+  // cuenta y genero el link igual.
+  const contratoActual = await obtenerContrato(idContrato);
+  if (contratoActual?.TIPO_CONTRATO_CODIGO === "LOCADOR" && contratoActual.TIPO_PAGO_LOCADOR_CODIGO === "POR_HORA") {
+    const proyectosDelContrato = await listarProyectosContrato(idContrato);
+    if (proyectosDelContrato.length === 0) {
+      return { ok: false, error: "Agrega al menos un proyecto con tarifa antes de generar el link -- si no, el documento sale incompleto." };
+    }
   }
 
   const token = randomUUID();

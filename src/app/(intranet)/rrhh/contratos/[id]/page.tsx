@@ -96,6 +96,7 @@ export default async function DetalleContratoPage({
     personal,
     tcPrestamo,
     importacion,
+    tcLaboral,
   ] = await Promise.all([
     esPlanilla ? listarConceptosContrato(idContrato) : Promise.resolve([]),
     esPlanilla ? listarMaestros("CONCEPTO_REMUNERATIVO") : Promise.resolve([]),
@@ -111,6 +112,7 @@ export default async function DetalleContratoPage({
     necesitaCuentasYFinanciamiento ? listarDirectorio(null, null) : Promise.resolve([]),
     necesitaCuentasYFinanciamiento ? obtenerTipoCambioVigente("PRESTAMO") : Promise.resolve(null),
     obtenerImportacionContrato(idContrato),
+    esPorHora ? obtenerTipoCambioVigente("LABORAL") : Promise.resolve(null),
   ]);
 
   const totalConceptos = conceptos.reduce((suma, c) => suma + Number(c.MONTO), 0);
@@ -393,7 +395,7 @@ export default async function DetalleContratoPage({
             ) : null}
           </ul>
 
-          <AgregarProyectoContratoForm idContrato={idContrato} proyectosGlobales={proyectosGlobales} monedas={monedas} />
+          <AgregarProyectoContratoForm idContrato={idContrato} proyectosGlobales={proyectosGlobales} monedas={monedas} tcSugerido={tcLaboral} />
 
           <h2 className="mt-6 text-sm font-semibold text-slate-800 dark:text-white">Horas registradas</h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -496,15 +498,16 @@ export default async function DetalleContratoPage({
         </a>
       ) : null}
 
-      {esPorHora && proyectos.length === 0 ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
-          ⚠️ Este contrato es por hora pero todavía no tiene ningún proyecto con tarifa agregado arriba -- el documento
-          va a salir con &quot;Periodo&quot;, &quot;Proyecto&quot; y &quot;Pago x hora&quot; vacíos. Agrega el proyecto
-          antes de generar el link o firmar.
-        </p>
-      ) : null}
-
-      {puedeGenerarLink ? (
+      {puedeGenerarLink && esPorHora && proyectos.length === 0 ? (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-slate-800 dark:text-white">Link de firma</h2>
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+            ⚠️ Todavía no se puede generar el link ni firmar: este contrato es por hora y no tiene ningún proyecto con
+            tarifa agregado arriba -- el documento saldría con &quot;Periodo&quot;, &quot;Proyecto&quot; y &quot;Pago x
+            hora&quot; vacíos. Agrega el proyecto primero.
+          </p>
+        </section>
+      ) : puedeGenerarLink ? (
         <section>
           <h2 className="mb-2 text-sm font-semibold text-slate-800 dark:text-white">Link de firma</h2>
           <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
