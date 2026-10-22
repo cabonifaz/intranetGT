@@ -181,12 +181,16 @@ export function construirTokens(datos: DatosContratoPdf): TokensContrato {
   let detallePago: string;
   let detallePagoFilas: string;
   if (datos.tipoPagoLocadorCodigo === "POR_HORA") {
+    // No hay PERIODO_PAGO fijo en un contrato por hora (se liquida segun
+    // las horas reportadas en Clockify, mes a mes) -- en su lugar, la
+    // columna "Periodo" muestra la vigencia del contrato (inicio - fin),
+    // que si existe desde que se crea. Pedido explicito del usuario tras
+    // ver esa columna vacia en el PDF real de un contrato.
+    const periodoVigencia = `${formatearFechaCorta(datos.fechaInicio)} - ${datos.fechaFin ? formatearFechaCorta(datos.fechaFin) : "sin plazo fijo"}`;
     detallePago = datos.proyectos.map((p) => `- ${p.nombreProyecto}: ${formatearMoneda(p.tarifaHora)} por hora`).join("\n");
     detallePagoFilas =
       datos.proyectos.length > 0
-        ? datos.proyectos
-            .map((p) => `| ${datos.periodoPago ?? "-"} | ${p.nombreProyecto} | ${formatearMoneda(p.tarifaHora)} |`)
-            .join("\n")
+        ? datos.proyectos.map((p) => `| ${periodoVigencia} | ${p.nombreProyecto} | ${formatearMoneda(p.tarifaHora)} |`).join("\n")
         : "| - | - | - |";
   } else {
     const partes: string[] = [];
