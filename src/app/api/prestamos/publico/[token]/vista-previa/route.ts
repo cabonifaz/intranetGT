@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { obtenerPrestamoPorToken, listarCuotasPrestamo } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import { generarCompromisoPrestamoPdf } from "@/lib/rrhh/planilla/generar-compromiso-prestamo-pdf";
 import { cargarLogoEmpresa } from "@/lib/rrhh/resolver-plantilla";
+import { tieneFormaDeToken } from "@/lib/validar-token";
 
 // Version sin firma del compromiso, para que el beneficiario lo pueda leer
 // completo antes de firmarlo (link publico con token, ver
@@ -9,7 +10,7 @@ import { cargarLogoEmpresa } from "@/lib/rrhh/resolver-plantilla";
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const prestamo = await obtenerPrestamoPorToken(token);
+  const prestamo = tieneFormaDeToken(token) ? await obtenerPrestamoPorToken(token) : null;
   if (!prestamo) {
     return NextResponse.json({ error: "Link inválido." }, { status: 404 });
   }

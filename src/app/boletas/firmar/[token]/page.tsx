@@ -1,5 +1,6 @@
 import { obtenerDetallePorToken } from "@/lib/db/repositories/rrhh-planilla.repository";
 import ConfirmarRecepcionBoletaPublico from "@/components/rrhh/ConfirmarRecepcionBoletaPublico";
+import { tieneFormaDeToken } from "@/lib/validar-token";
 
 function formatearMonto(monto: string | number): string {
   return `S/ ${Number(monto).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -16,7 +17,7 @@ function estaVencido(tokenExpira: string | null): boolean {
 // consume/limpia al confirmar (ver SP_RRHH_PLANILLA_DETALLE_CONFIRMAR_RECEPCION).
 export default async function ConfirmarRecepcionBoletaPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const detalle = await obtenerDetallePorToken(token);
+  const detalle = tieneFormaDeToken(token) ? await obtenerDetallePorToken(token) : null;
 
   const invalido = !detalle || detalle.ESTADO_EMISION_CODIGO !== "EMITIDA" || Boolean(detalle.FECHA_CONFIRMACION_COLABORADOR);
   const vencido = estaVencido(detalle?.TOKEN_EXPIRA ?? null);

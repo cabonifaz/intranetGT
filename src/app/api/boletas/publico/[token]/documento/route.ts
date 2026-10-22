@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { obtenerDetallePorToken } from "@/lib/db/repositories/rrhh-planilla.repository";
 import { leerArchivo } from "@/lib/storage/local-storage";
+import { tieneFormaDeToken } from "@/lib/validar-token";
 
 // PDF de la boleta ya emitida, para el link publico de confirmacion de
 // recepcion (ver /boletas/firmar/[token]). Misma vigencia que el token.
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const detalle = await obtenerDetallePorToken(token);
+  const detalle = tieneFormaDeToken(token) ? await obtenerDetallePorToken(token) : null;
   if (!detalle) {
     return NextResponse.json({ error: "Link inválido." }, { status: 404 });
   }

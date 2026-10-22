@@ -496,6 +496,14 @@ export default async function DetalleContratoPage({
         </a>
       ) : null}
 
+      {esPorHora && proyectos.length === 0 ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+          ⚠️ Este contrato es por hora pero todavía no tiene ningún proyecto con tarifa agregado arriba -- el documento
+          va a salir con &quot;Periodo&quot;, &quot;Proyecto&quot; y &quot;Pago x hora&quot; vacíos. Agrega el proyecto
+          antes de generar el link o firmar.
+        </p>
+      ) : null}
+
       {puedeGenerarLink ? (
         <section>
           <h2 className="mb-2 text-sm font-semibold text-slate-800 dark:text-white">Link de firma</h2>

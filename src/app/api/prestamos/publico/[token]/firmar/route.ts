@@ -7,6 +7,7 @@ import {
 import { generarCompromisoPrestamoPdf } from "@/lib/rrhh/planilla/generar-compromiso-prestamo-pdf";
 import { cargarLogoEmpresa } from "@/lib/rrhh/resolver-plantilla";
 import { guardarArchivo } from "@/lib/storage/local-storage";
+import { tieneFormaDeToken } from "@/lib/validar-token";
 
 function decodificarFirmaPng(dataUrl: string): Buffer {
   const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
@@ -20,7 +21,7 @@ function decodificarFirmaPng(dataUrl: string): Buffer {
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const prestamo = await obtenerPrestamoPorToken(token);
+  const prestamo = tieneFormaDeToken(token) ? await obtenerPrestamoPorToken(token) : null;
   if (!prestamo) {
     return NextResponse.json({ error: "Link inválido." }, { status: 404 });
   }

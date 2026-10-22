@@ -1,5 +1,6 @@
 import { obtenerPrestamoPorToken } from "@/lib/db/repositories/rrhh-prestamo.repository";
 import FirmarPrestamoForm from "@/components/rrhh/FirmarPrestamoForm";
+import { tieneFormaDeToken } from "@/lib/validar-token";
 
 function formatearMonto(monto: string | number, codigo: string): string {
   return `${codigo === "USD" ? "US$" : "S/"} ${Number(monto).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -23,7 +24,7 @@ function estaVencido(tokenExpira: string | null): boolean {
 // ni segunda firma que pedir, a diferencia de Contratos.
 export default async function FirmarPrestamoPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const prestamo = await obtenerPrestamoPorToken(token);
+  const prestamo = tieneFormaDeToken(token) ? await obtenerPrestamoPorToken(token) : null;
 
   const invalido = !prestamo || prestamo.ESTADO_PRESTAMO_CODIGO !== "PENDIENTE_FIRMA";
   const vencido = estaVencido(prestamo?.TOKEN_EXPIRA ?? null);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { obtenerDetallePorToken, confirmarRecepcionBoleta } from "@/lib/db/repositories/rrhh-planilla.repository";
 import { guardarArchivo } from "@/lib/storage/local-storage";
+import { tieneFormaDeToken } from "@/lib/validar-token";
 
 function decodificarFirmaPng(dataUrl: string): Buffer {
   const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
@@ -17,7 +18,7 @@ function decodificarFirmaPng(dataUrl: string): Buffer {
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const detalle = await obtenerDetallePorToken(token);
+  const detalle = tieneFormaDeToken(token) ? await obtenerDetallePorToken(token) : null;
   if (!detalle) {
     return NextResponse.json({ error: "Link inválido." }, { status: 404 });
   }

@@ -8,6 +8,7 @@ import { generarContratoPdf } from "@/lib/rrhh/generar-contrato-pdf";
 import { formatearNroContrato } from "@/lib/rrhh/plantilla-tokens";
 import { resolverPlantillaContrato } from "@/lib/rrhh/resolver-plantilla";
 import type { TipoContratoCodigo, TipoPagoLocadorCodigo } from "@/types/db";
+import { tieneFormaDeToken } from "@/lib/validar-token";
 
 // Version sin firma del contrato, para que el postulante lo pueda leer
 // completo antes de firmarlo (link publico con token, ver
@@ -15,7 +16,7 @@ import type { TipoContratoCodigo, TipoPagoLocadorCodigo } from "@/types/db";
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const contrato = await obtenerContratoPorToken(token);
+  const contrato = tieneFormaDeToken(token) ? await obtenerContratoPorToken(token) : null;
   if (!contrato) {
     return NextResponse.json({ error: "Link invalido." }, { status: 404 });
   }

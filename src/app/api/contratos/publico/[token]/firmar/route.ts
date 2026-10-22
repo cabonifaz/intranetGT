@@ -11,6 +11,7 @@ import { formatearNroContrato } from "@/lib/rrhh/plantilla-tokens";
 import { resolverPlantillaContrato } from "@/lib/rrhh/resolver-plantilla";
 import { guardarArchivo } from "@/lib/storage/local-storage";
 import type { TipoContratoCodigo, TipoPagoLocadorCodigo } from "@/types/db";
+import { tieneFormaDeToken } from "@/lib/validar-token";
 
 function decodificarFirmaPng(dataUrl: string): Buffer {
   const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
@@ -20,7 +21,7 @@ function decodificarFirmaPng(dataUrl: string): Buffer {
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const contrato = await obtenerContratoPorToken(token);
+  const contrato = tieneFormaDeToken(token) ? await obtenerContratoPorToken(token) : null;
   if (!contrato) {
     return NextResponse.json({ error: "Link invalido." }, { status: 404 });
   }

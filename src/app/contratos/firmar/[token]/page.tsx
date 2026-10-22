@@ -5,6 +5,7 @@ import {
 } from "@/lib/db/repositories/contrato.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { tieneIdentidadCompletaContrato } from "@/lib/rrhh/identidad";
+import { tieneFormaDeToken } from "@/lib/validar-token";
 import FirmarContratoForm from "@/components/rrhh/FirmarContratoForm";
 
 function formatearMoneda(monto: number): string {
@@ -27,7 +28,7 @@ export default async function FirmarContratoPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const contrato = await obtenerContratoPorToken(token);
+  const contrato = tieneFormaDeToken(token) ? await obtenerContratoPorToken(token) : null;
 
   const invalido = !contrato || contrato.ESTADO_CONTRATO_CODIGO !== "PENDIENTE_FIRMA";
   const vencido = estaVencido(contrato?.TOKEN_EXPIRA);

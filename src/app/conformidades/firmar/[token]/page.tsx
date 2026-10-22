@@ -1,5 +1,6 @@
 import { obtenerConformidadPorToken, listarItemsConformidad } from "@/lib/db/repositories/proyecto-conformidad.repository";
 import FirmarConformidadForm from "@/components/facturacion/FirmarConformidadForm";
+import { tieneFormaDeToken } from "@/lib/validar-token";
 
 function formatearMonto(monto: string | number, codigo: string): string {
   return `${codigo === "USD" ? "US$" : "S/"} ${Number(monto).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -16,7 +17,7 @@ function estaVencido(tokenExpira: string | null): boolean {
 // imprime el nombre de su representante (ver generar-conformidad-pdf.ts).
 export default async function FirmarConformidadPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const conformidad = await obtenerConformidadPorToken(token);
+  const conformidad = tieneFormaDeToken(token) ? await obtenerConformidadPorToken(token) : null;
 
   const invalido = !conformidad || conformidad.ESTADO_CONFORMIDAD_CODIGO !== "EMITIDA";
   const vencido = estaVencido(conformidad?.TOKEN_EXPIRA ?? null);

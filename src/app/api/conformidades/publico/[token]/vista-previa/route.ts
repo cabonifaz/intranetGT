@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { obtenerConformidadPorToken } from "@/lib/db/repositories/proyecto-conformidad.repository";
 import { leerArchivo } from "@/lib/storage/local-storage";
+import { tieneFormaDeToken } from "@/lib/validar-token";
 
 // PDF sin firma ya generado al Emitir (DOCUMENTO_PATH) -- para que el
 // cliente lo pueda leer completo antes de firmar (link publico con
@@ -9,7 +10,7 @@ import { leerArchivo } from "@/lib/storage/local-storage";
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const conformidad = await obtenerConformidadPorToken(token);
+  const conformidad = tieneFormaDeToken(token) ? await obtenerConformidadPorToken(token) : null;
   if (!conformidad) {
     return NextResponse.json({ error: "Link inválido." }, { status: 404 });
   }

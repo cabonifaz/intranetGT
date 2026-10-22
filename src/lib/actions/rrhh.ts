@@ -28,6 +28,7 @@ import {
   eliminarContrato,
 } from "@/lib/db/repositories/contrato.repository";
 import { registrarMovimientoCuenta, obtenerIdTipoMovimientoEgreso } from "@/lib/db/repositories/cuenta.repository";
+import { obtenerProyecto, listarCostosManoObra } from "@/lib/db/repositories/proyecto.repository";
 import {
   agregarPeriodoPago,
   listarPeriodosPago,
@@ -381,13 +382,31 @@ export async function agregarProyectoContratoAction(
   if (!tarifaHora) return { ok: false, error: "Ingresa la tarifa por hora." };
   if (!idMoneda) return { ok: false, error: "Elige la moneda de la lista (haz clic en una opcion, no solo escribas el nombre)." };
 
-  const resultado = await agregarProyectoContrato(idContrato, idProyecto, tarifaHora, idMoneda, tipoCambio);
-  if (!resultado.id_contrato_proyecto) {
+  // Antes de llamar al SP (que hace no-op silencioso por diseño): se
+  // adelantan aca las dos mismas validaciones para poder decir EXACTAMENTE
+  // cual de las dos fallo -- el mensaje generico "o esto o lo otro" no lo
+  // entendia un admin sin contexto tecnico (reportado en produccion: el
+  // proyecto quedaba sin agregar y el admin igual generaba el contrato,
+  // que salia con el detalle de pago vacio).
+  const [proyecto, costosDelProyecto] = await Promise.all([obtenerProyecto(idProyecto), listarCostosManoObra(idProyecto)]);
+
+  if (costosDelProyecto.some((c) => c.ID_CONTRATO === idContrato)) {
     return {
       ok: false,
-      error:
-        "No se agrego: o el proyecto ya tiene una asignacion manual para este contrato, o la moneda elegida es distinta a la del proyecto y falta el tipo de cambio.",
+      error: `"${proyecto?.NOMBRE ?? "Este proyecto"}" ya tiene una asignacion manual de mano de obra para este contrato (ver "Mano de obra" en el detalle del proyecto) -- no se puede agregar aca tambien.`,
     };
+  }
+
+  if (proyecto && proyecto.ID_MONEDA !== idMoneda && !tipoCambio) {
+    return {
+      ok: false,
+      error: `El proyecto "${proyecto.NOMBRE}" esta en ${proyecto.MONEDA_DESCRIPCION}, pero elegiste otra moneda sin poner el tipo de cambio. Cambia la moneda a ${proyecto.MONEDA_DESCRIPCION} o ingresa el TC.`,
+    };
+  }
+
+  const resultado = await agregarProyectoContrato(idContrato, idProyecto, tarifaHora, idMoneda, tipoCambio);
+  if (!resultado.id_contrato_proyecto) {
+    return { ok: false, error: "No se pudo agregar el proyecto por un motivo inesperado. Intenta de nuevo." };
   }
 
   revalidatePath(`/rrhh/contratos/${idContrato}`);
