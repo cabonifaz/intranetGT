@@ -15,6 +15,7 @@
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_CONTRATO_ELEGIBLE_LISTAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_CONTRATO_HORAS_DEL_PERIODO_LISTAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_CONTRATO_ACUMULADO_ANIO;
+DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_USUARIO_ACUMULADO_ANIO;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_MENSUAL_OBTENER_O_CREAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_MENSUAL_LISTAR;
 DROP PROCEDURE IF EXISTS SP_RRHH_PLANILLA_MENSUAL_OBTENER;
@@ -104,6 +105,33 @@ BEGIN
       FROM RRHH_PLANILLA_DETALLE d
       JOIN RRHH_PLANILLA_MENSUAL pm ON pm.ID_PLANILLA_MENSUAL = d.ID_PLANILLA_MENSUAL
      WHERE d.ID_CONTRATO = p_id_contrato AND pm.ANIO = p_anio AND pm.MES < p_mes_hasta;
+END$$
+
+-- Igual que la de arriba, pero acumulado POR PERSONA (ID_USUARIO) en vez
+-- de por contrato -- Renta 5ta se proyecta a nivel de la persona durante
+-- el año fiscal, sin importar cuantos RRHH_CONTRATO distintos haya tenido
+-- (ej. una renovacion con contrato nuevo, o 2 contratos consecutivos no
+-- solapados el mismo mes, ver procesarPeriodoRegularConsolidado en
+-- rrhh-planilla.ts). Usar esta en vez de la de arriba para cualquier
+-- calculo de Renta 5ta -- la version por-contrato queda solo por si
+-- algun reporte futuro necesita el desglose por contrato especifico.
+-- Excluye LOCADOR (JOIN con filtro CODIGO != 'LOCADOR'): ese regimen no
+-- acumula Renta 5ta, cada RxH retiene Renta 4ta independiente.
+CREATE PROCEDURE SP_RRHH_PLANILLA_USUARIO_ACUMULADO_ANIO(
+    IN p_id_usuario INT UNSIGNED,
+    IN p_anio SMALLINT UNSIGNED,
+    IN p_mes_hasta TINYINT UNSIGNED
+)
+BEGIN
+    SELECT COALESCE(SUM(d.MONTO_BRUTO), 0) AS BRUTO_ACUMULADO,
+           COALESCE(SUM(d.MONTO_RETENCION_RENTA), 0) AS RETENCION_ACUMULADA
+      FROM RRHH_PLANILLA_DETALLE d
+      JOIN RRHH_PLANILLA_MENSUAL pm ON pm.ID_PLANILLA_MENSUAL = d.ID_PLANILLA_MENSUAL
+      JOIN RRHH_CONTRATO c ON c.ID_CONTRATO = d.ID_CONTRATO
+      JOIN MAESTRO_MAESTRO tc ON tc.ID_MAESTRO = c.ID_TIPO_CONTRATO
+     WHERE c.ID_USUARIO = p_id_usuario
+       AND tc.CODIGO != 'LOCADOR'
+       AND pm.ANIO = p_anio AND pm.MES < p_mes_hasta;
 END$$
 
 -- Idempotente -- seguro reintentar "Generar planilla del mes" sin

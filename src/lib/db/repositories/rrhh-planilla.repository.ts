@@ -23,6 +23,14 @@ export async function obtenerAcumuladoAnio(idContrato: number, anio: number, mes
   return rows[0] ?? ({ BRUTO_ACUMULADO: "0", RETENCION_ACUMULADA: "0" } as PlanillaAcumuladoAnioRow);
 }
 
+// Acumulado por PERSONA (no por contrato especifico) -- usar esta para
+// cualquier calculo real de Renta 5ta, ver comentario de
+// SP_RRHH_PLANILLA_USUARIO_ACUMULADO_ANIO.
+export async function obtenerAcumuladoAnioUsuario(idUsuario: number, anio: number, mesHasta: number): Promise<PlanillaAcumuladoAnioRow> {
+  const rows = await callProcedure<PlanillaAcumuladoAnioRow>("SP_RRHH_PLANILLA_USUARIO_ACUMULADO_ANIO", [idUsuario, anio, mesHasta]);
+  return rows[0] ?? ({ BRUTO_ACUMULADO: "0", RETENCION_ACUMULADA: "0" } as PlanillaAcumuladoAnioRow);
+}
+
 export async function obtenerOCrearPlanillaMensual(anio: number, mes: number, periodo: string, idUsuarioCreacion: number | null): Promise<{ id_planilla_mensual: number }> {
   const resultado = await callProcedureWithOut<{ id_planilla_mensual: number | null }>(
     "SP_RRHH_PLANILLA_MENSUAL_OBTENER_O_CREAR",

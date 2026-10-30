@@ -9,7 +9,7 @@ import { requireSession } from "@/lib/auth/get-current-user";
 import {
   listarContratosElegibles,
   listarHorasDelPeriodo,
-  obtenerAcumuladoAnio,
+  obtenerAcumuladoAnioUsuario,
   obtenerOCrearPlanillaMensual,
   obtenerPlanillaMensual,
   emitirPlanillaMensual as marcarPlanillaMensualEmitida,
@@ -146,7 +146,7 @@ async function procesarPeriodoRegular(
   const prestamos = await cuotasADescontar(contrato.ID_USUARIO, anio, mes);
 
   if (esPlanilla) {
-    const acumulado = await obtenerAcumuladoAnio(contrato.ID_CONTRATO, anio, mes);
+    const acumulado = await obtenerAcumuladoAnioUsuario(contrato.ID_USUARIO, anio, mes);
     const resultado = calcularBoletaPlanilla({
       remuneracionBruta: periodoInfo.monto,
       sistemaPension: contrato.SISTEMA_PENSION_CODIGO,
@@ -198,6 +198,81 @@ async function procesarPeriodoRegular(
     idUsuarioCreacion: idUsuario,
   });
   if (idDetalleRxH) await vincularCuotasADetalle(prestamos.cuotas, idDetalleRxH);
+}
+
+// Cuando una persona tiene 2+ contratos PLANILLA (nunca LOCADOR -- ese
+// regimen emite un RxH por recibo, no una boleta unica por ley) que NO
+// se solapan en fechas pero caen en el mismo mes (ej. uno termina el 20,
+// el siguiente empieza el 21), se genera UNA sola fila de
+// RRHH_PLANILLA_DETALLE -- nunca una boleta por contrato -- sumando el
+// bruto YA prorrateado de cada uno (cada contrato sigue prorrateando el
+// suyo de forma independiente, factorProrateoDelMes sin cambios) y
+// calculando los descuentos (AFP/Renta/prestamo) UNA SOLA VEZ sobre el
+// total combinado -- evita el bug real encontrado en produccion (Priscila
+// Rachumi, oct 2026): antes, cada contrato generaba su propia fila con su
+// propio llamado a cuotasADescontar(ID_USUARIO,...), y esa consulta no
+// filtra por contrato -- la cuota de prestamo completa del mes se
+// reservaba entera contra la PRIMERA fila procesada (segun el orden del
+// loop), dejando un neto negativo en una fila y sin prestamo en la otra.
+// Con una sola fila, la cuota se reserva una sola vez, sin ambiguedad.
+//
+// La fila queda asociada al contrato vigente a fin de mes (el que
+// continua -- "el actual"), que tambien presta su CARGO al documento
+// (decision explicita: no desglosar 2 cargos en el mismo PDF). Si ningun
+// contrato del grupo cubre exactamente el fin de mes (hueco entre
+// contratos), se usa el de FECHA_INICIO mas reciente como aproximacion
+// razonable de "el contrato actual".
+async function procesarPeriodoRegularConsolidado(
+  idPlanillaMensual: number,
+  contratosDelUsuario: PlanillaContratoElegibleRow[],
+  periodo: string,
+  anio: number,
+  mes: number,
+  finMes: string,
+  parametros: ParametrosPlanillaVigentes,
+  idUsuario: number | null,
+): Promise<boolean> {
+  const periodos = await Promise.all(contratosDelUsuario.map((c) => asegurarPeriodoDelMes(c, periodo, idUsuario)));
+  const brutoCombinado = periodos.reduce((suma, p) => suma + (p?.monto ?? 0), 0);
+  if (brutoCombinado <= 0) return false;
+
+  const dueno =
+    contratosDelUsuario.find((c) => c.FECHA_INICIO <= finMes && (!c.FECHA_FIN || c.FECHA_FIN >= finMes)) ??
+    [...contratosDelUsuario].sort((a, b) => (a.FECHA_INICIO < b.FECHA_INICIO ? 1 : -1))[0];
+  const periodoDueno = periodos[contratosDelUsuario.indexOf(dueno)];
+  if (!periodoDueno) return false;
+
+  const prestamos = await cuotasADescontar(dueno.ID_USUARIO, anio, mes);
+  const acumulado = await obtenerAcumuladoAnioUsuario(dueno.ID_USUARIO, anio, mes);
+  const resultado = calcularBoletaPlanilla({
+    remuneracionBruta: brutoCombinado,
+    sistemaPension: dueno.SISTEMA_PENSION_CODIGO,
+    afpFondoCodigo: dueno.AFP_FONDO_CODIGO,
+    mesesRestantesIncluyendoActual: 13 - mes,
+    brutoAcumuladoMesesAnterioresDelAnio: Number(acumulado.BRUTO_ACUMULADO),
+    retencionesAcumuladasAnioActual: Number(acumulado.RETENCION_ACUMULADA),
+    descuentoPrestamo: prestamos.total,
+    parametros,
+  });
+
+  const { id_planilla_detalle: idDetalleNuevo } = await agregarDetalle({
+    idPlanillaMensual,
+    idContrato: dueno.ID_CONTRATO,
+    tipoReferencia: "RRHH_CONTRATO_PERIODO_PAGO",
+    idReferencia: periodoDueno.idPeriodoPago,
+    montoBruto: resultado.bruto,
+    montoAportePension: resultado.aportePension,
+    montoRetencionRenta: resultado.retencionRenta,
+    montoEssalud: resultado.essalud,
+    montoDescuentoPrestamo: resultado.descuentoPrestamo,
+    montoNeto: resultado.neto,
+    idSistemaPensionAplicado: dueno.ID_SISTEMA_PENSION,
+    idAfpFondoAplicado: dueno.ID_AFP_FONDO,
+    idParametroAplicado: parametros.idParametro,
+    idUsuarioCreacion: idUsuario,
+  });
+  if (idDetalleNuevo) await vincularCuotasADetalle(prestamos.cuotas, idDetalleNuevo);
+  return Boolean(idDetalleNuevo);
 }
 
 // LOCADOR POR_HORA: junta las horas del mes que compartan moneda. Si hay
@@ -291,8 +366,31 @@ export async function generarPlanillaMensual(anio: number, mes: number, idUsuari
     const vigentesEsteMes = contratos.filter((c) => esVigenteEnMes(c, inicioMes, finMes));
     const usuariosConConflicto = usuariosConContratosSolapados(vigentesEsteMes);
 
+    // Si una misma persona tiene 2+ contratos PLANILLA (nunca LOCADOR,
+    // ver nota de procesarPeriodoRegularConsolidado) vigentes este mes sin
+    // solaparse, se consolidan en UNA sola fila -- se procesan ANTES del
+    // loop normal y se marcan para que el loop no los vuelva a tocar.
+    const gruposPorUsuario = new Map<number, PlanillaContratoElegibleRow[]>();
+    for (const c of vigentesEsteMes) {
+      if (c.TIPO_CONTRATO_CODIGO === "LOCADOR") continue;
+      if (usuariosConConflicto.has(c.ID_USUARIO)) continue;
+      if (yaProcesados.has(c.ID_CONTRATO)) continue;
+      const lista = gruposPorUsuario.get(c.ID_USUARIO) ?? [];
+      lista.push(c);
+      gruposPorUsuario.set(c.ID_USUARIO, lista);
+    }
+
+    const idsConsolidados = new Set<number>();
+    for (const grupo of gruposPorUsuario.values()) {
+      if (grupo.length < 2) continue;
+      for (const c of grupo) idsConsolidados.add(c.ID_CONTRATO);
+      const agregado = await procesarPeriodoRegularConsolidado(idPlanillaMensual, grupo, periodo, anio, mes, finMes, parametros, idUsuario);
+      if (agregado) totalAgregados++;
+    }
+
     for (const contrato of contratos) {
       if (yaProcesados.has(contrato.ID_CONTRATO)) continue;
+      if (idsConsolidados.has(contrato.ID_CONTRATO)) continue;
       if (!esVigenteEnMes(contrato, inicioMes, finMes)) continue;
       if (usuariosConConflicto.has(contrato.ID_USUARIO)) continue;
 
@@ -344,7 +442,7 @@ export async function recalcularDetalleAction(formData: FormData): Promise<void>
   const descuentoPrestamo = Math.round(cuotasVinculadas.reduce((suma, c) => suma + Number(c.MONTO_DESCONTADO_SOLES ?? 0), 0) * 100) / 100;
 
   if (esPlanilla) {
-    const acumulado = await obtenerAcumuladoAnio(detalle.ID_CONTRATO, detalle.ANIO, detalle.MES);
+    const acumulado = await obtenerAcumuladoAnioUsuario(detalle.ID_USUARIO, detalle.ANIO, detalle.MES);
     const resultado = calcularBoletaPlanilla({
       remuneracionBruta: bruto,
       sistemaPension: detalle.SISTEMA_PENSION_CODIGO,
