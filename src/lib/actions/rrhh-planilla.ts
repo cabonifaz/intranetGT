@@ -42,7 +42,12 @@ import { listarPeriodosPago, agregarPeriodoPago, actualizarPeriodoPago } from "@
 import { listarConceptosContrato } from "@/lib/db/repositories/contrato.repository";
 import { obtenerParametrosVigentes } from "@/lib/rrhh/planilla/parametros";
 import { calcularBoletaPlanilla, calcularRxH, type ParametrosPlanillaVigentes } from "@/lib/rrhh/planilla/calculo";
-import { generarPeriodosPendientesDetallado, etiquetaPeriodoMensual, factorProrateoDelMes } from "@/lib/rrhh/periodos-pago";
+import {
+  generarPeriodosPendientesDetallado,
+  etiquetaPeriodoMensual,
+  factorProrateoDelMes,
+  usuariosConContratosSolapados,
+} from "@/lib/rrhh/periodos-pago";
 import { generarBoletaPdf } from "@/lib/rrhh/planilla/generar-boleta-pdf";
 import { generarReciboHonorariosPdf } from "@/lib/rrhh/planilla/generar-recibo-honorarios-pdf";
 import { cargarLogoEmpresa } from "@/lib/rrhh/resolver-plantilla";
@@ -274,19 +279,17 @@ export async function generarPlanillaMensual(anio: number, mes: number, idUsuari
     const [contratos, detalleExistente] = await Promise.all([listarContratosElegibles(), listarDetalle(idPlanillaMensual)]);
     const yaProcesados = new Set(detalleExistente.map((d) => d.ID_CONTRATO));
 
-    // Un colaborador no puede tener 2 registros de planilla el mismo mes
-    // (duplicaria su pago) -- si tiene mas de un contrato vigente este
-    // mes (ej. dos contratos solapados por error), no se genera NINGUNO
-    // hasta que se resuelva cual es el correcto. Ver
-    // diagnosticarGeneracionPlanilla, que explica el conflicto en la UI.
+    // Un colaborador con 2+ contratos vigentes este mes NO es conflicto
+    // automatico -- solo lo es si esos contratos de verdad se solapan en
+    // fechas (ej. uno termina el 20 y el siguiente empieza el 21: no hay
+    // solapamiento, cada uno genera su propio detalle prorrateado por
+    // separado via factorProrateoDelMes/procesarPeriodoRegular, sin
+    // duplicar el pago). Si SI se solapan, no se genera NINGUNO hasta que
+    // se resuelva cual es el correcto. Ver diagnosticarGeneracionPlanilla,
+    // que explica el conflicto en la UI con el mismo criterio
+    // (usuariosConContratosSolapados).
     const vigentesEsteMes = contratos.filter((c) => esVigenteEnMes(c, inicioMes, finMes));
-    const contratosVigentesPorUsuario = new Map<number, number>();
-    for (const c of vigentesEsteMes) {
-      contratosVigentesPorUsuario.set(c.ID_USUARIO, (contratosVigentesPorUsuario.get(c.ID_USUARIO) ?? 0) + 1);
-    }
-    const usuariosConConflicto = new Set(
-      [...contratosVigentesPorUsuario.entries()].filter(([, n]) => n > 1).map(([idUsuario]) => idUsuario),
-    );
+    const usuariosConConflicto = usuariosConContratosSolapados(vigentesEsteMes);
 
     for (const contrato of contratos) {
       if (yaProcesados.has(contrato.ID_CONTRATO)) continue;

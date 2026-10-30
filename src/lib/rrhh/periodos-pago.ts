@@ -102,3 +102,52 @@ export function factorProrateoDelMes(anio: number, mes0: number, fechaInicio: st
   const dias = Math.max(0, diaFin - diaInicio + 1);
   return dias / 30;
 }
+
+interface ContratoConVigencia {
+  ID_USUARIO: number;
+  FECHA_INICIO: string;
+  FECHA_FIN: string | null;
+}
+
+// Solapamiento real de intervalos [FECHA_INICIO, FECHA_FIN] (FECHA_FIN
+// NULL = sigue vigente, se trata como "sin limite"). Comparacion lexico-
+// grafica de strings "YYYY-MM-DD" -- equivalente a comparar fechas, sin
+// el riesgo de desfase de zona horaria de `new Date(string)` (ver
+// anioMes mas arriba).
+function seSuperponen(a: ContratoConVigencia, b: ContratoConVigencia): boolean {
+  const finA = a.FECHA_FIN ?? "9999-12-31";
+  const finB = b.FECHA_FIN ?? "9999-12-31";
+  return a.FECHA_INICIO <= finB && b.FECHA_INICIO <= finA;
+}
+
+// Dos (o mas) contratos de la MISMA persona que caen dentro del mismo
+// mes calendario NO son necesariamente un conflicto -- solo lo son si de
+// verdad se solapan en fechas (ej. un contrato terminado el 20 y el
+// siguiente empezando el 21 del mismo mes no se solapan, cada uno cubre
+// su propia porcion del mes). Se compara cada par de contratos de un
+// mismo ID_USUARIO; si ALGUN par se solapa de verdad, se marca conflicto
+// para esa persona completa (no se puede saber cual de los contratos
+// solapados es el correcto). Si no hay solapamiento real, cada contrato
+// sigue su propio prorrateo individual via factorProrateoDelMes -- no
+// hace falta ningun prorrateo "combinado" nuevo.
+export function usuariosConContratosSolapados<T extends ContratoConVigencia>(contratos: T[]): Set<number> {
+  const porUsuario = new Map<number, T[]>();
+  for (const c of contratos) {
+    const lista = porUsuario.get(c.ID_USUARIO) ?? [];
+    lista.push(c);
+    porUsuario.set(c.ID_USUARIO, lista);
+  }
+
+  const conConflicto = new Set<number>();
+  for (const [idUsuario, lista] of porUsuario) {
+    if (lista.length < 2) continue;
+    for (let i = 0; i < lista.length; i++) {
+      for (let j = i + 1; j < lista.length; j++) {
+        if (seSuperponen(lista[i], lista[j])) {
+          conConflicto.add(idUsuario);
+        }
+      }
+    }
+  }
+  return conConflicto;
+}

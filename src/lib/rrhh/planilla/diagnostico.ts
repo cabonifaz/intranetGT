@@ -4,7 +4,7 @@ import { listarConceptosContrato } from "@/lib/db/repositories/contrato.reposito
 import { obtenerParametroVigente } from "@/lib/db/repositories/rrhh-planilla-parametro.repository";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { obtenerParametrosVigentes } from "./parametros";
-import { generarPeriodosPendientes, etiquetaPeriodoMensual } from "@/lib/rrhh/periodos-pago";
+import { generarPeriodosPendientes, etiquetaPeriodoMensual, usuariosConContratosSolapados } from "@/lib/rrhh/periodos-pago";
 import type { AfpFondoCodigo, PlanillaContratoElegibleRow } from "@/types/db";
 
 // Repasa, sin persistir nada, las mismas condiciones que
@@ -64,19 +64,21 @@ export async function diagnosticarGeneracionPlanilla(
 
   const vigentesEsteMesTodos = contratos.filter((c) => esVigenteEnMes(c, inicioMes, finMes));
 
-  // Un colaborador no puede tener mas de un contrato vigente generando
-  // planilla el mismo mes (duplicaria su pago) -- si tiene 2+, se separan
-  // en su propia categoria y se excluyen del resto del diagnostico (y de
-  // la generacion real, ver generarPlanillaMensual) hasta que alguien
-  // revise cual de los contratos es el correcto.
+  // Un colaborador con 2+ contratos vigentes este mes solo es conflicto
+  // si esos contratos de verdad se solapan en fechas (ver
+  // usuariosConContratosSolapados) -- si no se solapan (ej. uno termina
+  // el 20 y el siguiente empieza el 21), cada uno sigue de largo con su
+  // propio prorrateo, sin excluirse de este diagnostico ni de la
+  // generacion real (ver generarPlanillaMensual, mismo criterio).
   const contratosPorUsuario = new Map<number, PlanillaContratoElegibleRow[]>();
   for (const c of vigentesEsteMesTodos) {
     const lista = contratosPorUsuario.get(c.ID_USUARIO) ?? [];
     lista.push(c);
     contratosPorUsuario.set(c.ID_USUARIO, lista);
   }
+  const idsConSolapamientoReal = usuariosConContratosSolapados(vigentesEsteMesTodos);
   const colaboradoresConConflicto: ColaboradorConContratosEnConflicto[] = [...contratosPorUsuario.values()]
-    .filter((lista) => lista.length > 1)
+    .filter((lista) => idsConSolapamientoReal.has(lista[0].ID_USUARIO))
     .map((lista) => ({
       idUsuario: lista[0].ID_USUARIO,
       nombreCompleto: `${lista[0].NOMBRES} ${lista[0].APELLIDOS}`,
