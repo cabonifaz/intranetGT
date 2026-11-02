@@ -354,6 +354,19 @@ export async function generarPlanillaMensual(anio: number, mes: number, idUsuari
     const [contratos, detalleExistente] = await Promise.all([listarContratosElegibles(), listarDetalle(idPlanillaMensual)]);
     const yaProcesados = new Set(detalleExistente.map((d) => d.ID_CONTRATO));
 
+    // Si una persona ya tiene una fila PLANILLA este mes (de CUALQUIER
+    // contrato suyo -- la fila de un grupo consolidado solo queda
+    // asociada al contrato "dueño", nunca a los demas del grupo), no se
+    // vuelve a generar nada para ella aunque otro de sus contratos todavia
+    // no tenga fila propia -- si no, un contrato "miembro" (no dueño) de
+    // un grupo ya consolidado se reprocesaba solo en el siguiente llamado
+    // a esta funcion, generando una SEGUNDA fila separada para la misma
+    // persona (bug real, encontrado en produccion). LOCADOR no aplica --
+    // ese regimen si genera una fila por contrato/recibo legitimamente.
+    const usuariosYaCubiertos = new Set(
+      detalleExistente.filter((d) => d.TIPO_CONTRATO_CODIGO !== "LOCADOR").map((d) => d.ID_USUARIO),
+    );
+
     // Un colaborador con 2+ contratos vigentes este mes NO es conflicto
     // automatico -- solo lo es si esos contratos de verdad se solapan en
     // fechas (ej. uno termina el 20 y el siguiente empieza el 21: no hay
@@ -375,6 +388,7 @@ export async function generarPlanillaMensual(anio: number, mes: number, idUsuari
       if (c.TIPO_CONTRATO_CODIGO === "LOCADOR") continue;
       if (usuariosConConflicto.has(c.ID_USUARIO)) continue;
       if (yaProcesados.has(c.ID_CONTRATO)) continue;
+      if (usuariosYaCubiertos.has(c.ID_USUARIO)) continue;
       const lista = gruposPorUsuario.get(c.ID_USUARIO) ?? [];
       lista.push(c);
       gruposPorUsuario.set(c.ID_USUARIO, lista);
@@ -393,6 +407,7 @@ export async function generarPlanillaMensual(anio: number, mes: number, idUsuari
       if (idsConsolidados.has(contrato.ID_CONTRATO)) continue;
       if (!esVigenteEnMes(contrato, inicioMes, finMes)) continue;
       if (usuariosConConflicto.has(contrato.ID_USUARIO)) continue;
+      if (contrato.TIPO_CONTRATO_CODIGO !== "LOCADOR" && usuariosYaCubiertos.has(contrato.ID_USUARIO)) continue;
 
       if (contrato.TIPO_CONTRATO_CODIGO === "LOCADOR" && contrato.TIPO_PAGO_LOCADOR_CODIGO === "POR_HORA") {
         await procesarLocadorPorHora(idPlanillaMensual, contrato, periodo, anio, mes, parametros, idUsuario);

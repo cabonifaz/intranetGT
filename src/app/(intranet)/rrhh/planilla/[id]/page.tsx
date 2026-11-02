@@ -47,13 +47,7 @@ export default async function PlanillaMensualDetallePage({ params }: { params: P
   const planillaVaciaYaEmitida = emitida && filas.length === 0;
   const noEmitidos = filas.filter((f) => f.ESTADO_EMISION_CODIGO !== "EMITIDA");
 
-  const diagnostico = !emitida
-    ? await diagnosticarGeneracionPlanilla(
-        planilla.ANIO,
-        planilla.MES,
-        new Set(filas.map((f) => f.ID_CONTRATO)),
-      )
-    : null;
+  const diagnostico = !emitida ? await diagnosticarGeneracionPlanilla(planilla.ANIO, planilla.MES, filas) : null;
 
   return (
     <div>

@@ -5,7 +5,7 @@ import { obtenerParametroVigente } from "@/lib/db/repositories/rrhh-planilla-par
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { obtenerParametrosVigentes } from "./parametros";
 import { generarPeriodosPendientes, etiquetaPeriodoMensual, usuariosConContratosSolapados } from "@/lib/rrhh/periodos-pago";
-import type { AfpFondoCodigo, PlanillaContratoElegibleRow } from "@/types/db";
+import type { AfpFondoCodigo, PlanillaContratoElegibleRow, PlanillaDetalleListadoRow } from "@/types/db";
 
 // Repasa, sin persistir nada, las mismas condiciones que
 // generarPlanillaMensualAction usa para decidir si agrega o no a un
@@ -48,8 +48,17 @@ function esVigenteEnMes(contrato: PlanillaContratoElegibleRow, inicioMes: string
 export async function diagnosticarGeneracionPlanilla(
   anio: number,
   mes: number,
-  contratosYaEnPlanilla: Set<number> = new Set(),
+  filasYaEnPlanilla: PlanillaDetalleListadoRow[] = [],
 ): Promise<DiagnosticoGeneracionPlanilla> {
+  const contratosYaEnPlanilla = new Set(filasYaEnPlanilla.map((f) => f.ID_CONTRATO));
+  // Mismo criterio que generarPlanillaMensual: si la persona ya tiene una
+  // fila PLANILLA este mes (de cualquiera de sus contratos -- una fila
+  // consolidada solo queda asociada al contrato "dueño"), no se le vuelve
+  // a listar como pendiente otro de sus contratos "miembro" sin fila
+  // propia.
+  const usuariosYaCubiertos = new Set(
+    filasYaEnPlanilla.filter((f) => f.TIPO_CONTRATO_CODIGO !== "LOCADOR").map((f) => f.ID_USUARIO),
+  );
   const periodo = etiquetaPeriodoMensual(anio, mes - 1);
   const buscado = periodo.trim().toUpperCase();
   const inicioMes = `${anio}-${String(mes).padStart(2, "0")}-01`;
@@ -92,7 +101,10 @@ export async function diagnosticarGeneracionPlanilla(
   const idsUsuarioConConflicto = new Set(colaboradoresConConflicto.map((c) => c.idUsuario));
 
   const vigentesEsteMes = vigentesEsteMesTodos.filter(
-    (c) => !contratosYaEnPlanilla.has(c.ID_CONTRATO) && !idsUsuarioConConflicto.has(c.ID_USUARIO),
+    (c) =>
+      !contratosYaEnPlanilla.has(c.ID_CONTRATO) &&
+      !idsUsuarioConConflicto.has(c.ID_USUARIO) &&
+      !(c.TIPO_CONTRATO_CODIGO !== "LOCADOR" && usuariosYaCubiertos.has(c.ID_USUARIO)),
   );
 
   const descripcionPorCodigoFondo = new Map(fondosAfp.map((f) => [f.CODIGO, f.DESCRIPCION]));
