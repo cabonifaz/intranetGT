@@ -8,6 +8,7 @@ import {
   listarHorasContrato,
 } from "@/lib/db/repositories/contrato.repository";
 import { listarPeriodosPago } from "@/lib/db/repositories/rrhh-periodo-pago.repository";
+import { etiquetaPeriodoMensual } from "@/lib/rrhh/periodos-pago";
 import { listarMaestros } from "@/lib/db/repositories/maestro.repository";
 import { listarProyectos } from "@/lib/db/repositories/proyecto.repository";
 import { listarCuentas } from "@/lib/db/repositories/cuenta.repository";
@@ -41,6 +42,24 @@ import {
   actualizarFuncionesContratoAction,
   eliminarContratoAction,
 } from "@/lib/actions/rrhh";
+
+// Opciones de periodo para la carga de horas -- antes era un input de
+// texto libre (placeholder "JUNIO 2026" solo como ejemplo), y cualquier
+// variacion de formato (ej. "OCTUBRE" sin el anio) hacia que
+// SP_RRHH_PLANILLA_CONTRATO_HORAS_DEL_PERIODO_LISTAR (match exacto de
+// string) nunca encontrara esas horas al generar la planilla -- fallaba
+// en silencio, sin ningun error visible (caso real: contrato de Denis
+// Alcantara). Con un <select> ya no se puede escribir un periodo que no
+// calce con lo que la planilla busca.
+function opcionesPeriodoHoras(): string[] {
+  const hoy = new Date();
+  const opciones: string[] = [];
+  for (let offset = 1; offset >= -6; offset--) {
+    const fecha = new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1);
+    opciones.push(etiquetaPeriodoMensual(fecha.getFullYear(), fecha.getMonth()));
+  }
+  return opciones;
+}
 
 function formatearFecha(fecha: string | null): string {
   if (!fecha) return "-";
@@ -473,7 +492,16 @@ export default async function DetalleContratoPage({
               </div>
               <div>
                 <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Periodo</label>
-                <input name="periodo" placeholder="JUNIO 2026" required className="w-32 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+                <select
+                  name="periodo"
+                  defaultValue={etiquetaPeriodoMensual(new Date().getFullYear(), new Date().getMonth())}
+                  required
+                  className="w-40 rounded-lg border border-slate-300 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                >
+                  {opcionesPeriodoHoras().map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Horas</label>
