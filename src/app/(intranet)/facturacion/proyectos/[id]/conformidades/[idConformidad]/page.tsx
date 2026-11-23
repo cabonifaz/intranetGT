@@ -3,13 +3,12 @@ import { notFound, redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/get-current-user";
 import { obtenerPermisosUsuario } from "@/lib/db/repositories/permiso.repository";
 import { tienePermiso } from "@/lib/rbac/permissions";
-import { obtenerConformidad, listarItemsConformidad } from "@/lib/db/repositories/proyecto-conformidad.repository";
+import { obtenerConformidad, listarItemsConformidad, listarFirmantesConformidad } from "@/lib/db/repositories/proyecto-conformidad.repository";
 import { reabrirConformidadAction, eliminarConformidadAction } from "@/lib/actions/proyecto-conformidad";
 import PasosConformidad from "@/components/facturacion/PasosConformidad";
 import ConformidadItemsEditor from "@/components/facturacion/ConformidadItemsEditor";
 import EmitirConformidadBoton from "@/components/facturacion/EmitirConformidadBoton";
-import GenerarLinkConformidadButton from "@/components/facturacion/GenerarLinkConformidadButton";
-import SubirConformidadFirmadaForm from "@/components/facturacion/SubirConformidadFirmadaForm";
+import FirmantesConformidad from "@/components/facturacion/FirmantesConformidad";
 import AnularConformidadBoton from "@/components/facturacion/AnularConformidadBoton";
 import ConfirmSubmitButton from "@/components/ui/ConfirmSubmitButton";
 
@@ -41,11 +40,13 @@ export default async function ConformidadDetallePage({
   if (!conformidad || conformidad.ID_PROYECTO !== idProyecto) notFound();
 
   const items = await listarItemsConformidad(idConformidad);
+  const firmantes = await listarFirmantesConformidad(idConformidad);
 
   const esBorrador = conformidad.ESTADO_CONFORMIDAD_CODIGO === "BORRADOR";
   const esEmitida = conformidad.ESTADO_CONFORMIDAD_CODIGO === "EMITIDA";
   const esFirmada = conformidad.ESTADO_CONFORMIDAD_CODIGO === "FIRMADA";
   const esAnulada = conformidad.ESTADO_CONFORMIDAD_CODIGO === "ANULADA";
+  const algunFirmanteYaFirmo = firmantes.some((f) => f.FECHA_FIRMA !== null);
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -64,6 +65,8 @@ export default async function ConformidadDetallePage({
         estadoCodigo={conformidad.ESTADO_CONFORMIDAD_CODIGO}
         fechaEmision={conformidad.FECHA_EMISION}
         fechaFirma={conformidad.FECHA_FIRMA}
+        totalFirmantes={conformidad.TOTAL_FIRMANTES}
+        firmantesFirmados={conformidad.FIRMANTES_FIRMADOS}
       />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
@@ -124,29 +127,45 @@ export default async function ConformidadDetallePage({
         </section>
       ) : null}
 
-      {puedeGestionar && esEmitida ? (
+      {esEmitida || esFirmada ? (
         <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Firma del cliente</h2>
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-white">Firmantes</h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            El cliente puede firmar él mismo por el link, o puedes subir el documento si lo firmó en papel.
+            {esFirmada
+              ? "Ya está completa -- si hace falta sumar otro firmante, se vuelve a marcar como pendiente hasta que también firme."
+              : "Cada firmante puede firmar él mismo por su propio link, o puedes subir el documento si firmó en papel. La conformidad queda completa recién cuando todos hayan firmado."}
           </p>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <GenerarLinkConformidadButton idConformidad={idConformidad} />
-            <SubirConformidadFirmadaForm idConformidad={idConformidad} idProyecto={idProyecto} />
+          <div className="mt-3">
+            <FirmantesConformidad
+              idConformidad={idConformidad}
+              idProyecto={idProyecto}
+              firmantes={firmantes}
+              puedeAgregar={puedeGestionar}
+              puedeGestionar={puedeGestionar}
+            />
           </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-            <form action={reabrirConformidadAction}>
-              <input type="hidden" name="idConformidad" value={idConformidad} />
-              <input type="hidden" name="idProyecto" value={idProyecto} />
-              <ConfirmSubmitButton
-                mensaje="¿Reabrir esta conformidad para corregir los items? Se borra el PDF ya generado y cualquier link de firma activo."
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-              >
-                Reabrir
-              </ConfirmSubmitButton>
-            </form>
-            <AnularConformidadBoton idConformidad={idConformidad} idProyecto={idProyecto} />
-          </div>
+
+          {puedeGestionar && esEmitida ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+              {algunFirmanteYaFirmo ? (
+                <span className="text-xs text-slate-400 dark:text-slate-500">
+                  Ya no se puede reabrir para editar items -- al menos un firmante ya firmó.
+                </span>
+              ) : (
+                <form action={reabrirConformidadAction}>
+                  <input type="hidden" name="idConformidad" value={idConformidad} />
+                  <input type="hidden" name="idProyecto" value={idProyecto} />
+                  <ConfirmSubmitButton
+                    mensaje="¿Reabrir esta conformidad para corregir los items? Se borra el PDF ya generado y los firmantes agregados hasta ahora."
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    Reabrir
+                  </ConfirmSubmitButton>
+                </form>
+              )}
+              <AnularConformidadBoton idConformidad={idConformidad} idProyecto={idProyecto} />
+            </div>
+          ) : null}
         </section>
       ) : null}
 

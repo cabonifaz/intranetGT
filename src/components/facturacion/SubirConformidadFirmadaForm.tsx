@@ -1,14 +1,23 @@
 "use client";
 
-import { subirConformidadFirmadaAction } from "@/lib/actions/proyecto-conformidad";
+import { subirFirmanteFirmadoAction } from "@/lib/actions/proyecto-conformidad";
 import SubmitButton from "@/components/ui/SubmitButton";
 
-// Alternativa al link publico: el cliente firmo en papel y se sube el
-// documento ya firmado (escaneado o foto) -- mismo patron de archivo que
-// subirCompromisoFirmadoAction (Prestamos).
-export default function SubirConformidadFirmadaForm({ idConformidad, idProyecto }: { idConformidad: number; idProyecto: number }) {
+// Alternativa al link publico: ESTE firmante puntual firmo en papel y se
+// sube el documento ya firmado (escaneado o foto) -- mismo patron de
+// archivo que subirCompromisoFirmadoAction (Prestamos).
+export default function SubirConformidadFirmadaForm({
+  idFirmante,
+  idConformidad,
+  idProyecto,
+}: {
+  idFirmante: number;
+  idConformidad: number;
+  idProyecto: number;
+}) {
   return (
-    <form action={subirConformidadFirmadaAction} className="flex flex-wrap items-end gap-2">
+    <form action={subirFirmanteFirmadoAction} className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="idFirmante" value={idFirmante} />
       <input type="hidden" name="idConformidad" value={idConformidad} />
       <input type="hidden" name="idProyecto" value={idProyecto} />
       <input

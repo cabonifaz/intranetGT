@@ -13,6 +13,11 @@ export interface PasosConformidadProps {
   estadoCodigo: EstadoConformidadCodigo | null; // null = todavia no se creo la conformidad
   fechaEmision: string | null;
   fechaFirma: string | null;
+  // Progreso de firmantes (puede haber 1 o varios, ver FirmantesConformidad.tsx)
+  // -- opcionales para no romper algun call-site viejo que no los pase;
+  // sin ellos el paso 3 se ve igual que antes (binario).
+  totalFirmantes?: number;
+  firmantesFirmados?: number;
   compact?: boolean;
 }
 
@@ -27,10 +32,20 @@ function formatearFecha(fecha: string | null): string {
   return new Date(fecha).toLocaleDateString("es-PE", { dateStyle: "medium" });
 }
 
-export default function PasosConformidad({ totalItems, estadoCodigo, fechaEmision, fechaFirma, compact = false }: PasosConformidadProps) {
+export default function PasosConformidad({
+  totalItems,
+  estadoCodigo,
+  fechaEmision,
+  fechaFirma,
+  totalFirmantes,
+  firmantesFirmados,
+  compact = false,
+}: PasosConformidadProps) {
   const anulada = estadoCodigo === "ANULADA";
   const emitida = estadoCodigo === "EMITIDA" || estadoCodigo === "FIRMADA";
   const firmada = estadoCodigo === "FIRMADA";
+  const hayVariosFirmantes = (totalFirmantes ?? 0) > 1;
+  const progresoFirmantes = `${firmantesFirmados ?? 0}/${totalFirmantes ?? 0}`;
 
   const pasos: Paso[] = [
     {
@@ -44,9 +59,15 @@ export default function PasosConformidad({ totalItems, estadoCodigo, fechaEmisio
       tooltip: anulada ? "Conformidad anulada" : emitida ? `Emitida el ${formatearFecha(fechaEmision)}` : "Pendiente de emitir el documento",
     },
     {
-      etiqueta: "Firmada",
+      etiqueta: hayVariosFirmantes ? `Firmada (${progresoFirmantes})` : "Firmada",
       hecho: firmada,
-      tooltip: anulada ? "Conformidad anulada" : firmada ? `Firmada el ${formatearFecha(fechaFirma)}` : "Pendiente de firma del cliente",
+      tooltip: anulada
+        ? "Conformidad anulada"
+        : firmada
+          ? `Firmada el ${formatearFecha(fechaFirma)}${hayVariosFirmantes ? ` -- ${progresoFirmantes} firmantes` : ""}`
+          : hayVariosFirmantes
+            ? `Faltan firmar ${(totalFirmantes ?? 0) - (firmantesFirmados ?? 0)} de ${totalFirmantes} firmantes`
+            : "Pendiente de firma",
     },
   ];
 

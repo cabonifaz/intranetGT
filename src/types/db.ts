@@ -933,9 +933,13 @@ export interface ProyectoHitoPendienteRow extends ProyectoHitoRow {
 export type EstadoConformidadCodigo = "BORRADOR" | "EMITIDA" | "FIRMADA" | "ANULADA";
 
 // Detalle completo de una conformidad (SP_PROYECTO_CONFORMIDAD_OBTENER /
-// _OBTENER_POR_HITO / _OBTENER_POR_TOKEN -- mismo shape, solo cambia el
-// WHERE), con los datos del hito/proyecto/cliente ya resueltos para no
-// tener que pedirlos aparte (PDF, pantalla de edicion, pagina publica).
+// _OBTENER_POR_HITO -- mismo shape, solo cambia el WHERE), con los datos
+// del hito/proyecto/cliente ya resueltos para no tener que pedirlos
+// aparte (PDF, pantalla de edicion). La firma ya no vive aca -- ver
+// ProyectoConformidadFirmanteRow (N firmantes por conformidad,
+// 054_proyecto_conformidad_firmante.sql); TOTAL_FIRMANTES/FIRMANTES_FIRMADOS
+// son el progreso agregado para no tener que pedir la lista completa
+// solo para mostrar "2 de 3".
 export interface ProyectoConformidadRow extends RowDataPacket {
   ID_CONFORMIDAD: number;
   ID_HITO: number;
@@ -946,12 +950,8 @@ export interface ProyectoConformidadRow extends RowDataPacket {
   ESTADO_CONFORMIDAD_DESCRIPCION: string;
   DOCUMENTO_PATH: string | null;
   DOCUMENTO_FIRMADO_PATH: string | null;
-  FIRMA_PNG_PATH: string | null;
   FECHA_EMISION: string | null;
   FECHA_FIRMA: string | null;
-  USUARIO_FIRMA_REGISTRO: number | null;
-  TOKEN_FIRMA: string | null;
-  TOKEN_EXPIRA: string | null;
   MOTIVO_ANULACION: string | null;
   FECHA_ANULACION: string | null;
   HITO_NOMBRE: string;
@@ -963,6 +963,8 @@ export interface ProyectoConformidadRow extends RowDataPacket {
   CLIENTE_RAZON_SOCIAL: string | null;
   CLIENTE_RUC: string | null;
   TOTAL_ITEMS: number;
+  TOTAL_FIRMANTES: number;
+  FIRMANTES_FIRMADOS: number;
 }
 
 // Para la matriz de cumplimiento del proyecto (SP_PROYECTO_CONFORMIDAD_LISTAR_POR_PROYECTO)
@@ -977,6 +979,8 @@ export interface ProyectoConformidadMatrizRow extends RowDataPacket {
   FECHA_EMISION: string | null;
   FECHA_FIRMA: string | null;
   TOTAL_ITEMS: number;
+  TOTAL_FIRMANTES: number;
+  FIRMANTES_FIRMADOS: number;
 }
 
 export interface ProyectoConformidadItemRow extends RowDataPacket {
@@ -984,6 +988,62 @@ export interface ProyectoConformidadItemRow extends RowDataPacket {
   ID_CONFORMIDAD: number;
   ORDEN: number;
   DESCRIPCION: string;
+}
+
+// Un firmante de una conformidad (ver 054_proyecto_conformidad_firmante.sql)
+// -- "firmado" se deriva de FECHA_FIRMA !== null, no hay un estado
+// aparte. TOKEN_FIRMA/TOKEN_EXPIRA solo mientras tiene un link activo
+// (se limpian al firmar).
+export interface ProyectoConformidadFirmanteRow extends RowDataPacket {
+  ID_FIRMANTE: number;
+  ID_CONFORMIDAD: number;
+  NOMBRE: string;
+  CARGO: string | null;
+  ORDEN: number;
+  FIRMA_PNG_PATH: string | null;
+  DOCUMENTO_FIRMADO_INDIVIDUAL_PATH: string | null;
+  FECHA_FIRMA: string | null;
+  USUARIO_FIRMA_REGISTRO: number | null;
+  TOKEN_FIRMA: string | null;
+  TOKEN_EXPIRA: string | null;
+}
+
+// Para la descarga protegida del documento individual de un firmante
+// (SP_PROYECTO_CONFORMIDAD_FIRMANTE_OBTENER).
+export interface ProyectoConformidadFirmanteDetalleRow extends RowDataPacket {
+  ID_FIRMANTE: number;
+  ID_CONFORMIDAD: number;
+  NOMBRE: string;
+  CARGO: string | null;
+  FIRMA_PNG_PATH: string | null;
+  DOCUMENTO_FIRMADO_INDIVIDUAL_PATH: string | null;
+  FECHA_FIRMA: string | null;
+}
+
+// Para la pagina publica de firma (SP_PROYECTO_CONFORMIDAD_FIRMANTE_OBTENER_POR_TOKEN)
+// -- datos del firmante puntual + el contexto de la conformidad/hito/
+// proyecto/cliente que la pagina necesita mostrar, en un solo viaje.
+export interface ProyectoConformidadFirmantePublicoRow extends RowDataPacket {
+  ID_FIRMANTE: number;
+  ID_CONFORMIDAD: number;
+  FIRMANTE_NOMBRE: string;
+  FIRMANTE_CARGO: string | null;
+  FECHA_FIRMA: string | null;
+  TOKEN_FIRMA: string | null;
+  TOKEN_EXPIRA: string | null;
+  TITULO: string;
+  ID_ESTADO_CONFORMIDAD: number;
+  ESTADO_CONFORMIDAD_CODIGO: EstadoConformidadCodigo;
+  DOCUMENTO_PATH: string | null;
+  FECHA_EMISION: string | null;
+  HITO_NOMBRE: string;
+  HITO_MONTO: string;
+  PROYECTO_NOMBRE: string;
+  ID_MONEDA: number;
+  MONEDA_CODIGO: MonedaCodigo;
+  ID_CLIENTE: number | null;
+  CLIENTE_RAZON_SOCIAL: string | null;
+  CLIENTE_RUC: string | null;
 }
 
 // Cross-proyecto (SP_PROYECTO_HITO_LISTAR_IGV_PENDIENTE) -- para la

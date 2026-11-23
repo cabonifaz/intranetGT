@@ -1,15 +1,16 @@
 import { PdfWriter } from "@/lib/rrhh/pdf-writer";
 import { EMPLEADOR, formatearFechaCorta } from "@/lib/rrhh/plantilla-tokens";
 
-// Documento de conformidad de un hito de facturacion: el cliente firma
-// dando conformidad al entregable descrito en los items, y esa firma es
-// el respaldo para poder marcar el hito como facturado (ver guard en
-// SP_PROYECTO_HITO_MARCAR_FACTURADO). Se genera dos veces: al emitir (sin
-// firma, queda como DOCUMENTO_PATH) y al firmar por el link publico (con
-// firmaClientePngBytes, queda como DOCUMENTO_FIRMADO_PATH) -- mismo
-// criterio que generar-compromiso-prestamo-pdf.ts. La empresa nunca
-// firma digitalmente, solo se imprime el nombre de su representante
-// (mismo criterio que Contratos/Prestamos).
+// Documento de conformidad de un hito de facturacion: 1 o varios
+// firmantes dan conformidad al entregable descrito en los items, y esa(s)
+// firma(s) son el respaldo para poder marcar el hito como facturado (ver
+// guard en SP_PROYECTO_HITO_MARCAR_FACTURADO). Se genera al emitir (sin
+// firmantes todavia, queda como DOCUMENTO_PATH) y se regenera cada vez
+// que alguien firma (con el estado actual de TODOS los firmantes, ver
+// regenerarDocumentoFirmadoConformidad, queda como DOCUMENTO_FIRMADO_PATH)
+// -- mismo criterio que generar-compromiso-prestamo-pdf.ts. La empresa
+// nunca firma digitalmente, solo se imprime el nombre de su
+// representante (mismo criterio que Contratos/Prestamos).
 
 function formatearNroConformidad(idConformidad: number): string {
   return `CONF#${new Date().getFullYear()}-${String(idConformidad).padStart(4, "0")}`;
@@ -22,6 +23,17 @@ function moneda(monto: number, codigo: string): string {
 
 export interface ItemConformidadPdf {
   descripcion: string;
+}
+
+// Un firmante en el PDF: firmaPngBytes null si todavia no firmo (su
+// casillero sale con la linea en blanco, igual que la fila de la
+// empresa) -- el documento combinado se regenera cada vez que alguien
+// firma, asi que siempre refleja el estado actual de TODOS los
+// firmantes, no solo del que acaba de firmar.
+export interface FirmanteConformidadPdf {
+  nombre: string;
+  cargo: string | null;
+  firmaPngBytes: Uint8Array | null;
 }
 
 export interface DatosConformidadPdf {
@@ -37,9 +49,10 @@ export interface DatosConformidadPdf {
   items: ItemConformidadPdf[];
   logoBytes: Uint8Array | null;
   logoFormato: "png" | "jpg" | null;
-  // Firma dibujada/subida por el cliente via el link publico -- null para
-  // la vista previa sin firmar (el documento que se genera al Emitir).
-  firmaClientePngBytes?: Uint8Array | null;
+  // Firmantes del lado cliente, en el orden en que deben imprimirse.
+  // Vacio durante la vista previa sin firmar que se genera al Emitir
+  // (todavia no se agrego a nadie).
+  firmantes: FirmanteConformidadPdf[];
 }
 
 export async function generarConformidadPdf(datos: DatosConformidadPdf): Promise<Uint8Array> {
@@ -70,10 +83,14 @@ export async function generarConformidadPdf(datos: DatosConformidadPdf): Promise
     { justificar: false },
   );
 
-  writer.parrafo(
-    `Con la firma de este documento, EL CLIENTE declara haber recibido y revisado el entregable descrito a continuación, ` +
-      `y otorga su conformidad a ${EMPLEADOR.razonSocial} para efectos de la facturación correspondiente a este hito.`,
-  );
+  const declaracion =
+    datos.firmantes.length > 1
+      ? `Con la firma de este documento, LOS FIRMANTES declaran haber recibido y revisado el entregable descrito a continuación, ` +
+        `y otorgan su conformidad a ${EMPLEADOR.razonSocial} para efectos de la facturación correspondiente a este hito. ` +
+        `La conformidad se considera completa solo cuando TODOS los firmantes indicados al pie hayan firmado.`
+      : `Con la firma de este documento, EL CLIENTE declara haber recibido y revisado el entregable descrito a continuación, ` +
+        `y otorga su conformidad a ${EMPLEADOR.razonSocial} para efectos de la facturación correspondiente a este hito.`;
+  writer.parrafo(declaracion);
 
   writer.subtitulo("Items de la conformidad");
   const filasItems = datos.items.map((item, i) => `| ${i + 1} | ${item.descripcion} |`);
@@ -81,13 +98,16 @@ export async function generarConformidadPdf(datos: DatosConformidadPdf): Promise
 
   writer.espacio(14);
 
-  await writer.firmasEnColumnas(
+  const rolCliente = `POR EL CLIENTE${datos.clienteRuc ? ` - RUC ${datos.clienteRuc}` : ""}`;
+  await writer.firmasEnGrid(
     { nombre: EMPLEADOR.representanteNombre, rol: `POR ${EMPLEADOR.razonSocial}`, firmaPngBytes: null },
-    {
-      nombre: datos.clienteRazonSocial ?? "Cliente",
-      rol: `POR EL CLIENTE${datos.clienteRuc ? ` - RUC ${datos.clienteRuc}` : ""}`,
-      firmaPngBytes: datos.firmaClientePngBytes ?? null,
-    },
+    datos.firmantes.length > 0
+      ? datos.firmantes.map((f) => ({
+          nombre: f.nombre,
+          rol: f.cargo ? `${f.cargo} -- ${rolCliente}` : rolCliente,
+          firmaPngBytes: f.firmaPngBytes,
+        }))
+      : [{ nombre: datos.clienteRazonSocial ?? "Cliente", rol: rolCliente, firmaPngBytes: null }],
   );
 
   return writer.bytes();

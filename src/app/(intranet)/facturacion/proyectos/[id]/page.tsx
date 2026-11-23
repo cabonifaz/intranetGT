@@ -522,6 +522,8 @@ export default async function DetalleProyectoPage({
                             estadoCodigo={conformidadHito.ESTADO_CONFORMIDAD_CODIGO}
                             fechaEmision={conformidadHito.FECHA_EMISION}
                             fechaFirma={conformidadHito.FECHA_FIRMA}
+                            totalFirmantes={conformidadHito.TOTAL_FIRMANTES}
+                            firmantesFirmados={conformidadHito.FIRMANTES_FIRMADOS}
                           />
                         </Link>
                       ) : (

@@ -1,4 +1,4 @@
-import { obtenerConformidadPorToken, listarItemsConformidad } from "@/lib/db/repositories/proyecto-conformidad.repository";
+import { obtenerFirmanteConformidadPorToken, listarItemsConformidad } from "@/lib/db/repositories/proyecto-conformidad.repository";
 import FirmarConformidadForm from "@/components/facturacion/FirmarConformidadForm";
 import { tieneFormaDeToken } from "@/lib/validar-token";
 
@@ -12,15 +12,18 @@ function estaVencido(tokenExpira: string | null): boolean {
 }
 
 // Publica, sin sesion -- misma logica que /prestamos/firmar/[token]:
-// token invalido/usado y token vencido muestran mensajes distintos. Aca
-// solo firma EL CLIENTE -- la empresa nunca firma digitalmente, solo se
-// imprime el nombre de su representante (ver generar-conformidad-pdf.ts).
+// token invalido/usado y token vencido muestran mensajes distintos. El
+// token identifica a UN firmante puntual (una conformidad puede pedir la
+// firma de varias personas, cada una con su propio link, ver
+// proyecto-conformidad.repository.ts) -- la empresa nunca firma
+// digitalmente, solo se imprime el nombre de su representante (ver
+// generar-conformidad-pdf.ts).
 export default async function FirmarConformidadPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const conformidad = tieneFormaDeToken(token) ? await obtenerConformidadPorToken(token) : null;
+  const firmante = tieneFormaDeToken(token) ? await obtenerFirmanteConformidadPorToken(token) : null;
 
-  const invalido = !conformidad || conformidad.ESTADO_CONFORMIDAD_CODIGO !== "EMITIDA";
-  const vencido = estaVencido(conformidad?.TOKEN_EXPIRA ?? null);
+  const invalido = !firmante || firmante.ESTADO_CONFORMIDAD_CODIGO !== "EMITIDA" || firmante.FECHA_FIRMA !== null;
+  const vencido = estaVencido(firmante?.TOKEN_EXPIRA ?? null);
 
   if (invalido || vencido) {
     return (
@@ -35,27 +38,27 @@ export default async function FirmarConformidadPage({ params }: { params: Promis
     );
   }
 
-  const items = await listarItemsConformidad(conformidad.ID_CONFORMIDAD);
+  const items = await listarItemsConformidad(firmante.ID_CONFORMIDAD);
 
   return (
     <div>
       <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h1 className="text-lg font-semibold text-slate-800 dark:text-white">{conformidad.TITULO}</h1>
+        <h1 className="text-lg font-semibold text-slate-800 dark:text-white">{firmante.TITULO}</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Revisa los items de este entregable y da tu conformidad firmando abajo.
+          Hola {firmante.FIRMANTE_NOMBRE}, revisa los items de este entregable y da tu conformidad firmando abajo.
         </p>
         <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-slate-500 dark:text-slate-400">Proyecto</dt>
-            <dd className="text-slate-800 dark:text-slate-200">{conformidad.PROYECTO_NOMBRE}</dd>
+            <dd className="text-slate-800 dark:text-slate-200">{firmante.PROYECTO_NOMBRE}</dd>
           </div>
           <div>
             <dt className="text-slate-500 dark:text-slate-400">Hito / entregable</dt>
-            <dd className="text-slate-800 dark:text-slate-200">{conformidad.HITO_NOMBRE}</dd>
+            <dd className="text-slate-800 dark:text-slate-200">{firmante.HITO_NOMBRE}</dd>
           </div>
           <div>
             <dt className="text-slate-500 dark:text-slate-400">Monto</dt>
-            <dd className="text-slate-800 dark:text-slate-200">{formatearMonto(conformidad.HITO_MONTO, conformidad.MONEDA_CODIGO)}</dd>
+            <dd className="text-slate-800 dark:text-slate-200">{formatearMonto(firmante.HITO_MONTO, firmante.MONEDA_CODIGO)}</dd>
           </div>
         </dl>
 

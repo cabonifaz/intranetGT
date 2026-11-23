@@ -393,6 +393,34 @@ export class PdfWriter {
     this.y = yTop - altoBloque;
   }
 
+  // Firmas de la empresa + N firmantes (conformidad de cliente con
+  // varios firmantes, ver proyecto-conformidad -- firmasEnColumnas de
+  // arriba sigue intacta para Prestamos/Contratos, que siempre son 1
+  // firmante). Fila 1 = empresa + primer firmante (mismo layout de 2
+  // columnas, asi que con 1 solo firmante se ve identico a
+  // firmasEnColumnas); los firmantes restantes se acomodan de a 2 por
+  // fila debajo, con salto de pagina automatico si no alcanza el
+  // espacio (asegurarEspacio por fila).
+  async firmasEnGrid(
+    empresa: { nombre: string; rol: string; firmaPngBytes: Uint8Array | null },
+    firmantes: { nombre: string; rol: string; firmaPngBytes: Uint8Array | null }[],
+  ): Promise<void> {
+    const bloques = [empresa, ...firmantes];
+    const altoBloque = 90;
+    const espacioEntreColumnas = 30;
+    const anchoCol = (ANCHO_UTIL - espacioEntreColumnas) / 2;
+
+    for (let i = 0; i < bloques.length; i += 2) {
+      this.asegurarEspacio(altoBloque);
+      const yTop = this.y;
+      await this.dibujarColumnaFirma(bloques[i], MARGEN, yTop, anchoCol);
+      if (bloques[i + 1]) {
+        await this.dibujarColumnaFirma(bloques[i + 1], MARGEN + anchoCol + espacioEntreColumnas, yTop, anchoCol);
+      }
+      this.y = yTop - altoBloque;
+    }
+  }
+
   private async dibujarColumnaFirma(
     datos: { nombre: string; rol: string; firmaPngBytes: Uint8Array | null },
     x: number,

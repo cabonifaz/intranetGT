@@ -43,6 +43,8 @@ export default function MatrizConformidadesProyecto({
                     estadoCodigo={c.ESTADO_CONFORMIDAD_CODIGO}
                     fechaEmision={c.FECHA_EMISION}
                     fechaFirma={c.FECHA_FIRMA}
+                    totalFirmantes={c.TOTAL_FIRMANTES}
+                    firmantesFirmados={c.FIRMANTES_FIRMADOS}
                   />
                 </td>
                 <td className="px-2 py-2 text-right">

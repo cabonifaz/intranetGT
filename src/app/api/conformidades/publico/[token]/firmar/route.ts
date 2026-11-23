@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
-import {
-  obtenerConformidadPorToken,
-  listarItemsConformidad,
-  registrarFirmaConformidad,
-} from "@/lib/db/repositories/proyecto-conformidad.repository";
-import { generarConformidadPdf } from "@/lib/proyectos/generar-conformidad-pdf";
-import { cargarLogoEmpresa } from "@/lib/rrhh/resolver-plantilla";
-import { guardarArchivo } from "@/lib/storage/local-storage";
+import { obtenerFirmanteConformidadPorToken, registrarFirmaFirmanteConformidad } from "@/lib/db/repositories/proyecto-conformidad.repository";
+import { regenerarDocumentoFirmadoConformidad } from "@/lib/proyectos/conformidad-firmado";
+import { guardarArchivo, leerArchivo } from "@/lib/storage/local-storage";
 import { tieneFormaDeToken } from "@/lib/validar-token";
 
 function decodificarFirmaPng(dataUrl: string): Buffer {
@@ -14,22 +9,25 @@ function decodificarFirmaPng(dataUrl: string): Buffer {
   return Buffer.from(base64, "base64");
 }
 
-// Firma de la conformidad por el cliente, sin sesion (link publico con
-// token, ver /conformidades/firmar/[token]). Sin idUsuario de sesion --
-// registrarFirmaConformidad acepta null ahi, igual que el flujo manual
-// del gestor (subirConformidadFirmadaAction) pero identificando que fue
-// una autofirma por venir sin usuario.
+// Firma de UN firmante puntual de la conformidad, sin sesion (link
+// publico con token, ver /conformidades/firmar/[token] -- cada firmante
+// tiene su propio token). Sin idUsuario de sesion -- registrarFirmaFirmanteConformidad
+// acepta null ahi, igual que el flujo manual del gestor
+// (subirFirmanteFirmadoAction) pero identificando que fue una autofirma
+// por venir sin usuario. El PDF combinado (con el estado de TODOS los
+// firmantes, no solo este) se regenera en regenerarDocumentoFirmadoConformidad,
+// que tambien decide si con esta firma la conformidad ya quedo completa.
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const conformidad = tieneFormaDeToken(token) ? await obtenerConformidadPorToken(token) : null;
-  if (!conformidad) {
+  const firmante = tieneFormaDeToken(token) ? await obtenerFirmanteConformidadPorToken(token) : null;
+  if (!firmante) {
     return NextResponse.json({ error: "Link inválido." }, { status: 404 });
   }
-  if (conformidad.ESTADO_CONFORMIDAD_CODIGO !== "EMITIDA") {
+  if (firmante.ESTADO_CONFORMIDAD_CODIGO !== "EMITIDA" || firmante.FECHA_FIRMA !== null) {
     return NextResponse.json({ error: "Esta conformidad ya no está disponible para firmar." }, { status: 409 });
   }
-  if (!conformidad.TOKEN_EXPIRA || new Date(conformidad.TOKEN_EXPIRA).getTime() < Date.now()) {
+  if (!firmante.TOKEN_EXPIRA || new Date(firmante.TOKEN_EXPIRA).getTime() < Date.now()) {
     return NextResponse.json({ error: "El link de firma ha expirado. Pide a tu contacto que genere uno nuevo." }, { status: 410 });
   }
 
@@ -48,37 +46,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   }
 
   const firmaPngBytes = decodificarFirmaPng(body.firmaPngDataUrl);
-
-  const [items, logo] = await Promise.all([listarItemsConformidad(conformidad.ID_CONFORMIDAD), cargarLogoEmpresa()]);
-
-  const pdfBytes = await generarConformidadPdf({
-    idConformidad: conformidad.ID_CONFORMIDAD,
-    titulo: conformidad.TITULO,
-    nombreProyecto: conformidad.PROYECTO_NOMBRE,
-    clienteRazonSocial: conformidad.CLIENTE_RAZON_SOCIAL,
-    clienteRuc: conformidad.CLIENTE_RUC,
-    hitoNombre: conformidad.HITO_NOMBRE,
-    hitoMonto: Number(conformidad.HITO_MONTO),
-    monedaCodigo: conformidad.MONEDA_CODIGO,
-    fechaEmision: conformidad.FECHA_EMISION,
-    items: items.map((i) => ({ descripcion: i.DESCRIPCION })),
-    logoBytes: logo.logoBytes,
-    logoFormato: logo.logoFormato,
-    firmaClientePngBytes: firmaPngBytes,
-  });
-
-  const firmaPngPath = `proyectos/conformidades/${conformidad.ID_CONFORMIDAD}/firma-cliente.png`;
-  const documentoPath = `proyectos/conformidades/${conformidad.ID_CONFORMIDAD}/conformidad-firmada.pdf`;
-
+  const firmaPngPath = `proyectos/conformidades/${firmante.ID_CONFORMIDAD}/firmante-${firmante.ID_FIRMANTE}-firma.png`;
   await guardarArchivo(firmaPngPath, firmaPngBytes);
-  await guardarArchivo(documentoPath, pdfBytes);
 
-  await registrarFirmaConformidad(conformidad.ID_CONFORMIDAD, documentoPath, firmaPngPath, null);
+  await registrarFirmaFirmanteConformidad(firmante.ID_FIRMANTE, firmaPngPath, null, null);
+  await regenerarDocumentoFirmadoConformidad(firmante.ID_CONFORMIDAD);
+
+  const documentoPath = `proyectos/conformidades/${firmante.ID_CONFORMIDAD}/conformidad-firmada.pdf`;
+  const pdfBytes = await leerArchivo(documentoPath);
 
   return new NextResponse(new Uint8Array(pdfBytes), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="conformidad-${conformidad.ID_CONFORMIDAD}.pdf"`,
+      "Content-Disposition": `attachment; filename="conformidad-${firmante.ID_CONFORMIDAD}.pdf"`,
     },
   });
 }

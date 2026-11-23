@@ -1,14 +1,24 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { generarLinkConformidadAction, type GenerarLinkConformidadState } from "@/lib/actions/proyecto-conformidad";
+import { generarLinkFirmanteConformidadAction, type GenerarLinkConformidadState } from "@/lib/actions/proyecto-conformidad";
 import SubmitButton from "@/components/ui/SubmitButton";
 
 const ESTADO_INICIAL: GenerarLinkConformidadState = { ok: false };
 
-// Copia 1:1 del patron de GenerarLinkPrestamoButton.tsx.
-export default function GenerarLinkConformidadButton({ idConformidad }: { idConformidad: number }) {
-  const [estado, formAction] = useActionState(generarLinkConformidadAction, ESTADO_INICIAL);
+// Copia 1:1 del patron de GenerarLinkPrestamoButton.tsx, pero el link es
+// para UN firmante puntual (una conformidad puede pedir la firma de
+// varias personas, ver FirmantesConformidad.tsx).
+export default function GenerarLinkConformidadButton({
+  idFirmante,
+  idConformidad,
+  idProyecto,
+}: {
+  idFirmante: number;
+  idConformidad: number;
+  idProyecto: number;
+}) {
+  const [estado, formAction] = useActionState(generarLinkFirmanteConformidadAction, ESTADO_INICIAL);
   const [copiado, setCopiado] = useState(false);
 
   async function copiar() {
@@ -21,23 +31,23 @@ export default function GenerarLinkConformidadButton({ idConformidad }: { idConf
   return (
     <div>
       <form action={formAction}>
+        <input type="hidden" name="idFirmante" value={idFirmante} />
         <input type="hidden" name="idConformidad" value={idConformidad} />
+        <input type="hidden" name="idProyecto" value={idProyecto} />
         <SubmitButton
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
           pendingText="Generando..."
         >
           Generar link de firma
         </SubmitButton>
       </form>
 
-      {estado.error ? <p className="mt-2 text-sm text-red-600 dark:text-red-400">{estado.error}</p> : null}
+      {estado.error ? <p className="mt-2 text-xs text-red-600 dark:text-red-400">{estado.error}</p> : null}
 
       {estado.ok && estado.url ? (
-        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
+        <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs dark:border-emerald-900 dark:bg-emerald-950/30">
           <p className="font-mono break-all text-emerald-700 dark:text-emerald-400">{estado.url}</p>
-          <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-500">
-            Válido por 7 días. Compártelo con el cliente para que revise y firme su conformidad.
-          </p>
+          <p className="mt-1 text-emerald-600 dark:text-emerald-500">Válido por 7 días. Compártelo para que revise y firme.</p>
           <button
             type="button"
             onClick={copiar}
