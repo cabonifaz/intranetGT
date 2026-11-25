@@ -138,14 +138,17 @@ export interface PresentarDeclaracionState {
   error?: string;
 }
 
-// Si el periodo genero saldo a favor (IGV_RESULTANTE < 0 en la mensual,
-// SALDO_RENTA < 0 en la DJ anual), registra el INGRESO correspondiente en
-// la cuenta IGV_FAVOR/RENTA_FAVOR (ver obtenerCuentaPorTipo) ANTES de
+// Acredita/descuenta en Cuentas (ver presentar-declaracion.ts) ANTES de
 // pasar la declaracion a PRESENTADA -- mismo patron de dos pasos sin
-// transaccion anidada que ya usa pagarCuotaAction (Pasivos). Si esa
-// cuenta todavia no existe (nunca se creo desde Cuentas), la declaracion
-// igual se puede presentar, simplemente sin acreditar nada -- se avisa
-// en pantalla para que RRHH/Facturacion cree la cuenta si corresponde.
+// transaccion anidada que ya usa pagarCuotaAction (Pasivos). En la
+// mensual (IGV_FAVOR) se registra el DELTA contra el IGV resultante del
+// periodo anterior, nunca el monto bruto del mes (el IGV a favor rueda,
+// no se acumula mes a mes). En la DJ anual (RENTA_FAVOR) se acredita
+// completo si hay saldo a favor, porque cada ejercicio es independiente.
+// Si la cuenta correspondiente todavia no existe (nunca se creo desde
+// Cuentas), la declaracion igual se puede presentar, simplemente sin
+// acreditar/descontar nada -- se avisa en pantalla para que
+// RRHH/Facturacion cree la cuenta si corresponde.
 export async function presentarDeclaracionAction(
   _prevState: PresentarDeclaracionState,
   formData: FormData,

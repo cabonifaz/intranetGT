@@ -20,6 +20,7 @@ DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_PRESENTAR;
 DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_MARCAR_PAGADA;
 DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_ANULAR;
 DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_ELIMINAR;
+DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_IGV_RESULTANTE_ANTERIOR;
 
 DELIMITER $$
 
@@ -237,6 +238,29 @@ BEGIN
     DELETE d FROM DECLARACION_TRIBUTARIA d
       JOIN MAESTRO_MAESTRO e ON e.ID_MAESTRO = d.ID_ESTADO_DECLARACION
      WHERE d.ID_DECLARACION = p_id_declaracion AND e.CODIGO = 'BORRADOR';
+END$$
+
+-- El IGV resultante de la mensual inmediata anterior (ya presentada o
+-- pagada) a un periodo dado -- usado para acreditar/descontar por DELTA
+-- en la cuenta IGV_FAVOR en vez del monto bruto del mes (ver
+-- presentar-declaracion.ts: el IGV a favor es un saldo que rueda, cada
+-- PDT 621 ya neta el credito del periodo anterior contra el IGV del mes,
+-- asi que sumar el bruto de varios meses sobreestima el saldo real).
+-- ANULADA queda fuera a proposito (nunca se presento de verdad).
+CREATE PROCEDURE SP_DECLARACION_TRIBUTARIA_IGV_RESULTANTE_ANTERIOR(
+    IN p_anio SMALLINT UNSIGNED,
+    IN p_mes TINYINT UNSIGNED
+)
+BEGIN
+    SELECT d.IGV_RESULTANTE
+      FROM DECLARACION_TRIBUTARIA d
+      JOIN MAESTRO_MAESTRO t ON t.ID_MAESTRO = d.ID_TIPO_DECLARACION
+      JOIN MAESTRO_MAESTRO e ON e.ID_MAESTRO = d.ID_ESTADO_DECLARACION
+     WHERE t.CODIGO = 'IGV_RENTA_MENSUAL'
+       AND e.CODIGO IN ('PRESENTADA', 'PAGADA')
+       AND (d.ANIO < p_anio OR (d.ANIO = p_anio AND d.MES < p_mes))
+     ORDER BY d.ANIO DESC, d.MES DESC
+     LIMIT 1;
 END$$
 
 DELIMITER ;

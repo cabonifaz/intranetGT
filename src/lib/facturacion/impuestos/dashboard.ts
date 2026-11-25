@@ -35,8 +35,7 @@ export interface ResumenAnualImpuestos {
   totalComprasGravadas: number;
   totalIgvVentas: number;
   totalIgvCompras: number;
-  totalIgvPagado: number; // suma de IGV_RESULTANTE positivos
-  totalSaldoFavorIgvGenerado: number; // suma absoluta de IGV_RESULTANTE negativos
+  totalIgvPagado: number; // suma de IGV_RESULTANTE positivos -- esto SI se suma (cada mes es un pago real distinto)
   totalPagoACuentaRenta: number;
   tasaEfectivaPromedioPagoCuenta: number | null;
   djAnual: {
@@ -68,6 +67,14 @@ export interface ResumenImpuestos {
   vencidasSinPresentar: AlertaDeclaracion[];
   vencidasSinPagar: AlertaDeclaracion[];
   proximosVencimientos: AlertaDeclaracion[];
+  // El IGV a favor es un saldo que RUEDA mes a mes -- cada PDT 621 ya neta
+  // el credito del periodo anterior contra el IGV del mes, asi que NO se
+  // suma a traves de los meses (eso sobreestima groseramente el saldo
+  // real). Este es el saldo vigente HOY: el IGV_RESULTANTE (si es
+  // negativo) de la ultima mensual presentada/pagada, sin importar el año
+  // seleccionado -- mismo criterio que usa presentar-declaracion.ts para
+  // acreditar/descontar por delta en Cuentas.
+  igvFavorAlCorte: number;
 }
 
 const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
@@ -131,7 +138,6 @@ export function construirResumenImpuestos(todas: DeclaracionTributariaListadoRow
     mensual.reduce((acc, m) => acc + (m[campo] ?? 0), 0);
 
   const totalIgvPagado = mensual.reduce((acc, m) => acc + (m.igvResultante !== null && m.igvResultante > 0 ? m.igvResultante : 0), 0);
-  const totalSaldoFavorIgvGenerado = mensual.reduce((acc, m) => acc + (m.igvResultante !== null && m.igvResultante < 0 ? Math.abs(m.igvResultante) : 0), 0);
   const totalVentasGravadas = sumar("ventasGravadas");
   const totalPagoACuentaRenta = sumar("pagoACuentaRenta");
   const mesesConDatos = mensual.filter((m) => m.existe && m.ventasGravadas !== null).length;
@@ -147,7 +153,6 @@ export function construirResumenImpuestos(todas: DeclaracionTributariaListadoRow
     totalIgvVentas: sumar("igvVentas"),
     totalIgvCompras: sumar("igvCompras"),
     totalIgvPagado,
-    totalSaldoFavorIgvGenerado,
     totalPagoACuentaRenta,
     tasaEfectivaPromedioPagoCuenta: totalVentasGravadas > 0 ? (totalPagoACuentaRenta / totalVentasGravadas) * 100 : null,
     djAnual: {
@@ -216,6 +221,15 @@ export function construirResumenImpuestos(todas: DeclaracionTributariaListadoRow
   vencidasSinPagar.sort((a, b) => b.diasDesdeVencimiento - a.diasDesdeVencimiento);
   proximosVencimientos.sort((a, b) => a.diasDesdeVencimiento - b.diasDesdeVencimiento);
 
+  // Saldo vigente HOY -- la mensual presentada/pagada mas reciente de
+  // TODO el historico (el IGV a favor rueda entre años, no se reinicia
+  // cada enero), sin importar el año seleccionado en el dashboard.
+  const ultimaMensualPresentada = todas
+    .filter((d) => d.TIPO_DECLARACION_CODIGO === "IGV_RENTA_MENSUAL" && (d.ESTADO_DECLARACION_CODIGO === "PRESENTADA" || d.ESTADO_DECLARACION_CODIGO === "PAGADA"))
+    .sort((a, b) => b.ANIO * 12 + b.MES - (a.ANIO * 12 + a.MES))[0];
+  const igvResultanteVigente = ultimaMensualPresentada ? numero(ultimaMensualPresentada.IGV_RESULTANTE) : null;
+  const igvFavorAlCorte = igvResultanteVigente !== null && igvResultanteVigente < 0 ? Math.abs(igvResultanteVigente) : 0;
+
   return {
     aniosDisponibles: aniosDisponibles.length > 0 ? aniosDisponibles : [anioSeleccionado],
     anioSeleccionado,
@@ -225,6 +239,7 @@ export function construirResumenImpuestos(todas: DeclaracionTributariaListadoRow
     vencidasSinPresentar,
     vencidasSinPagar,
     proximosVencimientos,
+    igvFavorAlCorte,
   };
 }
 
@@ -245,7 +260,7 @@ function formatS(monto: number): string {
 // generales ("evalua con tu contador/SUNAT").
 export function generarInsightsContables(resumen: ResumenImpuestos): InsightContable[] {
   const insights: InsightContable[] = [];
-  const { anual, vencidasSinPresentar, vencidasSinPagar, mensual, anioSeleccionado } = resumen;
+  const { anual, vencidasSinPresentar, vencidasSinPagar, mensual, anioSeleccionado, igvFavorAlCorte } = resumen;
 
   if (vencidasSinPresentar.length > 0) {
     insights.push({
@@ -262,10 +277,10 @@ export function generarInsightsContables(resumen: ResumenImpuestos): InsightCont
     });
   }
 
-  if (anual.totalSaldoFavorIgvGenerado > 0 && anual.totalSaldoFavorIgvGenerado > anual.totalIgvPagado) {
+  if (igvFavorAlCorte > 0 && anual.totalIgvPagado === 0) {
     insights.push({
       tono: "info",
-      texto: `En ${anioSeleccionado} generaste mas saldo a favor de IGV (${formatS(anual.totalSaldoFavorIgvGenerado)}) que IGV efectivamente pagado (${formatS(anual.totalIgvPagado)}) -- revisa que se este aplicando contra los periodos siguientes y no quedando inmovilizado.`,
+      texto: `Tienes ${formatS(igvFavorAlCorte)} de saldo a favor de IGV vigente (segun la ultima mensual presentada) y no pagaste IGV en efectivo en ${anioSeleccionado} -- revisa en Cuentas (IGV a favor) si conviene aplicarlo contra el IGV pendiente de declarar de los proyectos en vez de dejarlo inmovilizado.`,
     });
   }
 

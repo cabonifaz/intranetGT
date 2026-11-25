@@ -58,13 +58,14 @@ export default async function DashboardImpuestosPage({ searchParams }: { searchP
         <LecturaContableImpuestos insights={insights} />
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <TarjetaIndicador etiqueta="Ventas netas al corte" valor={formatearMonto(resumen.anual.totalVentasGravadas)} detalle={`${anioSeleccionado} -- suma de meses cargados`} />
         <TarjetaIndicador etiqueta="IGV pagado" valor={formatearMonto(resumen.anual.totalIgvPagado)} detalle={`${anioSeleccionado} -- meses a pagar`} />
         <TarjetaIndicador
-          etiqueta="Saldo a favor IGV generado"
-          valor={formatearMonto(resumen.anual.totalSaldoFavorIgvGenerado)}
-          detalle={`${anioSeleccionado} -- suma de meses a favor`}
-          tono={resumen.anual.totalSaldoFavorIgvGenerado > 0 ? "alerta" : "neutral"}
+          etiqueta="Saldo a favor IGV al corte"
+          valor={formatearMonto(resumen.igvFavorAlCorte)}
+          detalle="Segun la ultima mensual presentada (no se suma mes a mes -- rueda)"
+          tono={resumen.igvFavorAlCorte > 0 ? "alerta" : "neutral"}
         />
         <TarjetaIndicador etiqueta="Pago a cuenta Renta" valor={formatearMonto(resumen.anual.totalPagoACuentaRenta)} detalle={anioSeleccionado.toString()} />
         <TarjetaIndicador

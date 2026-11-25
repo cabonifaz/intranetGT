@@ -1564,6 +1564,10 @@ export interface DeclaracionTributariaDetalleRow extends RowDataPacket {
   FECHA_MODIFICACION: string | null;
 }
 
+export interface DeclaracionTributariaIgvAnteriorRow extends RowDataPacket {
+  IGV_RESULTANTE: string | null;
+}
+
 export interface DeclaracionTributariaPendienteRow extends RowDataPacket {
   ID_DECLARACION: number;
   TIPO_DECLARACION_DESCRIPCION: string;

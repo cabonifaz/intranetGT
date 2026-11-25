@@ -66,6 +66,10 @@ export default function GraficoIgvMensual({ datos }: { datos: ResumenMensualImpu
           );
         })}
       </div>
+      <p className="mt-3 text-[11px] text-slate-400 dark:text-slate-500">
+        Cada barra es el saldo vigente de ESE mes (el PDT 621 ya neta el credito del mes anterior) -- no se suman entre
+        si, el saldo a favor rueda, no se acumula mes a mes.
+      </p>
     </div>
   );
 }
