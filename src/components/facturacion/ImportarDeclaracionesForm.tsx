@@ -90,8 +90,9 @@ export default function ImportarDeclaracionesForm() {
         />
         <NotaAyuda>
           Puedes elegir varios archivos a la vez -- cada uno se analiza por separado con IA para identificar a que
-          periodo y tipo de declaracion corresponde. Se crea (o se encuentra) la declaracion y se le adjunta el
-          archivo; la fecha de vencimiento queda provisional (verificala contra el cronograma real de SUNAT) y los
+          periodo y tipo de declaracion corresponde. Se crea (o se encuentra) la declaracion, se le adjunta el
+          archivo y queda marcada como <strong>presentada</strong> (subir la constancia de SUNAT significa que ya se
+          presento). La fecha de vencimiento queda provisional (verificala contra el cronograma real de SUNAT) y los
           montos nunca se sobrescriben si la declaracion ya tenia datos cargados.
         </NotaAyuda>
       </div>

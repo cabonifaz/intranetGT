@@ -1517,6 +1517,15 @@ export interface DeclaracionTributariaListadoRow extends RowDataPacket {
   ESTADO_DECLARACION_DESCRIPCION: string;
   FECHA_PRESENTACION: string | null;
   FECHA_PAGO: string | null;
+  VENTAS_GRAVADAS: string | null;
+  COMPRAS_GRAVADAS: string | null;
+  IGV_VENTAS: string | null;
+  IGV_COMPRAS: string | null;
+  IGV_RESULTANTE: string | null;
+  PAGO_A_CUENTA_RENTA: string | null;
+  IMPUESTO_CALCULADO_RENTA: string | null;
+  PAGOS_A_CUENTA_ACUMULADOS: string | null;
+  SALDO_RENTA: string | null;
 }
 
 export interface DeclaracionTributariaDetalleRow extends RowDataPacket {

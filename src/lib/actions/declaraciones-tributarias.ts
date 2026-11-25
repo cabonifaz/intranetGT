@@ -8,18 +8,13 @@ import {
   actualizarDeclaracion,
   obtenerDeclaracion,
   subirDocumentoDeclaracion,
-  presentarDeclaracion,
   marcarDeclaracionPagada,
   anularDeclaracion,
   eliminarDeclaracion,
 } from "@/lib/db/repositories/declaracion-tributaria.repository";
-import {
-  registrarMovimientoCuenta,
-  obtenerIdTipoMovimientoEgreso,
-  obtenerIdTipoMovimientoIngreso,
-  obtenerCuentaPorTipo,
-} from "@/lib/db/repositories/cuenta.repository";
+import { registrarMovimientoCuenta, obtenerIdTipoMovimientoEgreso } from "@/lib/db/repositories/cuenta.repository";
 import { guardarArchivo } from "@/lib/storage/local-storage";
+import { presentarDeclaracionConCredito } from "@/lib/facturacion/impuestos/presentar-declaracion";
 
 const IMPUESTOS_APP_CODIGO = "IMPUESTOS_EMPRESA";
 
@@ -165,46 +160,23 @@ export async function presentarDeclaracionAction(
     return { ok: false, error: "Esta declaracion ya no esta en borrador." };
   }
 
-  const esMensual = declaracion.TIPO_DECLARACION_CODIGO === "IGV_RENTA_MENSUAL";
-  const resultadoPeriodo = esMensual
-    ? declaracion.IGV_RESULTANTE !== null
-      ? Number(declaracion.IGV_RESULTANTE)
-      : null
-    : declaracion.SALDO_RENTA !== null
-      ? Number(declaracion.SALDO_RENTA)
-      : null;
-
-  let idMovimientoCredito: number | null = null;
-  let avisoSinCuenta: string | undefined;
-
-  if (resultadoPeriodo !== null && resultadoPeriodo < 0) {
-    const codigoCuenta = esMensual ? "IGV_FAVOR" : "RENTA_FAVOR";
-    const cuenta = await obtenerCuentaPorTipo(codigoCuenta);
-    if (cuenta) {
-      const idTipoIngreso = await obtenerIdTipoMovimientoIngreso();
-      const periodoTexto = esMensual ? `${declaracion.MES}/${declaracion.ANIO}` : `${declaracion.ANIO}`;
-      const movimiento = await registrarMovimientoCuenta({
-        idCuenta: cuenta.ID_CUENTA,
-        idTipoMovimiento: idTipoIngreso,
-        fechaMovimiento: new Date().toISOString().slice(0, 10),
-        monto: Math.abs(resultadoPeriodo),
-        concepto: `Saldo a favor -- declaracion ${periodoTexto}`,
-        tipoReferencia: "DECLARACION_TRIBUTARIA",
-        idReferencia: idDeclaracion,
-        idUsuarioCreacion: sesion.idUsuario,
-      });
-      idMovimientoCredito = movimiento.id_movimiento;
-    } else {
-      avisoSinCuenta = `Se presento, pero no se acredito el saldo a favor: no existe una cuenta de tipo "${codigoCuenta === "IGV_FAVOR" ? "IGV a favor" : "Renta a favor"}" en Cuentas. Crea esa cuenta y ajusta el saldo a mano si corresponde.`;
-    }
-  }
-
-  await presentarDeclaracion(idDeclaracion, idMovimientoCredito);
+  const { avisoSinCuenta } = await presentarDeclaracionConCredito(
+    {
+      idDeclaracion,
+      tipoDeclaracionCodigo: declaracion.TIPO_DECLARACION_CODIGO,
+      mes: declaracion.MES,
+      anio: declaracion.ANIO,
+      igvResultante: declaracion.IGV_RESULTANTE !== null ? Number(declaracion.IGV_RESULTANTE) : null,
+      saldoRenta: declaracion.SALDO_RENTA !== null ? Number(declaracion.SALDO_RENTA) : null,
+    },
+    sesion.idUsuario,
+  );
+  const avisoFinal = avisoSinCuenta ? `Se presento, pero ${avisoSinCuenta.charAt(0).toLowerCase()}${avisoSinCuenta.slice(1)}` : undefined;
 
   revalidatePath(rutaDeclaracion(idDeclaracion));
   revalidatePath("/facturacion/cuentas");
   refresh();
-  return avisoSinCuenta ? { ok: true, error: avisoSinCuenta } : { ok: true };
+  return avisoFinal ? { ok: true, error: avisoFinal } : { ok: true };
 }
 
 export interface PagarDeclaracionState {

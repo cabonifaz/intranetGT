@@ -109,6 +109,11 @@ BEGIN
      WHERE d.ID_DECLARACION = p_id_declaracion;
 END$$
 
+-- Incluye las columnas de montos (ademas de las ya usadas por el listado
+-- simple) para que el dashboard (ver src/lib/facturacion/impuestos/dashboard.ts)
+-- pueda agregar/graficar sin una SP aparte -- a este volumen (unas pocas
+-- decenas de declaraciones por año) traer todo de una vez y sumar en la
+-- capa de aplicacion es mas simple que mantener varias SP de agregados.
 CREATE PROCEDURE SP_DECLARACION_TRIBUTARIA_LISTAR(
     IN p_id_tipo_declaracion INT UNSIGNED,
     IN p_anio SMALLINT UNSIGNED
@@ -117,7 +122,9 @@ BEGIN
     SELECT d.ID_DECLARACION, d.ID_TIPO_DECLARACION, t.CODIGO AS TIPO_DECLARACION_CODIGO, t.DESCRIPCION AS TIPO_DECLARACION_DESCRIPCION,
            d.ANIO, d.MES, d.FECHA_VENCIMIENTO, d.MONTO_TOTAL_A_PAGAR,
            d.ID_ESTADO_DECLARACION, e.CODIGO AS ESTADO_DECLARACION_CODIGO, e.DESCRIPCION AS ESTADO_DECLARACION_DESCRIPCION,
-           d.FECHA_PRESENTACION, d.FECHA_PAGO
+           d.FECHA_PRESENTACION, d.FECHA_PAGO,
+           d.VENTAS_GRAVADAS, d.COMPRAS_GRAVADAS, d.IGV_VENTAS, d.IGV_COMPRAS, d.IGV_RESULTANTE, d.PAGO_A_CUENTA_RENTA,
+           d.IMPUESTO_CALCULADO_RENTA, d.PAGOS_A_CUENTA_ACUMULADOS, d.SALDO_RENTA
       FROM DECLARACION_TRIBUTARIA d
       JOIN MAESTRO_MAESTRO t ON t.ID_MAESTRO = d.ID_TIPO_DECLARACION
       JOIN MAESTRO_MAESTRO e ON e.ID_MAESTRO = d.ID_ESTADO_DECLARACION

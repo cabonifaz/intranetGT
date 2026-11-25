@@ -10,6 +10,7 @@ import {
   subirDocumentoDeclaracion,
 } from "@/lib/db/repositories/declaracion-tributaria.repository";
 import { extraerDeclaracionTributaria } from "@/lib/facturacion/impuestos/extraer-declaracion";
+import { presentarDeclaracionConCredito } from "@/lib/facturacion/impuestos/presentar-declaracion";
 import { guardarArchivo } from "@/lib/storage/local-storage";
 
 const IMPUESTOS_APP_CODIGO = "IMPUESTOS_EMPRESA";
@@ -51,11 +52,14 @@ function vencimientoProvisional(tipoDeclaracion: "IGV_RENTA_MENSUAL" | "DJ_ANUAL
 // uno con su propio POST -- ver ImportarDeclaracionesForm). Por archivo:
 // 1) lo lee con IA para identificar tipo/periodo/montos, 2) crea (o
 // encuentra, idempotente por periodo) la declaracion, 3) si sigue en
-// BORRADOR y todavia no tenia montos cargados, los completa con lo
-// extraido -- nunca sobrescribe datos ya cargados ni una declaracion que
-// ya avanzo de estado, 4) adjunta el archivo original como constancia.
-// Si la IA no logra identificar tipo+periodo con confianza, no crea nada
-// -- el archivo queda para subir a mano desde "Nueva declaracion".
+// BORRADOR, completa los montos con lo extraido (si todavia no los tenia)
+// y la pasa a PRESENTADA -- subir la constancia de SUNAT por esta via
+// significa, por definicion, que la declaracion ya se presento (decision
+// de negocio del 2026-11-25), nunca se sobrescriben datos ya cargados ni
+// se toca una declaracion que ya avanzo de estado, 4) adjunta el archivo
+// original como constancia. Si la IA no logra identificar tipo+periodo
+// con confianza, no crea nada -- el archivo queda para subir a mano desde
+// "Nueva declaracion".
 export async function POST(request: Request) {
   const sesion = await requirePermiso(IMPUESTOS_APP_CODIGO, "ESCRITURA");
 
@@ -126,25 +130,56 @@ export async function POST(request: Request) {
 
   const datosYaCargados = datos.tipoDeclaracion === "IGV_RENTA_MENSUAL" ? declaracion.IGV_RESULTANTE !== null : declaracion.SALDO_RENTA !== null;
 
-  if (declaracion.ESTADO_DECLARACION_CODIGO === "BORRADOR" && !datosYaCargados) {
-    await actualizarDeclaracion({
-      idDeclaracion: id_declaracion,
-      fechaVencimiento: declaracion.FECHA_VENCIMIENTO,
-      ventasGravadas: datos.ventasGravadas,
-      comprasGravadas: datos.comprasGravadas,
-      igvVentas: datos.igvVentas,
-      igvCompras: datos.igvCompras,
-      igvResultante: datos.igvResultante,
-      pagoACuentaRenta: datos.pagoACuentaRenta,
-      impuestoCalculadoRenta: datos.impuestoCalculadoRenta,
-      pagosACuentaAcumulados: datos.pagosACuentaAcumulados,
-      saldoRenta: datos.saldoRenta,
-      montoTotalAPagar: datos.montoTotalAPagar ?? 0,
-      notas: declaracion.NOTAS,
-      idUsuarioModificacion: sesion.idUsuario,
-    });
+  if (declaracion.ESTADO_DECLARACION_CODIGO === "BORRADOR") {
+    if (!datosYaCargados) {
+      await actualizarDeclaracion({
+        idDeclaracion: id_declaracion,
+        fechaVencimiento: declaracion.FECHA_VENCIMIENTO,
+        ventasGravadas: datos.ventasGravadas,
+        comprasGravadas: datos.comprasGravadas,
+        igvVentas: datos.igvVentas,
+        igvCompras: datos.igvCompras,
+        igvResultante: datos.igvResultante,
+        pagoACuentaRenta: datos.pagoACuentaRenta,
+        impuestoCalculadoRenta: datos.impuestoCalculadoRenta,
+        pagosACuentaAcumulados: datos.pagosACuentaAcumulados,
+        saldoRenta: datos.saldoRenta,
+        montoTotalAPagar: datos.montoTotalAPagar ?? 0,
+        notas: declaracion.NOTAS,
+        idUsuarioModificacion: sesion.idUsuario,
+      });
+    } else {
+      advertencias.push("Esta declaracion ya tenia montos cargados -- no se sobrescribieron, se presento con lo que ya tenia.");
+    }
+
+    // Subir la constancia por esta via implica que SUNAT ya la recibio --
+    // se pasa a PRESENTADA de una vez (ver presentar-declaracion.ts), no
+    // se deja en BORRADOR esperando un click manual aparte.
+    const igvResultanteFinal =
+      datos.tipoDeclaracion === "IGV_RENTA_MENSUAL"
+        ? datosYaCargados
+          ? declaracion.IGV_RESULTANTE !== null
+            ? Number(declaracion.IGV_RESULTANTE)
+            : null
+          : datos.igvResultante
+        : null;
+    const saldoRentaFinal =
+      datos.tipoDeclaracion === "DJ_ANUAL_RENTA"
+        ? datosYaCargados
+          ? declaracion.SALDO_RENTA !== null
+            ? Number(declaracion.SALDO_RENTA)
+            : null
+          : datos.saldoRenta
+        : null;
+
+    const { avisoSinCuenta } = await presentarDeclaracionConCredito(
+      { idDeclaracion: id_declaracion, tipoDeclaracionCodigo: datos.tipoDeclaracion, mes, anio: datos.anio, igvResultante: igvResultanteFinal, saldoRenta: saldoRentaFinal },
+      sesion.idUsuario,
+    );
+    if (avisoSinCuenta) advertencias.push(avisoSinCuenta);
+    revalidatePath("/facturacion/cuentas");
   } else if (existiaAntes) {
-    advertencias.push("Esta declaracion ya tenia datos cargados o ya no esta en borrador -- no se sobrescribieron, solo se adjunto el documento.");
+    advertencias.push("Esta declaracion ya no estaba en borrador (presentada, pagada o anulada) -- no se modifico, solo se adjunto el documento.");
   }
 
   const ruta = `impuestos/declaraciones/${id_declaracion}/constancia-${Date.now()}.${tipoArchivo.extension}`;
