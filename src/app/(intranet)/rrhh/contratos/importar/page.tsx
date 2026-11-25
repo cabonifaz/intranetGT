@@ -7,7 +7,7 @@ import ImportarContratoForm from "@/components/rrhh/ImportarContratoForm";
 
 export default async function ImportarContratoPage() {
   await requireImportarContrato();
-  const ocrActivo = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  const ocrActivo = Boolean(process.env.OPENAI_API_KEY?.trim());
 
   const [colaboradores, tiposContrato, tiposPagoLocador] = await Promise.all([
     listarDirectorio(null, null),

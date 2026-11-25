@@ -1,16 +1,12 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
 // Lee el escaneo de la "Solicitud de registro de contrato" (ver
 // generar-solicitud-contrato-pdf.ts -- MISMO layout/orden de campos,
 // cualquier cambio en uno se refleja en el otro) y devuelve sus datos en
-// JSON. Usa Claude API con vision -- no hay ningun servicio de OCR
-// instalado en el proyecto. Requiere ANTHROPIC_API_KEY configurada.
-//
-// Modelo: Sonnet 5. Es una extraccion de campos de un formato fijo y
-// conocido (no razonamiento abierto) -- Sonnet da buena precision de
-// lectura a una fraccion del costo de Opus; a este volumen (unos pocos
-// contratos al mes) el costo es de todas formas insignificante.
-const MODELO = "claude-sonnet-5";
+// JSON. Usa OpenAI Responses API con vision/PDF -- no hay ningun servicio
+// de OCR instalado en el proyecto. Requiere OPENAI_API_KEY configurada.
+// Modelo via OPENAI_MODEL (mismo criterio que extraer-declaracion.ts).
+const MODELO = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
 export interface ConceptoExtraido {
   concepto: string;
@@ -158,39 +154,37 @@ export async function extraerSolicitudContrato(
   bytes: Uint8Array,
   mimeType: "application/pdf" | "image/png" | "image/jpeg",
 ): Promise<DatosExtraidosSolicitud> {
-  const client = new Anthropic();
+  const client = new OpenAI();
   const base64 = Buffer.from(bytes).toString("base64");
 
-  const bloqueArchivo: Anthropic.DocumentBlockParam | Anthropic.ImageBlockParam =
+  const bloqueArchivo: OpenAI.Responses.ResponseInputFile | OpenAI.Responses.ResponseInputImage =
     mimeType === "application/pdf"
-      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
-      : { type: "image", source: { type: "base64", media_type: mimeType, data: base64 } };
+      ? { type: "input_file", filename: "solicitud.pdf", file_data: `data:application/pdf;base64,${base64}` }
+      : { type: "input_image", detail: "auto", image_url: `data:${mimeType};base64,${base64}` };
 
   let respuestaTexto: string;
   try {
-    const response = await client.messages.create({
+    const response = await client.responses.create({
       model: MODELO,
-      max_tokens: 2000,
-      system: PROMPT_SISTEMA,
-      messages: [
+      instructions: PROMPT_SISTEMA,
+      input: [
         {
           role: "user",
-          content: [bloqueArchivo, { type: "text", text: "Extrae los datos de esta solicitud escaneada. Responde solo con el JSON." }],
+          content: [bloqueArchivo, { type: "input_text", text: "Extrae los datos de esta solicitud escaneada. Responde solo con el JSON." }],
         },
       ],
     });
-    const bloqueTexto = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-    if (!bloqueTexto) throw new Error("La API no devolvio texto.");
-    respuestaTexto = bloqueTexto.text;
+    respuestaTexto = response.output_text;
+    if (!respuestaTexto) throw new Error("La API no devolvio texto.");
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) {
-      throw new Error("La clave de la API de Claude (ANTHROPIC_API_KEY) no esta configurada o es invalida.");
+    if (err instanceof OpenAI.AuthenticationError) {
+      throw new Error("La clave de la API de OpenAI (OPENAI_API_KEY) no esta configurada o es invalida.");
     }
-    if (err instanceof Anthropic.RateLimitError) {
-      throw new Error("Se alcanzo el limite de solicitudes a la API de Claude -- intenta de nuevo en unos minutos.");
+    if (err instanceof OpenAI.RateLimitError) {
+      throw new Error("Se alcanzo el limite de solicitudes a la API de OpenAI -- intenta de nuevo en unos minutos.");
     }
-    if (err instanceof Anthropic.APIError) {
-      throw new Error(`Error de la API de Claude: ${err.message}`);
+    if (err instanceof OpenAI.APIError) {
+      throw new Error(`Error de la API de OpenAI: ${err.message}`);
     }
     throw err;
   }

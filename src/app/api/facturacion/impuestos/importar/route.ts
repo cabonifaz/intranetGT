@@ -25,10 +25,10 @@ const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "O
 
 // Mismo criterio que ocrDisponible() en rrhh-contratos-importacion.ts: sin
 // la clave configurada ni se intenta la llamada -- se devuelve un error
-// claro en vez de dejar que el SDK de Anthropic tire su propio error de
+// claro en vez de dejar que el SDK de OpenAI tire su propio error de
 // autenticacion crudo hacia la UI.
 function iaDisponible(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
 // Fecha de vencimiento de SUNAT (cronograma por ultimo digito de RUC) no

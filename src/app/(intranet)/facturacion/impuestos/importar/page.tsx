@@ -4,7 +4,7 @@ import ImportarDeclaracionesForm from "@/components/facturacion/ImportarDeclarac
 
 export default async function ImportarDeclaracionesPage() {
   await requirePermiso("IMPUESTOS_EMPRESA", "ESCRITURA");
-  const ocrActivo = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  const ocrActivo = Boolean(process.env.OPENAI_API_KEY?.trim());
 
   return (
     <div>

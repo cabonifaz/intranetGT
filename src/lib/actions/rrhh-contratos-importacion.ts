@@ -26,13 +26,13 @@ function hoyIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// Mientras no haya una ANTHROPIC_API_KEY configurada, ni se intenta la
+// Mientras no haya una OPENAI_API_KEY configurada, ni se intenta la
 // llamada -- se pasa directo a carga manual (paso 3 vacio, sin marcar
 // nada como "fallo"). Evita una llamada que de todas formas va a
 // rechazar por autenticacion, y deja claro que es una eleccion
 // (OCR aun no activado), no un error.
 function ocrDisponible(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
 const DATOS_VACIOS: DatosExtraidosSolicitud = {
