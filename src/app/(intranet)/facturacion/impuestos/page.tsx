@@ -40,9 +40,17 @@ export default async function ImpuestosPage({
             Declaraciones mensuales de IGV/Renta (PDT 621) y Declaracion Jurada Anual de Renta.
           </p>
         </div>
-        <Link href="/facturacion/impuestos/nueva" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-          Nueva declaracion
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/facturacion/impuestos/importar"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            Importar (IA)
+          </Link>
+          <Link href="/facturacion/impuestos/nueva" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            Nueva declaracion
+          </Link>
+        </div>
       </div>
 
       <form className="mt-4 flex flex-wrap items-end gap-2 text-sm" action="/facturacion/impuestos">
