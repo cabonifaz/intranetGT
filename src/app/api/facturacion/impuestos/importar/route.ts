@@ -23,6 +23,14 @@ const TIPOS_PERMITIDOS: Record<string, { mime: "application/pdf" | "image/png" |
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
 
+// Mismo criterio que ocrDisponible() en rrhh-contratos-importacion.ts: sin
+// la clave configurada ni se intenta la llamada -- se devuelve un error
+// claro en vez de dejar que el SDK de Anthropic tire su propio error de
+// autenticacion crudo hacia la UI.
+function iaDisponible(): boolean {
+  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+}
+
 // Fecha de vencimiento de SUNAT (cronograma por ultimo digito de RUC) no
 // viene en la constancia y cambia cada año -- esto es solo un valor
 // provisional para que la declaracion se pueda crear sin bloquear la carga
@@ -62,6 +70,10 @@ export async function POST(request: Request) {
   const tipoArchivo = TIPOS_PERMITIDOS[archivo.type];
   if (!tipoArchivo) {
     return NextResponse.json({ ok: false, error: "Solo se aceptan PDF, PNG o JPG." }, { status: 400 });
+  }
+
+  if (!iaDisponible()) {
+    return NextResponse.json({ ok: false, error: "La lectura automatica (IA) todavia no esta activada en este entorno." }, { status: 200 });
   }
 
   const bytesArchivo = new Uint8Array(await archivo.arrayBuffer());
