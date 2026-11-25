@@ -190,6 +190,13 @@ END$$
 -- p_monto siempre llega calculado desde la app (MONTO_FIJO copiado, o
 -- cargado a mano si es variable) -- una sola fuente de verdad para el
 -- calculo de "cuales instancias generar" (ver generar-instancias.ts).
+-- No-op silencioso (p_id_instancia queda NULL) si esa instancia
+-- (ID_PAGO_RECURRENTE + PERIODO) ya existia -- UQ_PRI_PAGO_PERIODO
+-- (055_pago_recurrente_instancia_unique.sql) es el guard real: sin esto,
+-- 2 requests concurrentes de asegurarInstanciasGeneradasDelDia()
+-- (auto-generar.ts, dispara en cada visita a Facturacion, sin lock)
+-- terminaban insertando la misma instancia varias veces -- bug real
+-- encontrado en produccion.
 CREATE PROCEDURE SP_PAGO_RECURRENTE_INSTANCIA_AGREGAR(
     IN p_id_pago_recurrente INT UNSIGNED,
     IN p_periodo VARCHAR(100),
@@ -203,13 +210,21 @@ BEGIN
     DECLARE v_id_cuenta_pago INT UNSIGNED;
     SET v_id_cuenta_pago = COALESCE(p_id_cuenta_pago, (SELECT ID_CUENTA_PAGO_DEFAULT FROM PAGO_RECURRENTE WHERE ID_PAGO_RECURRENTE = p_id_pago_recurrente));
 
-    INSERT INTO PAGO_RECURRENTE_INSTANCIA (
+    -- INSERT IGNORE: si 2 llamadas concurrentes pasan el chequeo de
+    -- arriba casi al mismo tiempo (ventana muy angosta, pero posible),
+    -- UQ_PRI_PAGO_PERIODO rechaza a la segunda -- con IGNORE eso se
+    -- resuelve como no-op silencioso (ROW_COUNT()=0) en vez de reventar
+    -- con un error de llave duplicada.
+    INSERT IGNORE INTO PAGO_RECURRENTE_INSTANCIA (
         ID_PAGO_RECURRENTE, PERIODO, FECHA_VENCIMIENTO, MONTO, ID_CUENTA_PAGO, USUARIO_CREACION
-    ) VALUES (
-        p_id_pago_recurrente, p_periodo, p_fecha_vencimiento, p_monto, v_id_cuenta_pago, p_id_usuario_creacion
-    );
+    )
+    SELECT p_id_pago_recurrente, p_periodo, p_fecha_vencimiento, p_monto, v_id_cuenta_pago, p_id_usuario_creacion
+     WHERE NOT EXISTS (
+         SELECT 1 FROM PAGO_RECURRENTE_INSTANCIA
+          WHERE ID_PAGO_RECURRENTE = p_id_pago_recurrente AND PERIODO = p_periodo
+     );
 
-    SET p_id_instancia = LAST_INSERT_ID();
+    SET p_id_instancia = IF(ROW_COUNT() > 0, LAST_INSERT_ID(), NULL);
 END$$
 
 -- Editar el monto (y/o cuenta de pago) de una instancia ya generada

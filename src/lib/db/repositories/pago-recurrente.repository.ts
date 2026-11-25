@@ -89,6 +89,8 @@ export async function cambiarEstadoPagoRecurrente(idPagoRecurrente: number, acti
 // automatico diario (ver auto-generar.ts) -- mismo criterio que el sync
 // de TC SUNAT, que tampoco le atribuye las filas automaticas a quien
 // haya cargado la pagina.
+// id_instancia viene null si esa instancia (mismo pago + periodo) ya
+// existia -- no-op silencioso, ver UQ_PRI_PAGO_PERIODO y el guard del SP.
 export async function agregarInstancia(
   idPagoRecurrente: number,
   periodo: string,
@@ -96,8 +98,8 @@ export async function agregarInstancia(
   monto: number,
   idCuentaPago: number | null,
   idUsuarioCreacion: number | null,
-): Promise<{ id_instancia: number }> {
-  return callProcedureWithOut<{ id_instancia: number }>(
+): Promise<{ id_instancia: number | null }> {
+  return callProcedureWithOut<{ id_instancia: number | null }>(
     "SP_PAGO_RECURRENTE_INSTANCIA_AGREGAR",
     [idPagoRecurrente, periodo, fechaVencimiento, monto, idCuentaPago, idUsuarioCreacion],
     ["id_instancia"],

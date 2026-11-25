@@ -1,0 +1,22 @@
+-- Bug real en produccion: asegurarInstanciasGeneradasDelDia() (ver
+-- src/lib/pagos-recurrentes/auto-generar.ts) se dispara en cada request a
+-- cualquier pantalla de Facturacion (facturacion/layout.tsx), y mientras
+-- el primer request del dia todavia esta recorriendo los pagos
+-- recurrentes (varios roundtrips a la BD antes de terminar), cualquier
+-- otro request concurrente vuelve a entrar porque PAGO_RECURRENTE_GENERACION_DIA
+-- todavia no tiene la fila de hoy -- SP_PAGO_RECURRENTE_INSTANCIA_AGREGAR
+-- no tenia ningun guard contra duplicados (ni UNIQUE KEY en la tabla),
+-- asi que cada request concurrente insertaba su propia copia del mismo
+-- periodo. Resultado real: decenas de filas identicas (mismo
+-- ID_PAGO_RECURRENTE + PERIODO + FECHA_VENCIMIENTO) para el periodo
+-- "actual" del mes.
+--
+-- La limpieza de las filas duplicadas ya generadas se hizo aparte (script
+-- puntual contra cada entorno, no queda en el repo -- mismo criterio que
+-- cualquier correccion de datos de produccion de este proyecto). Esto
+-- solo agrega el guard de verdad: ya no puede existir mas de 1 instancia
+-- por (ID_PAGO_RECURRENTE, PERIODO) a nivel de motor de base de datos --
+-- SP_PAGO_RECURRENTE_INSTANCIA_AGREGAR se actualiza (sp_pago_recurrente.sql)
+-- para tolerar la colision en vez de fallar.
+ALTER TABLE PAGO_RECURRENTE_INSTANCIA
+    ADD CONSTRAINT UQ_PRI_PAGO_PERIODO UNIQUE (ID_PAGO_RECURRENTE, PERIODO);
