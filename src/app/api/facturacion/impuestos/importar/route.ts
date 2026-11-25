@@ -132,6 +132,24 @@ export async function POST(request: Request) {
 
   if (declaracion.ESTADO_DECLARACION_CODIGO === "BORRADOR") {
     if (!datosYaCargados) {
+      // El "importe total a pagar" que lee la IA a veces no coincide con
+      // la suma de sus propios campos (caso real: constancia con IGV
+      // resultante positivo y pago a cuenta Renta > 0, pero la IA
+      // devolvio 0 a pagar). Nunca se confia ciegamente en ese campo --
+      // se usa el mayor entre lo que la IA leyo y lo que se puede derivar
+      // de IGV_RESULTANTE/PAGO_A_CUENTA_RENTA (o SALDO_RENTA en la
+      // anual), para no subregistrar un monto pendiente real.
+      const montoCalculado =
+        datos.tipoDeclaracion === "IGV_RENTA_MENSUAL"
+          ? Math.max(datos.igvResultante ?? 0, 0) + Math.max(datos.pagoACuentaRenta ?? 0, 0)
+          : Math.max(datos.saldoRenta ?? 0, 0);
+      const montoTotalAPagar = Math.max(datos.montoTotalAPagar ?? 0, montoCalculado);
+      if (montoTotalAPagar > (datos.montoTotalAPagar ?? 0)) {
+        advertencias.push(
+          `El monto a pagar leido (${(datos.montoTotalAPagar ?? 0).toFixed(2)}) no coincidia con la suma de sus propios montos -- se uso ${montoTotalAPagar.toFixed(2)}, verificalo contra la constancia.`,
+        );
+      }
+
       await actualizarDeclaracion({
         idDeclaracion: id_declaracion,
         fechaVencimiento: declaracion.FECHA_VENCIMIENTO,
@@ -144,7 +162,7 @@ export async function POST(request: Request) {
         impuestoCalculadoRenta: datos.impuestoCalculadoRenta,
         pagosACuentaAcumulados: datos.pagosACuentaAcumulados,
         saldoRenta: datos.saldoRenta,
-        montoTotalAPagar: datos.montoTotalAPagar ?? 0,
+        montoTotalAPagar,
         notas: declaracion.NOTAS,
         idUsuarioModificacion: sesion.idUsuario,
       });
