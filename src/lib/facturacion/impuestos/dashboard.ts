@@ -75,6 +75,12 @@ export interface ResumenImpuestos {
   // seleccionado -- mismo criterio que usa presentar-declaracion.ts para
   // acreditar/descontar por delta en Cuentas.
   igvFavorAlCorte: number;
+  // Renta a favor NO rueda como el IGV (cada DJ Anual es un ejercicio
+  // independiente), pero el saldo que genera la ultima DJ Anual
+  // presentada/pagada sigue vigente hasta que se aplique o se devuelva --
+  // igual que IGV, se muestra "al corte" (ultimo ejercicio declarado), no
+  // solo cuando el año seleccionado coincide con el de esa DJ Anual.
+  rentaFavorAlCorte: number;
 }
 
 const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
@@ -230,6 +236,16 @@ export function construirResumenImpuestos(todas: DeclaracionTributariaListadoRow
   const igvResultanteVigente = ultimaMensualPresentada ? numero(ultimaMensualPresentada.IGV_RESULTANTE) : null;
   const igvFavorAlCorte = igvResultanteVigente !== null && igvResultanteVigente < 0 ? Math.abs(igvResultanteVigente) : 0;
 
+  // Mismo criterio para Renta: la DJ Anual presentada/pagada del
+  // EJERCICIO MAS RECIENTE (no necesariamente el año seleccionado en el
+  // dashboard), sin sumar entre ejercicios -- cada DJ Anual ya es su
+  // propio resultado final, no un delta.
+  const ultimaDjAnualPresentada = todas
+    .filter((d) => d.TIPO_DECLARACION_CODIGO === "DJ_ANUAL_RENTA" && (d.ESTADO_DECLARACION_CODIGO === "PRESENTADA" || d.ESTADO_DECLARACION_CODIGO === "PAGADA"))
+    .sort((a, b) => b.ANIO - a.ANIO)[0];
+  const saldoRentaVigente = ultimaDjAnualPresentada ? numero(ultimaDjAnualPresentada.SALDO_RENTA) : null;
+  const rentaFavorAlCorte = saldoRentaVigente !== null && saldoRentaVigente < 0 ? Math.abs(saldoRentaVigente) : 0;
+
   return {
     aniosDisponibles: aniosDisponibles.length > 0 ? aniosDisponibles : [anioSeleccionado],
     anioSeleccionado,
@@ -240,6 +256,7 @@ export function construirResumenImpuestos(todas: DeclaracionTributariaListadoRow
     vencidasSinPagar,
     proximosVencimientos,
     igvFavorAlCorte,
+    rentaFavorAlCorte,
   };
 }
 
