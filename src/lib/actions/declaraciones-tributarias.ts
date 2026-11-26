@@ -170,6 +170,7 @@ export async function presentarDeclaracionAction(
       mes: declaracion.MES,
       anio: declaracion.ANIO,
       igvResultante: declaracion.IGV_RESULTANTE !== null ? Number(declaracion.IGV_RESULTANTE) : null,
+      pagoACuentaRenta: declaracion.PAGO_A_CUENTA_RENTA !== null ? Number(declaracion.PAGO_A_CUENTA_RENTA) : null,
       saldoRenta: declaracion.SALDO_RENTA !== null ? Number(declaracion.SALDO_RENTA) : null,
     },
     sesion.idUsuario,

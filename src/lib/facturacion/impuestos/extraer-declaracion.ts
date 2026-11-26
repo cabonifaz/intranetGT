@@ -38,13 +38,27 @@ const CAMPOS_MONTO = [
   "montoTotalAPagar",
 ] as const;
 
+// Campos de verificacion (no se guardan en BD, solo se usan para cuadrar
+// la aritmetica contra "igvResultante"/"pagoACuentaRenta" antes de
+// aceptarlos -- ver normalizar()).
+const CAMPOS_VERIFICACION = ["igvResultanteBruto", "igvSaldoAnterior", "pagoACuentaRentaBruto", "pagoACuentaRentaSaldoAnterior"] as const;
+
 const PROMPT_SISTEMA = `Eres un asistente que lee constancias de presentacion de SUNAT (Peru) y devuelve sus datos en JSON estricto, sin inventar valores.
 
 El documento es UNA de estas dos constancias:
 
-1. PDT 621 -- IGV + pago a cuenta de Renta MENSUAL. Suele decir "Formulario 621" o "IGV - Renta mensual", y tiene un "Periodo tributario" en formato MM/AAAA (ej. "10/2026" = octubre 2026). Campos tipicos: Ventas gravadas, Compras gravadas, IGV de ventas, IGV de compras, IGV resultante (o "tributo resultante"/"saldo a favor del periodo" -- si dice saldo a favor, el valor es NEGATIVO), Pago a cuenta del Impuesto a la Renta, Importe total a pagar.
+1. PDT 621 -- IGV + pago a cuenta de Renta MENSUAL. Suele decir "Formulario 621" o "IGV - Renta mensual", y tiene un "Periodo tributario" en formato MM/AAAA (ej. "10/2026" = octubre 2026).
 
-2. Declaracion Jurada ANUAL de Renta (formulario de Renta Anual de 3ra categoria, ej. 710/709 u otro segun el año). Dice "Ejercicio" o "Periodo" con solo el AÑO (ej. "2025"), sin mes. Campos tipicos: Impuesto calculado, Pagos a cuenta del ejercicio (o "credito/saldo aplicado"), Saldo del Impuesto a la Renta (si dice "a favor del contribuyente" el valor es NEGATIVO, si dice "por regularizar" o "tributo a pagar" es POSITIVO), Importe a pagar.
+   La seccion "Determinacion de la Deuda" tiene, para IGV y para Renta por separado, TRES filas distintas que NO hay que confundir:
+   a) "Impuesto Resultante o Saldo a Favor" -- el resultado de ESE mes solo, SIN aplicar ningun credito anterior (bruto).
+   b) "Saldo a Favor del Periodo anterior" -- el credito que traia acumulado de meses previos.
+   c) "Tributo a Pagar o Saldo a Favor" -- el resultado FINAL, (a) menos (b), que es el que realmente importa (si es positivo hay que pagarlo, si es negativo es el saldo a favor que queda para el siguiente periodo).
+
+   SIEMPRE usa la fila (c), la FINAL, para "igvResultante" (IGV) y "pagoACuentaRenta" (Renta) -- nunca la fila (a). Si la constancia NO muestra por separado (a)/(b)/(c) (algunas no tienen saldo anterior que aplicar, por ejemplo si nunca hubo credito), basta con una sola fila de resultado y esa es la que se usa.
+
+   Otros campos tipicos: Ventas gravadas, Compras gravadas, IGV de ventas, IGV de compras, Importe total a pagar.
+
+2. Declaracion Jurada ANUAL de Renta (formulario de Renta Anual de 3ra categoria, ej. 710/709 u otro segun el año). Dice "Ejercicio" o "Periodo" con solo el AÑO (ej. "2025"), sin mes. Campos tipicos: Impuesto calculado, Pagos a cuenta del ejercicio (o "credito/saldo aplicado"), Saldo del Impuesto a la Renta (si dice "a favor del contribuyente" el valor es NEGATIVO, si dice "por regularizar" o "tributo a pagar" es POSITIVO), Importe a pagar. Esta NO tiene el esquema de 3 filas de la mensual -- es un calculo anual propio, independiente de otros años.
 
 Identifica cual de los dos es por el numero de formulario o el titulo del documento, y si tiene mes (mensual) o no (anual).
 
@@ -57,8 +71,12 @@ Devuelve SOLO un objeto JSON (sin texto antes ni despues, sin bloque de codigo m
   "comprasGravadas": number o null (null si es DJ_ANUAL_RENTA),
   "igvVentas": number o null (null si es DJ_ANUAL_RENTA),
   "igvCompras": number o null (null si es DJ_ANUAL_RENTA),
-  "igvResultante": number o null (null si es DJ_ANUAL_RENTA; negativo si es saldo a favor),
-  "pagoACuentaRenta": number o null (null si es DJ_ANUAL_RENTA),
+  "igvResultante": number o null (SOLO la fila FINAL "Tributo a Pagar o Saldo a Favor" de IGV, null si es DJ_ANUAL_RENTA; negativo si es saldo a favor),
+  "igvResultanteBruto": number o null (la fila "Impuesto Resultante o Saldo a Favor" de IGV, bruto, SIN aplicar el saldo anterior -- null si la constancia no distingue bruto/final, o si es DJ_ANUAL_RENTA),
+  "igvSaldoAnterior": number o null (la fila "Saldo a Favor del Periodo anterior" de IGV -- null si no aplica o es DJ_ANUAL_RENTA),
+  "pagoACuentaRenta": number o null (SOLO la fila FINAL "Tributo a Pagar o Saldo a Favor" de Renta, null si es DJ_ANUAL_RENTA; puede ser negativo si queda saldo a favor de Renta),
+  "pagoACuentaRentaBruto": number o null (la fila "Impuesto Resultante o Saldo a Favor" de Renta, bruto -- null si la constancia no distingue bruto/final, o si es DJ_ANUAL_RENTA),
+  "pagoACuentaRentaSaldoAnterior": number o null (la fila "Saldo a Favor del Periodo anterior" de Renta -- null si no aplica o es DJ_ANUAL_RENTA),
   "impuestoCalculadoRenta": number o null (null si es IGV_RENTA_MENSUAL),
   "pagosACuentaAcumulados": number o null (null si es IGV_RENTA_MENSUAL),
   "saldoRenta": number o null (null si es IGV_RENTA_MENSUAL; negativo si es a favor del contribuyente),
@@ -101,7 +119,35 @@ function normalizar(bruto: Record<string, unknown>): DatosExtraidosDeclaracion {
     datos[campo] = comoNumeroONull(bruto[campo]);
   }
 
-  datos.advertencias = Array.isArray(bruto.advertencias) ? bruto.advertencias.filter((a): a is string => typeof a === "string") : [];
+  const advertencias = Array.isArray(bruto.advertencias) ? bruto.advertencias.filter((a): a is string => typeof a === "string") : [];
+
+  // Cuadre: bruto - saldo anterior debe dar el resultado FINAL que se
+  // guarda (igvResultante/pagoACuentaRenta) -- si la constancia traia las
+  // 3 filas y no cuadran, el modelo probablemente confundio una fila con
+  // otra (ver prompt). Solo es un chequeo, nunca sobreescribe el valor
+  // final que ya se leyo.
+  const verificacion = {} as Record<(typeof CAMPOS_VERIFICACION)[number], number | null>;
+  for (const campo of CAMPOS_VERIFICACION) {
+    verificacion[campo] = comoNumeroONull(bruto[campo]);
+  }
+  if (verificacion.igvResultanteBruto !== null && verificacion.igvSaldoAnterior !== null && datos.igvResultante !== null) {
+    const esperado = verificacion.igvResultanteBruto - verificacion.igvSaldoAnterior;
+    if (Math.abs(esperado - datos.igvResultante) > 0.5) {
+      advertencias.push(
+        `El IGV resultante final (${datos.igvResultante}) no cuadra con bruto (${verificacion.igvResultanteBruto}) menos saldo anterior (${verificacion.igvSaldoAnterior}) = ${esperado} -- verifica la constancia.`,
+      );
+    }
+  }
+  if (verificacion.pagoACuentaRentaBruto !== null && verificacion.pagoACuentaRentaSaldoAnterior !== null && datos.pagoACuentaRenta !== null) {
+    const esperado = verificacion.pagoACuentaRentaBruto - verificacion.pagoACuentaRentaSaldoAnterior;
+    if (Math.abs(esperado - datos.pagoACuentaRenta) > 0.5) {
+      advertencias.push(
+        `El pago a cuenta Renta final (${datos.pagoACuentaRenta}) no cuadra con bruto (${verificacion.pagoACuentaRentaBruto}) menos saldo anterior (${verificacion.pagoACuentaRentaSaldoAnterior}) = ${esperado} -- verifica la constancia.`,
+      );
+    }
+  }
+
+  datos.advertencias = advertencias;
 
   return datos;
 }

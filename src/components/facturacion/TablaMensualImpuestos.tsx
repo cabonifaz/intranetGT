@@ -47,7 +47,13 @@ export default function TablaMensualImpuestos({ datos }: { datos: ResumenMensual
               >
                 {monto(m.igvResultante)}
               </td>
-              <td className="px-3 py-1.5 text-right">{monto(m.pagoACuentaRenta)}</td>
+              <td
+                className={`px-3 py-1.5 text-right ${
+                  m.pagoACuentaRenta === null ? "" : m.pagoACuentaRenta > 0 ? "text-amber-600 dark:text-amber-400" : m.pagoACuentaRenta < 0 ? "text-sky-600 dark:text-sky-400" : ""
+                }`}
+              >
+                {monto(m.pagoACuentaRenta)}
+              </td>
               <td className="px-3 py-1.5 text-right">{m.tasaEfectivaPagoCuenta === null ? "--" : `${m.tasaEfectivaPagoCuenta.toFixed(2)}%`}</td>
               <td className="px-3 py-1.5">
                 {m.fechaPresentacion ? (

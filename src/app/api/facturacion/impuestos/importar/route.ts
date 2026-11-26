@@ -181,6 +181,14 @@ export async function POST(request: Request) {
             : null
           : datos.igvResultante
         : null;
+    const pagoACuentaRentaFinal =
+      datos.tipoDeclaracion === "IGV_RENTA_MENSUAL"
+        ? datosYaCargados
+          ? declaracion.PAGO_A_CUENTA_RENTA !== null
+            ? Number(declaracion.PAGO_A_CUENTA_RENTA)
+            : null
+          : datos.pagoACuentaRenta
+        : null;
     const saldoRentaFinal =
       datos.tipoDeclaracion === "DJ_ANUAL_RENTA"
         ? datosYaCargados
@@ -191,7 +199,15 @@ export async function POST(request: Request) {
         : null;
 
     const { avisoSinCuenta } = await presentarDeclaracionConCredito(
-      { idDeclaracion: id_declaracion, tipoDeclaracionCodigo: datos.tipoDeclaracion, mes, anio: datos.anio, igvResultante: igvResultanteFinal, saldoRenta: saldoRentaFinal },
+      {
+        idDeclaracion: id_declaracion,
+        tipoDeclaracionCodigo: datos.tipoDeclaracion,
+        mes,
+        anio: datos.anio,
+        igvResultante: igvResultanteFinal,
+        pagoACuentaRenta: pagoACuentaRentaFinal,
+        saldoRenta: saldoRentaFinal,
+      },
       sesion.idUsuario,
     );
     if (avisoSinCuenta) advertencias.push(avisoSinCuenta);

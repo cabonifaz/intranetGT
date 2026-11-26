@@ -65,8 +65,17 @@ export default function DeclaracionTributariaForm({ declaracion }: { declaracion
             <Campo name="igvCompras" label="IGV compras" defaultValue={declaracion.IGV_COMPRAS} />
           </div>
           <Campo name="igvResultante" label="IGV resultante (positivo = a pagar, negativo = saldo a favor)" defaultValue={declaracion.IGV_RESULTANTE} />
+          <NotaAyuda>
+            Usa el resultado FINAL del PDT 621 (&ldquo;Tributo a Pagar o Saldo a Favor&rdquo;), el que ya aplica el
+            saldo a favor del periodo anterior -- no el &ldquo;Impuesto Resultante o Saldo a Favor&rdquo; bruto de
+            arriba, que es solo el resultado de este mes sin el credito acumulado.
+          </NotaAyuda>
           <h3 className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Renta (pago a cuenta mensual)</h3>
-          <Campo name="pagoACuentaRenta" label="Pago a cuenta de Renta" defaultValue={declaracion.PAGO_A_CUENTA_RENTA} />
+          <Campo name="pagoACuentaRenta" label="Pago a cuenta de Renta (puede ser negativo si queda saldo a favor)" defaultValue={declaracion.PAGO_A_CUENTA_RENTA} />
+          <NotaAyuda>
+            Mismo criterio que el IGV: usa el resultado FINAL (&ldquo;Tributo a Pagar o Saldo a Favor&rdquo; de
+            Renta), no el bruto.
+          </NotaAyuda>
         </>
       ) : (
         <>

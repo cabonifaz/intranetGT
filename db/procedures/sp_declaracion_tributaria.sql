@@ -21,6 +21,7 @@ DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_MARCAR_PAGADA;
 DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_ANULAR;
 DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_ELIMINAR;
 DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_IGV_RESULTANTE_ANTERIOR;
+DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_RENTA_ANTERIOR;
 
 DELIMITER $$
 
@@ -261,6 +262,46 @@ BEGIN
        AND (d.ANIO < p_anio OR (d.ANIO = p_anio AND d.MES < p_mes))
      ORDER BY d.ANIO DESC, d.MES DESC
      LIMIT 1;
+END$$
+
+-- El pago a cuenta de Renta TAMBIEN rueda (casillas "Saldo a Favor del
+-- Periodo anterior"/"Tributo a Pagar o Saldo a Favor" de Renta en el PDT
+-- 621, igual que el IGV) -- no es exclusivo del IGV. Prioridad: 1) la
+-- mensual inmediata anterior ya presentada/pagada (su PAGO_A_CUENTA_RENTA
+-- ya es el resultado final, post-credito); 2) si no hay ninguna mensual
+-- anterior, la DJ Anual mas reciente ya presentada/pagada (su SALDO_RENTA
+-- es el credito semilla que las mensuales del año siguiente empiezan a
+-- consumir). ANULADA queda fuera a proposito en ambos casos.
+CREATE PROCEDURE SP_DECLARACION_TRIBUTARIA_RENTA_ANTERIOR(
+    IN p_anio SMALLINT UNSIGNED,
+    IN p_mes TINYINT UNSIGNED
+)
+BEGIN
+    DECLARE v_resultado DECIMAL(14,2);
+
+    SELECT d.PAGO_A_CUENTA_RENTA INTO v_resultado
+      FROM DECLARACION_TRIBUTARIA d
+      JOIN MAESTRO_MAESTRO t ON t.ID_MAESTRO = d.ID_TIPO_DECLARACION
+      JOIN MAESTRO_MAESTRO e ON e.ID_MAESTRO = d.ID_ESTADO_DECLARACION
+     WHERE t.CODIGO = 'IGV_RENTA_MENSUAL'
+       AND e.CODIGO IN ('PRESENTADA', 'PAGADA')
+       AND (d.ANIO < p_anio OR (d.ANIO = p_anio AND d.MES < p_mes))
+     ORDER BY d.ANIO DESC, d.MES DESC
+     LIMIT 1;
+
+    IF v_resultado IS NULL THEN
+        SELECT d.SALDO_RENTA INTO v_resultado
+          FROM DECLARACION_TRIBUTARIA d
+          JOIN MAESTRO_MAESTRO t ON t.ID_MAESTRO = d.ID_TIPO_DECLARACION
+          JOIN MAESTRO_MAESTRO e ON e.ID_MAESTRO = d.ID_ESTADO_DECLARACION
+         WHERE t.CODIGO = 'DJ_ANUAL_RENTA'
+           AND e.CODIGO IN ('PRESENTADA', 'PAGADA')
+           AND d.ANIO < p_anio
+         ORDER BY d.ANIO DESC
+         LIMIT 1;
+    END IF;
+
+    SELECT v_resultado AS RESULTADO_ANTERIOR;
 END$$
 
 DELIMITER ;

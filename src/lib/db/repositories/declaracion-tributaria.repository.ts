@@ -4,6 +4,7 @@ import type {
   DeclaracionTributariaListadoRow,
   DeclaracionTributariaPendienteRow,
   DeclaracionTributariaIgvAnteriorRow,
+  DeclaracionTributariaRentaAnteriorRow,
 } from "@/types/db";
 
 interface ActualizarDeclaracionParams {
@@ -99,5 +100,13 @@ export async function eliminarDeclaracion(idDeclaracion: number): Promise<void> 
 export async function obtenerIgvResultanteAnterior(anio: number, mes: number): Promise<number | null> {
   const rows = await callProcedure<DeclaracionTributariaIgvAnteriorRow>("SP_DECLARACION_TRIBUTARIA_IGV_RESULTANTE_ANTERIOR", [anio, mes]);
   const valor = rows[0]?.IGV_RESULTANTE;
+  return valor !== undefined && valor !== null ? Number(valor) : null;
+}
+
+// Mensual anterior (ya presentada/pagada) si existe, si no la DJ Anual
+// mas reciente -- ver presentar-declaracion.ts.
+export async function obtenerRentaAnterior(anio: number, mes: number): Promise<number | null> {
+  const rows = await callProcedure<DeclaracionTributariaRentaAnteriorRow>("SP_DECLARACION_TRIBUTARIA_RENTA_ANTERIOR", [anio, mes]);
+  const valor = rows[0]?.RESULTADO_ANTERIOR;
   return valor !== undefined && valor !== null ? Number(valor) : null;
 }

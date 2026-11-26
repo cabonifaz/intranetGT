@@ -140,12 +140,15 @@ export function construirResumenImpuestos(todas: DeclaracionTributariaListadoRow
     };
   });
 
-  const sumar = (campo: "ventasGravadas" | "comprasGravadas" | "igvVentas" | "igvCompras" | "pagoACuentaRenta") =>
-    mensual.reduce((acc, m) => acc + (m[campo] ?? 0), 0);
+  const sumar = (campo: "ventasGravadas" | "comprasGravadas" | "igvVentas" | "igvCompras") => mensual.reduce((acc, m) => acc + (m[campo] ?? 0), 0);
 
+  // pagoACuentaRenta ahora puede ser negativo (saldo a favor de Renta que
+  // rueda, igual que el IGV) -- igual que totalIgvPagado, solo se suman
+  // los meses donde realmente hubo que pagar, nunca los que quedaron a
+  // favor (sumarlos tal cual entenderia de menos el pago real del año).
   const totalIgvPagado = mensual.reduce((acc, m) => acc + (m.igvResultante !== null && m.igvResultante > 0 ? m.igvResultante : 0), 0);
   const totalVentasGravadas = sumar("ventasGravadas");
-  const totalPagoACuentaRenta = sumar("pagoACuentaRenta");
+  const totalPagoACuentaRenta = mensual.reduce((acc, m) => acc + (m.pagoACuentaRenta !== null && m.pagoACuentaRenta > 0 ? m.pagoACuentaRenta : 0), 0);
   const mesesConDatos = mensual.filter((m) => m.existe && m.ventasGravadas !== null).length;
 
   const impuestoCalculadoRenta = anualDelAnio ? numero(anualDelAnio.IMPUESTO_CALCULADO_RENTA) : null;
@@ -236,15 +239,18 @@ export function construirResumenImpuestos(todas: DeclaracionTributariaListadoRow
   const igvResultanteVigente = ultimaMensualPresentada ? numero(ultimaMensualPresentada.IGV_RESULTANTE) : null;
   const igvFavorAlCorte = igvResultanteVigente !== null && igvResultanteVigente < 0 ? Math.abs(igvResultanteVigente) : 0;
 
-  // Mismo criterio para Renta: la DJ Anual presentada/pagada del
-  // EJERCICIO MAS RECIENTE (no necesariamente el año seleccionado en el
-  // dashboard), sin sumar entre ejercicios -- cada DJ Anual ya es su
-  // propio resultado final, no un delta.
-  const ultimaDjAnualPresentada = todas
-    .filter((d) => d.TIPO_DECLARACION_CODIGO === "DJ_ANUAL_RENTA" && (d.ESTADO_DECLARACION_CODIGO === "PRESENTADA" || d.ESTADO_DECLARACION_CODIGO === "PAGADA"))
-    .sort((a, b) => b.ANIO - a.ANIO)[0];
-  const saldoRentaVigente = ultimaDjAnualPresentada ? numero(ultimaDjAnualPresentada.SALDO_RENTA) : null;
-  const rentaFavorAlCorte = saldoRentaVigente !== null && saldoRentaVigente < 0 ? Math.abs(saldoRentaVigente) : 0;
+  // Renta (pago a cuenta) TAMBIEN rueda mes a mes, igual que el IGV (ver
+  // presentar-declaracion.ts / SP_DECLARACION_TRIBUTARIA_RENTA_ANTERIOR)
+  // -- prioridad: la mensual presentada/pagada mas reciente de TODO el
+  // historico; si no hay ninguna, la DJ Anual mas reciente (la semilla
+  // del credito, antes de que cualquier mensual lo empiece a consumir).
+  const resultadoRentaVigente = ultimaMensualPresentada
+    ? numero(ultimaMensualPresentada.PAGO_A_CUENTA_RENTA)
+    : (todas
+        .filter((d) => d.TIPO_DECLARACION_CODIGO === "DJ_ANUAL_RENTA" && (d.ESTADO_DECLARACION_CODIGO === "PRESENTADA" || d.ESTADO_DECLARACION_CODIGO === "PAGADA"))
+        .sort((a, b) => b.ANIO - a.ANIO)
+        .map((d) => numero(d.SALDO_RENTA))[0] ?? null);
+  const rentaFavorAlCorte = resultadoRentaVigente !== null && resultadoRentaVigente < 0 ? Math.abs(resultadoRentaVigente) : 0;
 
   return {
     aniosDisponibles: aniosDisponibles.length > 0 ? aniosDisponibles : [anioSeleccionado],

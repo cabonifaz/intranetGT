@@ -1568,6 +1568,10 @@ export interface DeclaracionTributariaIgvAnteriorRow extends RowDataPacket {
   IGV_RESULTANTE: string | null;
 }
 
+export interface DeclaracionTributariaRentaAnteriorRow extends RowDataPacket {
+  RESULTADO_ANTERIOR: string | null;
+}
+
 export interface DeclaracionTributariaPendienteRow extends RowDataPacket {
   ID_DECLARACION: number;
   TIPO_DECLARACION_DESCRIPCION: string;
