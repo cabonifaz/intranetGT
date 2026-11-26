@@ -15,6 +15,10 @@ interface PresentarDeclaracionParams {
   igvResultante: number | null;
   pagoACuentaRenta: number | null;
   saldoRenta: number | null;
+  // La fecha real de SUNAT (la que trae impresa la constancia) -- null
+  // usa HOY, correcto para el boton manual. La importacion por IA debe
+  // mandarla siempre que se pueda leer (ver extraer-declaracion.ts).
+  fechaPresentacion?: string | null;
 }
 
 export interface ResultadoPresentarDeclaracion {
@@ -81,7 +85,7 @@ export async function presentarDeclaracionConCredito(params: PresentarDeclaracio
     }
   }
 
-  await presentarDeclaracion(params.idDeclaracion, idMovimientoCredito);
+  await presentarDeclaracion(params.idDeclaracion, idMovimientoCredito, params.fechaPresentacion ?? null);
   return { avisoSinCuenta };
 }
 

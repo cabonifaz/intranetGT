@@ -170,9 +170,16 @@ END$$
 -- Guard: solo BORRADOR. p_id_movimiento_credito viene ya registrado
 -- (INGRESO en IGV_FAVOR/RENTA_FAVOR) por la capa de aplicacion solo si
 -- el periodo genero saldo a favor -- NULL si no corresponde.
+-- p_fecha_presentacion: la fecha REAL de presentacion a SUNAT (la que
+-- trae impresa la constancia, "Fecha de presentacion") -- NULL usa HOY
+-- (NOW()), que es lo correcto para el boton manual (se presenta a SUNAT y
+-- se marca en el acto). La importacion por IA SIEMPRE debe mandar la
+-- fecha real de la constancia, nunca el dia en que se subio el archivo a
+-- la intranet (pueden ser dias distintos).
 CREATE PROCEDURE SP_DECLARACION_TRIBUTARIA_PRESENTAR(
     IN p_id_declaracion INT UNSIGNED,
-    IN p_id_movimiento_credito INT UNSIGNED
+    IN p_id_movimiento_credito INT UNSIGNED,
+    IN p_fecha_presentacion DATETIME
 )
 BEGIN
     DECLARE v_id_presentada INT UNSIGNED;
@@ -181,7 +188,7 @@ BEGIN
     UPDATE DECLARACION_TRIBUTARIA d
       JOIN MAESTRO_MAESTRO e ON e.ID_MAESTRO = d.ID_ESTADO_DECLARACION
        SET d.ID_ESTADO_DECLARACION = v_id_presentada,
-           d.FECHA_PRESENTACION = NOW(),
+           d.FECHA_PRESENTACION = COALESCE(p_fecha_presentacion, NOW()),
            d.ID_MOVIMIENTO_CREDITO = p_id_movimiento_credito
      WHERE d.ID_DECLARACION = p_id_declaracion
        AND e.CODIGO = 'BORRADOR';

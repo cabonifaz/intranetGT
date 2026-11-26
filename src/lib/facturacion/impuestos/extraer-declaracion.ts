@@ -12,6 +12,7 @@ export interface DatosExtraidosDeclaracion {
   tipoDeclaracion: "IGV_RENTA_MENSUAL" | "DJ_ANUAL_RENTA" | null;
   anio: number | null;
   mes: number | null; // 1-12, siempre null si tipoDeclaracion es DJ_ANUAL_RENTA
+  fechaPresentacion: string | null; // "YYYY-MM-DD", la fecha real de SUNAT impresa en la constancia -- NUNCA el dia en que se sube el archivo a la intranet
   ventasGravadas: number | null;
   comprasGravadas: number | null;
   igvVentas: number | null;
@@ -62,11 +63,14 @@ El documento es UNA de estas dos constancias:
 
 Identifica cual de los dos es por el numero de formulario o el titulo del documento, y si tiene mes (mensual) o no (anual).
 
+Ambas constancias traen, cerca del encabezado ("Identificacion de la Transaccion" o similar), una "Fecha de presentacion" (formato DD/MM/AAAA) -- esta es la fecha REAL en que se presento a SUNAT, distinta de cualquier otra fecha del documento (como la fecha/hora de impresion de la constancia, si aparece aparte). Siempre extraela si esta visible.
+
 Devuelve SOLO un objeto JSON (sin texto antes ni despues, sin bloque de codigo markdown) con esta forma exacta:
 {
   "tipoDeclaracion": "IGV_RENTA_MENSUAL" | "DJ_ANUAL_RENTA" | null (null si no se puede determinar cual de los dos es),
   "anio": number o null,
   "mes": number (1-12) o null (SIEMPRE null si tipoDeclaracion es DJ_ANUAL_RENTA),
+  "fechaPresentacion": "AAAA-MM-DD" o null (la "Fecha de presentacion" de la constancia, convertida de DD/MM/AAAA a AAAA-MM-DD -- null si no se puede leer con confianza),
   "ventasGravadas": number o null (null si es DJ_ANUAL_RENTA),
   "comprasGravadas": number o null (null si es DJ_ANUAL_RENTA),
   "igvVentas": number o null (null si es DJ_ANUAL_RENTA),
@@ -103,6 +107,16 @@ function comoNumeroONull(valor: unknown): number | null {
   return typeof valor === "number" || (typeof valor === "string" && valor.trim()) ? (Number.isFinite(n) ? n : null) : null;
 }
 
+// "AAAA-MM-DD" valido y con una fecha real (evita ej. "2026-13-40" que
+// pasaria el regex pero no existe) -- cualquier otro formato se descarta
+// en vez de intentar re-parsear variantes.
+function comoFechaIsoONull(valor: unknown): string | null {
+  if (typeof valor !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return null;
+  const fecha = new Date(`${valor}T00:00:00Z`);
+  if (Number.isNaN(fecha.getTime())) return null;
+  return fecha.toISOString().slice(0, 10) === valor ? valor : null;
+}
+
 // Normaliza lo que devuelve el modelo a la forma exacta de
 // DatosExtraidosDeclaracion -- nunca confia ciegamente en el JSON ajeno
 // (tipos incorrectos, campos faltantes, enums con otra capitalizacion).
@@ -114,12 +128,17 @@ function normalizar(bruto: Record<string, unknown>): DatosExtraidosDeclaracion {
   const mesBruto = comoNumeroONull(bruto.mes);
   const mes = tipoDeclaracion === "IGV_RENTA_MENSUAL" && mesBruto !== null && mesBruto >= 1 && mesBruto <= 12 ? mesBruto : null;
 
-  const datos = { tipoDeclaracion, anio, mes } as DatosExtraidosDeclaracion;
+  const fechaPresentacion = comoFechaIsoONull(bruto.fechaPresentacion);
+
+  const datos = { tipoDeclaracion, anio, mes, fechaPresentacion } as DatosExtraidosDeclaracion;
   for (const campo of CAMPOS_MONTO) {
     datos[campo] = comoNumeroONull(bruto[campo]);
   }
 
   const advertencias = Array.isArray(bruto.advertencias) ? bruto.advertencias.filter((a): a is string => typeof a === "string") : [];
+  if (bruto.fechaPresentacion && fechaPresentacion === null) {
+    advertencias.push("No se pudo leer con confianza la fecha de presentacion -- se usara la fecha de hoy, verificala contra la constancia.");
+  }
 
   // Cuadre: bruto - saldo anterior debe dar el resultado FINAL que se
   // guarda (igvResultante/pagoACuentaRenta) -- si la constancia traia las

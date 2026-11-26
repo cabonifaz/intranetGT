@@ -74,8 +74,11 @@ export async function subirDocumentoDeclaracion(idDeclaracion: number, documento
   await callProcedure("SP_DECLARACION_TRIBUTARIA_SUBIR_DOCUMENTO", [idDeclaracion, documentoPath, idUsuarioModificacion]);
 }
 
-export async function presentarDeclaracion(idDeclaracion: number, idMovimientoCredito: number | null): Promise<void> {
-  await callProcedure("SP_DECLARACION_TRIBUTARIA_PRESENTAR", [idDeclaracion, idMovimientoCredito]);
+// fechaPresentacion: la fecha real de SUNAT (ver constancia) -- null usa
+// HOY, correcto para el boton manual. La importacion por IA siempre debe
+// mandarla quando se pueda leer, nunca el dia de carga a la intranet.
+export async function presentarDeclaracion(idDeclaracion: number, idMovimientoCredito: number | null, fechaPresentacion: string | null = null): Promise<void> {
+  await callProcedure("SP_DECLARACION_TRIBUTARIA_PRESENTAR", [idDeclaracion, idMovimientoCredito, fechaPresentacion]);
 }
 
 export async function marcarDeclaracionPagada(

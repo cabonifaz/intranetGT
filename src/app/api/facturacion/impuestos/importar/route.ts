@@ -207,9 +207,16 @@ export async function POST(request: Request) {
         igvResultante: igvResultanteFinal,
         pagoACuentaRenta: pagoACuentaRentaFinal,
         saldoRenta: saldoRentaFinal,
+        // La fecha real de SUNAT (no el dia en que se sube el archivo) --
+        // si la IA no pudo leerla, se avisa y queda la fecha de hoy
+        // (COALESCE en el SP), igual que el boton manual.
+        fechaPresentacion: datos.fechaPresentacion,
       },
       sesion.idUsuario,
     );
+    if (!datos.fechaPresentacion) {
+      advertencias.push("No se encontro la fecha de presentacion en la constancia -- se uso la fecha de hoy, verificala y corrigela si hace falta.");
+    }
     if (avisoSinCuenta) advertencias.push(avisoSinCuenta);
     revalidatePath("/facturacion/cuentas");
   } else if (existiaAntes) {
