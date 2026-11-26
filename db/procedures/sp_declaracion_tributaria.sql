@@ -22,6 +22,7 @@ DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_ANULAR;
 DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_ELIMINAR;
 DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_IGV_RESULTANTE_ANTERIOR;
 DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_RENTA_ANTERIOR;
+DROP PROCEDURE IF EXISTS SP_DECLARACION_TRIBUTARIA_CORREGIR_FECHA_PRESENTACION;
 
 DELIMITER $$
 
@@ -309,6 +310,23 @@ BEGIN
     END IF;
 
     SELECT v_resultado AS RESULTADO_ANTERIOR;
+END$$
+
+-- Correccion puntual de FECHA_PRESENTACION ya guardada (ej. se guardo el
+-- dia que se subio el archivo a la intranet en vez de la fecha real de
+-- SUNAT que trae impresa la constancia) -- no toca ningun otro campo, no
+-- reabre el estado ni vuelve a acreditar saldo a favor. Solo aplica si ya
+-- esta PRESENTADA o PAGADA (no tiene sentido corregirla en BORRADOR).
+CREATE PROCEDURE SP_DECLARACION_TRIBUTARIA_CORREGIR_FECHA_PRESENTACION(
+    IN p_id_declaracion INT UNSIGNED,
+    IN p_fecha_presentacion DATETIME
+)
+BEGIN
+    UPDATE DECLARACION_TRIBUTARIA d
+      JOIN MAESTRO_MAESTRO e ON e.ID_MAESTRO = d.ID_ESTADO_DECLARACION
+       SET d.FECHA_PRESENTACION = p_fecha_presentacion
+     WHERE d.ID_DECLARACION = p_id_declaracion
+       AND e.CODIGO IN ('PRESENTADA', 'PAGADA');
 END$$
 
 DELIMITER ;

@@ -81,6 +81,13 @@ export async function presentarDeclaracion(idDeclaracion: number, idMovimientoCr
   await callProcedure("SP_DECLARACION_TRIBUTARIA_PRESENTAR", [idDeclaracion, idMovimientoCredito, fechaPresentacion]);
 }
 
+// Corrige la FECHA_PRESENTACION de una declaracion ya presentada/pagada
+// (ej. se habia guardado el dia de carga a la intranet) -- no toca nada
+// mas. Ver SP_DECLARACION_TRIBUTARIA_CORREGIR_FECHA_PRESENTACION.
+export async function corregirFechaPresentacion(idDeclaracion: number, fechaPresentacion: string): Promise<void> {
+  await callProcedure("SP_DECLARACION_TRIBUTARIA_CORREGIR_FECHA_PRESENTACION", [idDeclaracion, fechaPresentacion]);
+}
+
 export async function marcarDeclaracionPagada(
   idDeclaracion: number,
   idMovimientoPago: number,
